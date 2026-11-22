@@ -41,6 +41,8 @@ export interface LevelData {
   tileSet?: TileKind[];
   /** Можно ли пользоваться слотом «отложить» (по умолчанию да). */
   allowStash?: boolean;
+  /** Ночной уровень: поле затемнено, светятся только дорога и фонари. */
+  night?: boolean;
   /** Сколько плиток должно остаться для 2 и 3 звёзд. */
   stars: { two: number; three: number };
   /** Подсказка без текста: place — рука показывает нужную плитку, stash — показывает слот «отложить». */
@@ -69,6 +71,7 @@ export interface Level {
   /** Набор бесконечной колоды или null, если колода конечная. */
   tileSet: TileKind[] | null;
   allowStash: boolean;
+  night: boolean;
   stars: { two: number; three: number };
   tutorial?: 'place' | 'stash';
   easeDecks?: TileKind[][];

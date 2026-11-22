@@ -120,7 +120,8 @@ const fmtTime = (ms: number) => {
 
 /** Текст, который игрок копирует и присылает после плейтеста. */
 export function statsText(levelCount: number): string {
-  const log = loadLog();
+  const save = SaveService.load();
+  const log = save.log;
   const rows = summarize(log, levelCount);
   const passed = rows.filter((r) => r.wins > 0).length;
   const totalMs = rows.reduce((s, r) => s + r.timeMs, 0);
@@ -129,6 +130,7 @@ export function statsText(levelCount: number): string {
     'Glowtrail — статистика',
     `Пройдено уровней: ${passed} из ${levelCount}`,
     `Время в уровнях: ${fmtTime(totalMs)}, сессий: ${sessions}`,
+    `Игрок: ${save.profile.name ?? 'Путник'} · ID ${save.profile.playerId} · дней подряд ${save.profile.dayStreak} · подсказок ${save.profile.hintsUsed}`,
     `Первый запуск: ${log[0]?.t ?? '—'}`,
     `Устройство: ${typeof navigator !== 'undefined' ? navigator.userAgent : '—'}`,
     '',

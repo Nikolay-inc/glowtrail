@@ -2,7 +2,7 @@
 // Сейчас данные лежат в localStorage; чтобы перейти на облако, достаточно подменить бэкенд
 // (setBackend) на реализацию с тем же интерфейсом — остальной код игры не меняется.
 
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 export const SAVE_KEY = 'glowtrail.save';
 /** Старый формат (до SaveService): прогресс и лог лежали в двух ключах. */
 export const LEGACY_KEYS = { progress: 'glowtrail.progress.v1', log: 'glowtrail.log.v1' } as const;
@@ -20,6 +20,28 @@ export interface Progress {
   /** Пропущенные уровни. */
   skipped: Record<number, boolean>;
   muted: boolean;
+}
+
+/**
+ * Профиль игрока. Локальный, но готов к привязке облачного аккаунта: playerId — постоянный
+ * случайный UUID, по нему профиль потом свяжется с аккаунтом на сервере.
+ */
+export interface Profile {
+  playerId: string;
+  /** Имя, которое ввёл игрок; null — не задано (показываем «Путник»). */
+  name: string | null;
+  /** Номер аватарки (0–7). */
+  avatar: number;
+  createdAt: string;
+  /** Окно «Как тебя зовут?» уже показывали. */
+  nameAsked: boolean;
+  /** Сколько раз игрок пользовался подсказкой. */
+  hintsUsed: number;
+  /** Последний день игры (YYYY-MM-DD по местному времени). */
+  lastPlayDay: string | null;
+  /** Серия дней подряд. */
+  dayStreak: number;
+  bestDayStreak: number;
 }
 
 export type EventType = 'session' | 'start' | 'win' | 'lose' | 'abandon' | 'hint_used' | 'extra_tiles' | 'auto_ease' | 'level_skipped';
@@ -49,6 +71,7 @@ export interface LogEvent {
 
 export interface SaveData {
   version: number;
+  profile: Profile;
   progress: Progress;
   log: LogEvent[];
 }
@@ -98,7 +121,30 @@ export function memoryBackend(initial: Record<string, string> = {}): SaveBackend
 
 export const defaultProgress = (): Progress => ({ unlocked: 1, stars: {}, attempts: {}, lossStreak: {}, skipped: {}, muted: false });
 
-export const emptySave = (): SaveData => ({ version: SAVE_VERSION, progress: defaultProgress(), log: [] });
+/** Случайный UUID v4 (crypto.randomUUID, если есть). */
+export function newPlayerId(): string {
+  try {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  } catch {
+    /* нет crypto — ниже запасной вариант */
+  }
+  const hex = (n: number) => Array.from({ length: n }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+  return `${hex(8)}-${hex(4)}-4${hex(3)}-${'89ab'[Math.floor(Math.random() * 4)]}${hex(3)}-${hex(12)}`;
+}
+
+export const defaultProfile = (): Profile => ({
+  playerId: newPlayerId(),
+  name: null,
+  avatar: 0,
+  createdAt: new Date().toISOString(),
+  nameAsked: false,
+  hintsUsed: 0,
+  lastPlayDay: null,
+  dayStreak: 0,
+  bestDayStreak: 0,
+});
+
+export const emptySave = (): SaveData => ({ version: SAVE_VERSION, profile: defaultProfile(), progress: defaultProgress(), log: [] });
 
 function parse(raw: string | null): unknown {
   if (!raw) return null;
@@ -123,6 +169,21 @@ function normalizeProgress(raw: unknown): Progress {
   return p;
 }
 
+function normalizeProfile(raw: unknown): Profile {
+  const p = defaultProfile();
+  if (!isObj(raw)) return p;
+  if (typeof raw.playerId === 'string' && raw.playerId.length >= 8) p.playerId = raw.playerId;
+  if (typeof raw.name === 'string' && raw.name.trim()) p.name = raw.name.trim().slice(0, 16);
+  if (typeof raw.avatar === 'number' && raw.avatar >= 0 && raw.avatar < 8) p.avatar = Math.floor(raw.avatar);
+  if (typeof raw.createdAt === 'string') p.createdAt = raw.createdAt;
+  if (typeof raw.nameAsked === 'boolean') p.nameAsked = raw.nameAsked;
+  for (const key of ['hintsUsed', 'dayStreak', 'bestDayStreak'] as const) {
+    if (typeof raw[key] === 'number' && raw[key] >= 0) p[key] = Math.floor(raw[key] as number);
+  }
+  if (typeof raw.lastPlayDay === 'string') p.lastPlayDay = raw.lastPlayDay;
+  return p;
+}
+
 function normalizeLog(raw: unknown): LogEvent[] {
   return Array.isArray(raw) ? raw.filter((e): e is LogEvent => isObj(e) && typeof e.ev === 'string').slice(-MAX_LOG) : [];
 }
@@ -131,16 +192,28 @@ function normalizeLog(raw: unknown): LogEvent[] {
  * Миграция: из сырых данных любой версии делает SaveData текущей версии.
  * v1 — два ключа localStorage (glowtrail.progress.v1 и glowtrail.log.v1), без поля version.
  * v2 — один объект { version: 2, progress, log }.
+ * v3 — добавлен раздел profile (playerId, имя, аватарка, серия дней, подсказки).
+ * Шаги идут цепочкой: v1 → v2 → v3, поэтому любое старое сохранение доходит до текущей версии.
  */
 export function migrate(raw: unknown, legacy?: { progress: unknown; log: unknown }): SaveData {
-  if (isObj(raw) && typeof raw.version === 'number') {
-    // Будущие версии: здесь добавятся шаги «vN → vN+1».
-    return { version: SAVE_VERSION, progress: normalizeProgress(raw.progress), log: normalizeLog(raw.log) };
+  let data: Record<string, unknown> | null = null;
+  if (isObj(raw) && typeof raw.version === 'number') data = { ...raw };
+  else if (legacy && (legacy.progress !== null || legacy.log !== null)) {
+    // v1 → v2: два ключа собираем в один объект.
+    data = { version: 2, progress: legacy.progress, log: legacy.log };
   }
-  if (legacy && (legacy.progress !== null || legacy.log !== null)) {
-    return { version: SAVE_VERSION, progress: normalizeProgress(legacy.progress), log: normalizeLog(legacy.log) };
+  if (!data) return emptySave();
+  if ((data.version as number) < 3) {
+    // v2 → v3: появляется профиль. Число использованных подсказок восстанавливаем по логу.
+    const log = normalizeLog(data.log);
+    data = { ...data, version: 3, profile: { ...defaultProfile(), hintsUsed: log.filter((e) => e.ev === 'hint_used').length } };
   }
-  return emptySave();
+  return {
+    version: SAVE_VERSION,
+    profile: normalizeProfile(data.profile),
+    progress: normalizeProgress(data.progress),
+    log: normalizeLog(data.log),
+  };
 }
 
 class SaveServiceImpl {
@@ -160,11 +233,13 @@ class SaveServiceImpl {
     let data: SaveData;
     if (raw !== null) {
       data = migrate(raw);
+      // Сохранение старой версии — сразу пересохраняем в новом формате (playerId должен быть постоянным).
+      if (!isObj(raw) || raw.version !== SAVE_VERSION) this.write(data);
     } else {
       const legacy = { progress: parse(this.backend.read(LEGACY_KEYS.progress)), log: parse(this.backend.read(LEGACY_KEYS.log)) };
       data = migrate(null, legacy);
       // Старые ключи не удаляем: если что-то пойдёт не так, данные не пропадут.
-      if (legacy.progress !== null || legacy.log !== null) this.write(data);
+      this.write(data); // и для нового игрока: playerId создаётся один раз и сразу сохраняется
     }
     this.cache = data;
     return data;

@@ -5,7 +5,9 @@ import type { Dir, TileKind } from '../core/types';
 import { drawTileIcon } from './draw';
 import { C } from './theme';
 
-export const CARD = 190;
+import { CARD } from './layout';
+
+export { CARD };
 
 export class TileCard extends Phaser.GameObjects.Container {
   kind: TileKind | null = null;

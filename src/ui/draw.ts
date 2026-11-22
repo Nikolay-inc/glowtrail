@@ -1,6 +1,7 @@
 // Вся графика рисуется фигурами в коде: иконки плиток, кнопки, Lumo, свечение.
 
 import Phaser from 'phaser';
+import { AVATARS, avatarById, type Avatar } from '../core/avatars';
 import type { TileKind } from '../core/types';
 import { C, FONT, H, W } from './theme';
 
@@ -324,45 +325,109 @@ export class Button extends Phaser.GameObjects.Container {
 // ---------------------------------------------------------------------------
 // Фонарщик Lumo
 
-export function createLumo(scene: Phaser.Scene, size: number): Phaser.GameObjects.Container {
-  const c = scene.add.container(0, 0);
-  const glow = scene.add.image(size * 0.42, -size * 0.12, 'glow').setTint(C.lanternOn).setBlendMode(Phaser.BlendModes.ADD);
-  glow.setScale((size * 1.4) / 128).setAlpha(0.7);
-  const g = scene.add.graphics();
-  const s = size;
+/** Рисует фонарщика Lumo в Graphics (без анимации). Вариант — аватарка игрока. */
+export function drawLumo(g: G, s: number, avatar: Avatar = AVATARS[0]) {
   // Тень
   g.fillStyle(0x000000, 0.3);
   g.fillEllipse(0, s * 0.42, s * 0.7, s * 0.16);
   // Плащ
-  g.fillStyle(0x3d5bd9, 1);
+  g.fillStyle(avatar.cloak, 1);
   g.fillTriangle(-s * 0.34, s * 0.42, s * 0.34, s * 0.42, 0, -s * 0.2);
   g.fillRoundedRect(-s * 0.34, s * 0.08, s * 0.68, s * 0.36, s * 0.14);
+  g.fillStyle(0xffffff, 0.12);
+  g.fillRoundedRect(-s * 0.3, s * 0.1, s * 0.6, s * 0.08, s * 0.04);
   // Лицо
   g.fillStyle(0xffe3c2, 1);
   g.fillCircle(0, -s * 0.06, s * 0.2);
   // Колпак
-  g.fillStyle(0x2a3fa8, 1);
+  g.fillStyle(avatar.hat, 1);
   g.fillTriangle(-s * 0.24, -s * 0.1, s * 0.24, -s * 0.1, s * 0.06, -s * 0.52);
   g.fillStyle(C.lanternOn, 1);
   g.fillCircle(s * 0.06, -s * 0.52, s * 0.05);
-  // Глаза
+  // Глаза и щёки
   g.fillStyle(0x1a1a2e, 1);
   g.fillCircle(-s * 0.07, -s * 0.03, s * 0.035);
   g.fillCircle(s * 0.07, -s * 0.03, s * 0.035);
   g.fillStyle(0xff9e9e, 0.6);
   g.fillCircle(-s * 0.13, s * 0.04, s * 0.035);
   g.fillCircle(s * 0.13, s * 0.04, s * 0.035);
-  // Посох с фонариком
+  // Посох с фонариком — форма фонаря зависит от аватарки
   g.lineStyle(s * 0.05, 0x6b4a2b, 1);
   g.lineBetween(s * 0.3, s * 0.4, s * 0.36, -s * 0.06);
+  const lx = s * 0.42;
+  const ly = -s * 0.11;
   g.fillStyle(C.lanternOn, 1);
-  g.fillRoundedRect(s * 0.32, -s * 0.2, s * 0.2, s * 0.18, s * 0.05);
+  switch (avatar.lantern) {
+    case 'square':
+      g.fillRoundedRect(lx - s * 0.1, ly - s * 0.09, s * 0.2, s * 0.18, s * 0.05);
+      break;
+    case 'round':
+      g.fillCircle(lx, ly, s * 0.11);
+      break;
+    case 'star':
+      g.fillPoints(starPoints(s * 0.14, 0.5).map((p) => new Phaser.Math.Vector2(p.x + lx, p.y + ly)), true);
+      break;
+    case 'diamond':
+      g.fillPoints(
+        [
+          [0, -0.14],
+          [0.1, 0],
+          [0, 0.14],
+          [-0.1, 0],
+        ].map(([px, py]) => new Phaser.Math.Vector2(lx + px * s, ly + py * s)),
+        true,
+      );
+      break;
+  }
   g.fillStyle(0xffffff, 0.9);
-  g.fillCircle(s * 0.42, -s * 0.11, s * 0.04);
+  g.fillCircle(lx, ly, s * 0.04);
+}
+
+export function createLumo(scene: Phaser.Scene, size: number, avatarId = 0, animate = true): Phaser.GameObjects.Container {
+  const avatar = avatarById(avatarId);
+  const c = scene.add.container(0, 0);
+  const glow = scene.add.image(size * 0.42, -size * 0.12, 'glow').setTint(C.lanternOn).setBlendMode(Phaser.BlendModes.ADD);
+  glow.setScale((size * 1.4) / 128).setAlpha(0.7);
+  const g = scene.add.graphics();
+  drawLumo(g, size, avatar);
   c.add([glow, g]);
-  // Лёгкое «дыхание» и мерцание фонарика
-  scene.tweens.add({ targets: g, scaleY: 1.04, y: -s * 0.015, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
-  scene.tweens.add({ targets: glow, alpha: 0.45, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+  if (animate) {
+    // Лёгкое «дыхание» и мерцание фонарика
+    scene.tweens.add({ targets: g, scaleY: 1.04, y: -size * 0.015, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+    scene.tweens.add({ targets: glow, alpha: 0.45, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+  }
+  return c;
+}
+
+/** Круглый значок с аватаркой (меню, победа, профиль). locked — серый с замком и условием. */
+export function createAvatarBadge(
+  scene: Phaser.Scene,
+  x: number,
+  y: number,
+  r: number,
+  avatarId: number,
+  opts: { locked?: boolean; selected?: boolean; animate?: boolean } = {},
+): Phaser.GameObjects.Container {
+  const avatar = avatarById(avatarId);
+  const c = scene.add.container(x, y);
+  const bg = scene.add.graphics();
+  bg.fillStyle(0x000000, 0.3);
+  bg.fillCircle(0, 6, r);
+  bg.fillStyle(opts.locked ? C.cardDisabled : 0x2b3470, 1);
+  bg.fillCircle(0, 0, r);
+  bg.lineStyle(Math.max(4, r * 0.07), opts.selected ? C.primary : C.cardEdge, 1);
+  bg.strokeCircle(0, 0, r);
+  c.add(bg);
+  const lumo = createLumo(scene, r * 1.45, avatar.id, opts.animate ?? false).setPosition(-r * 0.08, r * 0.12);
+  c.add(lumo);
+  if (opts.locked) {
+    lumo.setAlpha(0.25);
+    const lg = scene.add.graphics();
+    drawIcon(lg, 'lock', r * 0.7, C.icon);
+    lg.setPosition(0, -r * 0.12);
+    c.add(lg);
+    c.add(text(scene, 0, r * 0.5, `★ ${avatar.stars}`, Math.round(r * 0.34), '#ffd36b'));
+  }
   return c;
 }
 

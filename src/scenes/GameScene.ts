@@ -25,18 +25,17 @@ import type { TileKind } from '../core/types';
 import { LEVELS } from '../levels/index';
 import { sfx } from '../audio';
 import { logEvent, lossStreak, recordLoss, recordSkip, recordWin, startAttempt } from '../storage';
+import { countHint, getProfile, recordPlayDay, shouldAskName } from '../profile';
+import { showNameDialog } from '../ui/NameDialog';
 import { BoardView } from '../ui/BoardView';
-import { addBackground, Button, drawStar, text } from '../ui/draw';
+import { addBackground, Button, createAvatarBadge, drawStar, text } from '../ui/draw';
 import { C, H, W } from '../ui/theme';
 import { CARD, MiniCard, TileCard } from '../ui/TileCard';
+import { trayLayout, type TrayLayout } from '../ui/layout';
 
 const TOP_Y = 105;
 const TRAY_Y = 1640;
-const SLOT_X = [400, 610, 820];
-const STASH_X = 150;
-const DECK_X = 990;
 const PREVIEW_Y = 1492;
-const PREVIEW_X = [950, 1034];
 const BOTTOM_Y = 1835;
 
 /** Сколько поражений подряд нужно для каждой меры защиты от застревания. */
@@ -93,6 +92,12 @@ export class GameScene extends Phaser.Scene {
   private activeHint: Action | null = null;
   private extraUsed = false;
   private streak = 0;
+  /** Раскладка нижней панели: зависит от того, есть ли на уровне слот «отложить». */
+  private L: TrayLayout = trayLayout(true);
+
+  private get stashX() {
+    return this.L.stashX ?? -CARD * 2;
+  }
 
   constructor() {
     super('Game');
@@ -113,6 +118,7 @@ export class GameScene extends Phaser.Scene {
 
   create() {
     const level = LEVELS[this.levelIndex];
+    this.L = trayLayout(level.allowStash);
     addBackground(this);
     this.cameras.main.fadeIn(250, 11, 15, 39);
     this.streak = lossStreak(level.id);
@@ -124,24 +130,25 @@ export class GameScene extends Phaser.Scene {
     this.undoBtn = new Button(this, 840, TOP_Y, { w: 130, h: 130, icon: 'undo', onClick: () => this.onUndo() });
     this.restartBtn = new Button(this, 990, TOP_Y, { w: 130, h: 130, icon: 'restart', onClick: () => this.restart() });
 
-    this.board = new BoardView(this, level, { x: 40, y: 250, w: 1000, h: 1190 });
+    recordPlayDay(); // если сессия перешла через полночь
+    this.board = new BoardView(this, level, { x: 40, y: 250, w: 1000, h: 1190 }, { avatar: getProfile().avatar });
 
     // Лоток
     const slotsG = this.add.graphics();
     slotsG.fillStyle(0x000000, 0.22);
-    slotsG.fillRoundedRect(SLOT_X[0] - CARD / 2 - 24, TRAY_Y - CARD / 2 - 24, SLOT_X[2] - SLOT_X[0] + CARD + 48, CARD + 48, 50);
-    for (const x of SLOT_X) {
+    slotsG.fillRoundedRect(this.L.slotX[0] - CARD / 2 - 24, TRAY_Y - CARD / 2 - 24, this.L.slotX[2] - this.L.slotX[0] + CARD + 48, CARD + 48, 50);
+    for (const x of this.L.slotX) {
       slotsG.lineStyle(4, C.cardEdge, 0.25);
       slotsG.strokeRoundedRect(x - CARD / 2, TRAY_Y - CARD / 2, CARD, CARD, CARD * 0.2);
     }
     this.stashGlow = this.add.graphics().setDepth(9);
-    this.stashCard = new TileCard(this, STASH_X, TRAY_Y, 'stash');
+    this.stashCard = new TileCard(this, this.stashX, TRAY_Y, 'stash');
     // Слот «отложить» появляется с уровня, где его учат.
     this.stashCard.setVisible(level.allowStash);
-    this.cards = SLOT_X.map((x, i) => new TileCard(this, x, TRAY_Y, i));
+    this.cards = this.L.slotX.map((x, i) => new TileCard(this, x, TRAY_Y, i));
     this.deckG = this.add.graphics();
-    this.deckText = text(this, DECK_X, TRAY_Y + 8, '0', 56);
-    this.previews = PREVIEW_X.map((x) => new MiniCard(this, x, PREVIEW_Y, 72));
+    this.deckText = text(this, this.L.deckX, TRAY_Y + 8, '0', 56);
+    this.previews = this.L.previewX.map((x) => new MiniCard(this, x, PREVIEW_Y, 72));
 
     // Нижняя панель: подсказка и (после серии поражений) пропуск уровня
     const showSkip = this.streak >= STUCK.skip;
@@ -249,7 +256,7 @@ export class GameScene extends Phaser.Scene {
     const h = 150;
     const layers = Math.min(3, n === Infinity ? 3 : n);
     for (let i = layers - 1; i >= 0; i--) {
-      const x = DECK_X - w / 2 + i * 8;
+      const x = this.L.deckX - w / 2 + i * 8;
       const y = TRAY_Y - h / 2 - i * 10;
       g.fillStyle(0x000000, 0.25);
       g.fillRoundedRect(x, y + 8, w, h, 24);
@@ -260,7 +267,7 @@ export class GameScene extends Phaser.Scene {
     }
     if (n === 0) {
       g.lineStyle(4, C.cardEdge, 0.3);
-      g.strokeRoundedRect(DECK_X - w / 2, TRAY_Y - h / 2, w, h, 24);
+      g.strokeRoundedRect(this.L.deckX - w / 2, TRAY_Y - h / 2, w, h, 24);
     }
     this.deckText
       .setText(n === Infinity ? '∞' : String(n))
@@ -309,14 +316,14 @@ export class GameScene extends Phaser.Scene {
     if (hint.type === 'stash' || hint.type === 'swap') {
       const from = this.cards[hint.slot];
       this.ring(from.homeX, from.homeY);
-      this.showHandDrag(from.homeX, from.homeY, STASH_X, TRAY_Y);
+      this.showHandDrag(from.homeX, from.homeY, this.stashX, TRAY_Y);
       return;
     }
     if (hint.type === 'placeStash') {
       // Отложенную плитку ставят, перетащив её на поле.
       const head = this.board.center(s.head);
-      this.ring(STASH_X, TRAY_Y);
-      this.showHandDrag(STASH_X, TRAY_Y, head.x, head.y);
+      this.ring(this.stashX, TRAY_Y);
+      this.showHandDrag(this.stashX, TRAY_Y, head.x, head.y);
       this.board.showGhost(s, previewTile(s, s.stash!), 'hint');
       return;
     }
@@ -390,6 +397,7 @@ export class GameScene extends Phaser.Scene {
   /** Подсказки бесплатные и без ограничений — просто записываем в лог. */
   private spendHint(rollback: number) {
     logEvent({ ev: 'hint_used', level: this.state.level.id, attempt: this.attempt, rollback: rollback || undefined });
+    countHint();
     this.stopPulse(this.hintBtn);
     sfx.tap();
   }
@@ -438,7 +446,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private overStash(x: number, y: number) {
-    return Math.abs(x - STASH_X) < CARD * 0.75 && Math.abs(y - TRAY_Y) < CARD * 0.9;
+    return Math.abs(x - this.stashX) < CARD * 0.75 && Math.abs(y - TRAY_Y) < CARD * 0.9;
   }
 
   private traySlotAt(x: number, y: number): number {
@@ -459,7 +467,7 @@ export class GameScene extends Phaser.Scene {
       this.stashGlow.clear();
       if (typeof pr.slot === 'number' && this.overStash(p.x, p.y)) {
         this.stashGlow.lineStyle(10, C.lanternOn, 0.9);
-        this.stashGlow.strokeRoundedRect(STASH_X - CARD / 2 - 12, TRAY_Y - CARD / 2 - 12, CARD + 24, CARD + 24, CARD * 0.25);
+        this.stashGlow.strokeRoundedRect(this.stashX - CARD / 2 - 12, TRAY_Y - CARD / 2 - 12, CARD + 24, CARD + 24, CARD * 0.25);
       }
     }
   }
@@ -524,6 +532,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private onKey(e: KeyboardEvent) {
+    if (e.target instanceof HTMLInputElement) return; // печатают имя
     if (this.overlay) {
       if (e.key === 'Enter' || e.key === ' ') this.overlay.emit('primary');
       return;
@@ -586,7 +595,7 @@ export class GameScene extends Phaser.Scene {
       sfx.stash();
       this.tweens.add({
         targets: card,
-        x: STASH_X,
+        x: this.stashX,
         y: TRAY_Y,
         duration: 200,
         ease: 'Quad.out',
@@ -602,7 +611,7 @@ export class GameScene extends Phaser.Scene {
     if (action.type === 'swap') {
       const card = this.cards[action.slot];
       sfx.stash();
-      this.tweens.add({ targets: card, x: STASH_X, y: TRAY_Y, duration: 220, ease: 'Quad.inOut' });
+      this.tweens.add({ targets: card, x: this.stashX, y: TRAY_Y, duration: 220, ease: 'Quad.inOut' });
       this.tweens.add({
         targets: this.stashCard,
         x: card.homeX,
@@ -611,7 +620,7 @@ export class GameScene extends Phaser.Scene {
         ease: 'Quad.inOut',
         onComplete: () => {
           card.setPosition(card.homeX, card.homeY);
-          this.stashCard.setPosition(STASH_X, TRAY_Y);
+          this.stashCard.setPosition(this.stashX, TRAY_Y);
           card.setTile(next.tray[action.slot], false, next.dir, false);
           this.stashCard.setTile(next.stash, false, next.dir, false);
           finish();
@@ -654,13 +663,13 @@ export class GameScene extends Phaser.Scene {
       done();
       return;
     }
-    card.setVisible(true).setPosition(DECK_X, TRAY_Y).setScale(0.6).setAlpha(1);
+    card.setVisible(true).setPosition(this.L.deckX, TRAY_Y).setScale(0.6).setAlpha(1);
     this.tweens.add({ targets: card, x: card.homeX, y: card.homeY, scale: 1, duration: 230, ease: 'Back.out', onComplete: done });
   }
 
   private resetCards() {
     this.cards.forEach((c) => c.setPosition(c.homeX, c.homeY).setScale(1).setAlpha(1));
-    this.stashCard.setPosition(STASH_X, TRAY_Y).setScale(1).setAlpha(1);
+    this.stashCard.setPosition(this.stashX, TRAY_Y).setScale(1).setAlpha(1);
   }
 
   private onUndo() {
@@ -781,12 +790,14 @@ export class GameScene extends Phaser.Scene {
   private showWinPanel(stars: number) {
     const isLast = this.levelIndex >= LEVELS.length - 1;
     const { o, top } = this.makeOverlay('win', 860);
-    o.add(text(this, W / 2, top + 110, isLast ? 'Все фонари зажжены!' : `Уровень ${this.state.level.id}`, isLast ? 60 : 50, C.textDim));
-    o.add(text(this, W / 2, top + 190, 'Пройден!', 84));
+    // Аватарка игрока — значком на верхнем краю окна.
+    o.add(createAvatarBadge(this, W / 2, top, 86, getProfile().avatar, { selected: true, animate: true }).setData('avatarBadge', true));
+    o.add(text(this, W / 2, top + 130, isLast ? 'Все фонари зажжены!' : `Уровень ${this.state.level.id}`, isLast ? 56 : 46, C.textDim));
+    o.add(text(this, W / 2, top + 205, 'Пройден!', 84));
     const starG = this.add.graphics();
     o.add(starG);
     const xs = [W / 2 - 190, W / 2, W / 2 + 190];
-    const ys = [top + 380, top + 340, top + 380];
+    const ys = [top + 400, top + 360, top + 400];
     xs.forEach((x, i) => drawStar(starG, x, ys[i], 82, C.starEmpty));
     for (let i = 0; i < stars; i++) {
       const sg = this.add.graphics().setPosition(xs[i], ys[i]).setScale(0);
@@ -799,6 +810,23 @@ export class GameScene extends Phaser.Scene {
     o.add(new Button(this, W / 2 - 160, top + 750, { w: 120, h: 100, icon: 'restart', onClick: () => this.scene.start('Game', { levelIndex: this.levelIndex }) }));
     o.add(new Button(this, W / 2 + 160, top + 750, { w: 120, h: 100, icon: 'menu', onClick: () => this.scene.start('Menu') }));
     o.on('primary', next);
+    // Мягкое знакомство: после уровня 3 спрашиваем имя и аватарку (можно пропустить).
+    if (shouldAskName(this.state.level.id)) {
+      this.time.delayedCall(1500, () => {
+        if (this.overlay !== o) return;
+        showNameDialog(this, { title: 'Как тебя зовут?', withAvatars: true, secondary: 'skip', onClose: () => this.refreshWinAvatar(o, top) });
+      });
+    }
+  }
+
+  /** После знакомства аватарка в окне победы могла смениться. */
+  private refreshWinAvatar(o: Phaser.GameObjects.Container, top: number) {
+    if (this.overlay !== o) return;
+    const old = o.list.find((c) => c.getData?.('avatarBadge'));
+    old?.destroy();
+    const badge = createAvatarBadge(this, W / 2, top, 86, getProfile().avatar, { selected: true, animate: true });
+    badge.setData('avatarBadge', true);
+    o.add(badge);
   }
 
   /** Экран «Почти!»: сколько фонарей зажжено, сколько осталось до выхода, +3 плитки, заново, отменить. */

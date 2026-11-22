@@ -81,6 +81,9 @@ export const sfx = {
 
 function vibrate(p: number | number[]) {
   if (muted) return;
+  // До первого касания браузер блокирует вибрацию и пишет ошибку в консоль (например, при игре с клавиатуры).
+  const ua = (navigator as Navigator & { userActivation?: { hasBeenActive: boolean } }).userActivation;
+  if (ua && !ua.hasBeenActive) return;
   try {
     navigator.vibrate?.(p);
   } catch {

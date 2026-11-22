@@ -34,12 +34,14 @@ export class BoardView {
     private scene: Phaser.Scene,
     private level: Level,
     area: { x: number; y: number; w: number; h: number },
+    opts: { avatar?: number } = {},
   ) {
     this.cell = Math.floor(Math.min(area.w / level.width, area.h / level.height, 200));
     this.ox = area.x + (area.w - this.cell * level.width) / 2;
     this.oy = area.y + (area.h - this.cell * level.height) / 2;
 
     this.drawCells();
+    if (level.night) this.addNight();
     this.roadG = scene.add.graphics().setDepth(2);
     this.hintG = scene.add.graphics().setDepth(3);
     this.ghostG = scene.add.graphics().setDepth(3);
@@ -48,7 +50,7 @@ export class BoardView {
     this.drawLanternsAndExit();
 
     const start = this.center(level.start.y * level.width + level.start.x);
-    this.lumo = createLumo(scene, this.cell * 0.9).setPosition(start.x, start.y - this.cell * 0.05).setDepth(7);
+    this.lumo = createLumo(scene, this.cell * 0.9, opts.avatar ?? 0).setPosition(start.x, start.y - this.cell * 0.05).setDepth(7);
 
     this.burst = scene.add
       .particles(0, 0, 'glow', {
@@ -127,6 +129,17 @@ export class BoardView {
         g.fillEllipse(cx - s * 0.2, cy - s * 0.35, s * 0.5, s * 0.22);
       }
     });
+  }
+
+  /**
+   * Ночной уровень: затемняем только поле (клетки, камни, воду). Дорога, фонари и Lumo рисуются
+   * поверх и светятся ярче, а кнопки и лоток остаются нормальной яркости.
+   */
+  private addNight() {
+    const { cell, level } = this;
+    const g = this.scene.add.graphics().setDepth(1.5);
+    g.fillStyle(0x03040f, 0.55);
+    g.fillRoundedRect(this.ox - cell * 0.12, this.oy - cell * 0.12, cell * (level.width + 0.24), cell * (level.height + 0.24), cell * 0.25);
   }
 
   private addWaves(x: number, y: number) {

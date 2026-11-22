@@ -4,8 +4,9 @@ import Phaser from 'phaser';
 import { LEVELS } from '../levels/index';
 import { isMuted, setMuted, sfx } from '../audio';
 import { loadProgress } from '../storage';
-import { addBackground, Button, createLumo, drawIcon, drawStar, text } from '../ui/draw';
-import { C, H, W } from '../ui/theme';
+import { displayName, getProfile } from '../profile';
+import { addBackground, Button, createAvatarBadge, createLumo, drawIcon, drawStar, text } from '../ui/draw';
+import { C, FONT, H, W } from '../ui/theme';
 
 export class MenuScene extends Phaser.Scene {
   constructor() {
@@ -22,7 +23,18 @@ export class MenuScene extends Phaser.Scene {
     this.tweens.add({ targets: title, y: 240, duration: 2200, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
     text(this, W / 2, 350, 'Проложи дорогу фонарщику Lumo', 44, C.textDim, false);
 
-    const lumo = createLumo(this, 260).setPosition(W / 2, 560);
+    const profile = getProfile();
+    const lumo = createLumo(this, 260, profile.avatar).setPosition(W / 2, 560);
+
+    // Кнопка профиля в углу: аватарка и имя
+    const badge = createAvatarBadge(this, 100, 100, 62, profile.avatar);
+    badge.setSize(140, 140).setInteractive({ useHandCursor: true });
+    badge.on('pointerup', () => this.go('Profile'));
+    const nameT = this.add
+      .text(180, 100, displayName(profile), { fontFamily: FONT, fontSize: '40px', color: C.text, fontStyle: 'bold' })
+      .setOrigin(0, 0.5)
+      .setInteractive({ useHandCursor: true });
+    nameT.on('pointerup', () => this.go('Profile'));
     this.tweens.add({ targets: lumo, y: 545, duration: 1600, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
 
     // Сетка уровней 5×2

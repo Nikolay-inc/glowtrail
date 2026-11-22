@@ -2,6 +2,8 @@ import Phaser from 'phaser';
 import { GameScene } from './scenes/GameScene';
 import { MenuScene } from './scenes/MenuScene';
 import { StatsScene } from './scenes/StatsScene';
+import { ProfileScene } from './scenes/ProfileScene';
+import { recordPlayDay } from './profile';
 import { loadProgress, logEvent } from './storage';
 import { createTextures } from './ui/draw';
 import { C, H, W } from './ui/theme';
@@ -15,6 +17,7 @@ class BootScene extends Phaser.Scene {
   create() {
     createTextures(this);
     logEvent({ ev: 'session' });
+    recordPlayDay();
     const p = loadProgress();
     const firstTime = Object.keys(p.stars).length === 0 && Object.keys(p.attempts).length === 0;
     // ?level=N — открыть уровень сразу (удобно для проверки и видео).
@@ -35,8 +38,10 @@ const game = new Phaser.Game({
     autoCenter: Phaser.Scale.CENTER_BOTH,
   },
   input: { activePointers: 2 },
+  // DOM-элементы поверх холста — для поля ввода имени (масштабируются вместе с игрой).
+  dom: { createContainer: true },
   render: { antialias: true },
-  scene: [BootScene, MenuScene, GameScene, StatsScene],
+  scene: [BootScene, MenuScene, GameScene, StatsScene, ProfileScene],
 });
 
 // Для отладки в консоли браузера во время разработки.
