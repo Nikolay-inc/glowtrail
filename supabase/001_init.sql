@@ -11,6 +11,10 @@ create table if not exists public.saves (
   constraint saves_data_size check (pg_column_size(data) < 64000)
 );
 
+-- Доступ к таблице через API — только вошедшим игрокам (в новых проектах права не выдаются сами).
+grant usage on schema public to authenticated;
+grant select, insert, update on table public.saves to authenticated;
+
 -- Row Level Security: каждый видит и меняет только свою строку.
 alter table public.saves enable row level security;
 
