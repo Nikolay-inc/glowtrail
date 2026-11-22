@@ -5,6 +5,7 @@ import { LEVELS } from '../levels/index';
 import { sfx } from '../audio';
 import { fmtTime, loadLog, resetAll, statsText, summarize } from '../storage';
 import { addBackground, Button, text } from '../ui/draw';
+import { isolateFromGame } from '../ui/domIsolation';
 import { C, MONO, W } from '../ui/theme';
 
 export class StatsScene extends Phaser.Scene {
@@ -118,6 +119,7 @@ function showTextFallback(str: string) {
   btn.style.cssText = 'font:bold 18px sans-serif;padding:14px;border:0;border-radius:12px;background:#ffb84d;';
   btn.onclick = () => wrap.remove();
   wrap.append(ta, btn);
+  isolateFromGame(wrap);
   document.body.appendChild(wrap);
   ta.focus();
   ta.select();

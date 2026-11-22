@@ -3,6 +3,7 @@
 
 import { Account, AccountError } from '../cloud/account';
 import { PASSWORD_MIN, validateEmail, validatePassword, validatePasswordPair } from '../cloud/validate';
+import { isolateFromGame } from './domIsolation';
 
 export type AuthMode = 'login' | 'register' | 'forgot' | 'recovery' | 'change' | 'account';
 
@@ -95,15 +96,15 @@ export function openAuthDialog(
   const root = el('div', { class: 'gt-auth', role: 'dialog', 'aria-modal': 'true' });
   const card = el('div', { class: 'gt-auth__card' });
   root.append(card);
-  // Клавиши из формы не должны доходить до игры (Enter в меню запускает уровень).
   root.addEventListener('keydown', (e) => {
-    e.stopPropagation();
     if (e.key === 'Escape') close();
   });
-  root.addEventListener('keyup', (e) => e.stopPropagation());
-  root.addEventListener('pointerdown', (e) => {
+  // Закрываем по завершённому клику на фон: к этому моменту и нажатие, и отпускание уже пойманы окном.
+  root.addEventListener('click', (e) => {
     if (e.target === root) close();
   });
+  // Клики и клавиши из окна не доходят до игры (иначе срабатывают игровые кнопки под формой).
+  isolateFromGame(root);
 
   let closed = false;
   const close = () => {
