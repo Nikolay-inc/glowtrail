@@ -1,0 +1,27 @@
+{
+  "id": 6,
+  "name": "Узкий проход",
+  "grid": [
+    "##E##",
+    "##.##",
+    "##.##",
+    "#...#",
+    "##.##",
+    "##S##"
+  ],
+  "startDir": "N",
+  "deck": [
+    "left",
+    "right",
+    "straight2",
+    "left",
+    "straight2",
+    "straight",
+    "right"
+  ],
+  "stars": {
+    "two": 2,
+    "three": 4
+  },
+  "tutorial": "stash"
+}

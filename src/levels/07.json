@@ -1,0 +1,30 @@
+{
+  "id": 7,
+  "name": "Река",
+  "grid": [
+    ".E...",
+    ".....",
+    "~~~~~",
+    "...L.",
+    ".....",
+    ".S..."
+  ],
+  "startDir": "N",
+  "deck": [
+    "straight",
+    "right",
+    "left",
+    "left",
+    "straight2",
+    "bridge",
+    "straight",
+    "straight",
+    "straight",
+    "left",
+    "left"
+  ],
+  "stars": {
+    "two": 2,
+    "three": 3
+  }
+}

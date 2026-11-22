@@ -1,0 +1,24 @@
+{
+  "id": 2,
+  "name": "Поворот",
+  "grid": [
+    "...E",
+    "....",
+    "....",
+    "....",
+    ".S.."
+  ],
+  "startDir": "N",
+  "deck": [
+    "right",
+    "straight",
+    "left",
+    "straight2",
+    "straight"
+  ],
+  "stars": {
+    "two": 0,
+    "three": 0
+  },
+  "tutorial": "place"
+}

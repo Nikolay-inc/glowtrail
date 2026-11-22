@@ -1,0 +1,37 @@
+{
+  "id": 9,
+  "name": "Тихая заводь",
+  "grid": [
+    "...E.",
+    "L.#..",
+    "~~~~.",
+    "..L..",
+    ".#..~",
+    ".....",
+    ".S..."
+  ],
+  "startDir": "N",
+  "deck": [
+    "right",
+    "right",
+    "left",
+    "left",
+    "straight2",
+    "left",
+    "straight",
+    "straight2",
+    "straight",
+    "straight2",
+    "right",
+    "right",
+    "bridge",
+    "right",
+    "left",
+    "straight",
+    "left"
+  ],
+  "stars": {
+    "two": 2,
+    "three": 3
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "id": 3,
+  "name": "Огонёк",
+  "grid": [
+    ".E...",
+    ".....",
+    "...L.",
+    ".....",
+    ".S..."
+  ],
+  "startDir": "N",
+  "deck": [
+    "straight",
+    "right",
+    "straight",
+    "straight2",
+    "left",
+    "straight",
+    "left",
+    "straight2"
+  ],
+  "stars": {
+    "two": 1,
+    "three": 2
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "id": 5,
+  "name": "Камни",
+  "grid": [
+    "..E..",
+    ".###.",
+    "..L..",
+    ".#.#.",
+    ".....",
+    "..S.."
+  ],
+  "startDir": "N",
+  "deck": [
+    "straight2",
+    "straight2",
+    "straight",
+    "straight",
+    "right",
+    "straight",
+    "left",
+    "straight",
+    "left",
+    "left"
+  ],
+  "stars": {
+    "two": 2,
+    "three": 3
+  }
+}

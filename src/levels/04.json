@@ -1,0 +1,31 @@
+{
+  "id": 4,
+  "name": "Два огонька",
+  "grid": [
+    "..E..",
+    ".L...",
+    ".....",
+    "...L.",
+    ".....",
+    "..S.."
+  ],
+  "startDir": "N",
+  "deck": [
+    "right",
+    "right",
+    "left",
+    "left",
+    "right",
+    "straight2",
+    "right",
+    "straight",
+    "right",
+    "straight",
+    "left",
+    "right"
+  ],
+  "stars": {
+    "two": 2,
+    "three": 4
+  }
+}

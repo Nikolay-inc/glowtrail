@@ -1,0 +1,23 @@
+{
+  "id": 1,
+  "name": "Первые шаги",
+  "grid": [
+    ".E.",
+    "...",
+    "...",
+    "...",
+    ".S."
+  ],
+  "startDir": "N",
+  "deck": [
+    "straight",
+    "straight",
+    "straight",
+    "straight"
+  ],
+  "stars": {
+    "two": 0,
+    "three": 0
+  },
+  "tutorial": "place"
+}
