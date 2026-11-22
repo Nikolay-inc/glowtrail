@@ -32,7 +32,9 @@ export function parseLevel(data: LevelData): Level {
   if (!exit) throw new Error(`Уровень ${data.id}: нет выхода`);
   const startDir = DIR_BY_LETTER[data.startDir];
   if (startDir === undefined) throw new Error(`Уровень ${data.id}: неверное направление старта`);
-  for (const t of [...data.deck, ...(data.easeDecks ?? []).flat()]) {
+  if (data.tileSet && data.tileSet.length === 0) throw new Error(`Уровень ${data.id}: пустой набор плиток`);
+  if (!data.tileSet && data.deck.length === 0) throw new Error(`Уровень ${data.id}: пустая колода`);
+  for (const t of [...data.deck, ...(data.tileSet ?? []), ...(data.easeDecks ?? []).flat()]) {
     if (!TILE_KINDS.includes(t)) throw new Error(`Уровень ${data.id}: неизвестная плитка «${t}»`);
   }
 
@@ -46,7 +48,9 @@ export function parseLevel(data: LevelData): Level {
     startDir,
     exit,
     lanterns,
-    deck: [...data.deck],
+    deck: [...(data.deck ?? [])],
+    tileSet: data.tileSet ? [...data.tileSet] : null,
+    allowStash: data.allowStash ?? true,
     stars: { ...data.stars },
     tutorial: data.tutorial,
     easeDecks: data.easeDecks?.map((d) => [...d]),

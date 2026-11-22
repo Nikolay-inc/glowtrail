@@ -9,6 +9,7 @@ import {
   createGame,
   deckLeft,
   distanceToExit,
+  isInfinite,
   lanternsOnRoad,
   leftmostTile,
   previewTile,
@@ -23,7 +24,7 @@ import { easeDeck, findExtraTiles, findHint, nearestSolvable } from '../core/sol
 import type { TileKind } from '../core/types';
 import { LEVELS } from '../levels/index';
 import { sfx } from '../audio';
-import { hintsLeft, logEvent, lossStreak, recordLoss, recordSkip, recordWin, startAttempt, useHint } from '../storage';
+import { logEvent, lossStreak, recordLoss, recordSkip, recordWin, startAttempt } from '../storage';
 import { BoardView } from '../ui/BoardView';
 import { addBackground, Button, drawStar, text } from '../ui/draw';
 import { C, H, W } from '../ui/theme';
@@ -39,7 +40,9 @@ const PREVIEW_X = [950, 1034];
 const BOTTOM_Y = 1835;
 
 /** Сколько поражений подряд нужно для каждой меры защиты от застревания. */
-export const STUCK = { pulseHint: 2, ease1: 3, ease2: 4, skip: 5 } as const;
+export const STUCK = { pulseHint: 2, ease: 2, skip: 4 } as const;
+/** Сколько лишних плиток незаметно добавляет облегчение. */
+export const EASE_TILES = 2;
 
 type SlotId = number | 'stash';
 
@@ -73,10 +76,8 @@ export class GameScene extends Phaser.Scene {
   private deckG!: Phaser.GameObjects.Graphics;
   private deckText!: Phaser.GameObjects.Text;
   private undoBtn!: Button;
-  private undoBadge!: Phaser.GameObjects.Text;
   private restartBtn!: Button;
   private hintBtn!: Button;
-  private hintBadge!: Phaser.GameObjects.Text;
   private badgesG!: Phaser.GameObjects.Graphics;
   private hand!: Phaser.GameObjects.Text;
   private hintRing!: Phaser.GameObjects.Graphics;
@@ -121,7 +122,6 @@ export class GameScene extends Phaser.Scene {
     text(this, W / 2, TOP_Y - 14, `Уровень ${level.id}`, 54);
     this.badgesG = this.add.graphics().setDepth(1);
     this.undoBtn = new Button(this, 840, TOP_Y, { w: 130, h: 130, icon: 'undo', onClick: () => this.onUndo() });
-    this.undoBadge = text(this, 840 + 52, TOP_Y - 52, '1', 32, '#2a1a05').setDepth(2);
     this.restartBtn = new Button(this, 990, TOP_Y, { w: 130, h: 130, icon: 'restart', onClick: () => this.restart() });
 
     this.board = new BoardView(this, level, { x: 40, y: 250, w: 1000, h: 1190 });
@@ -136,6 +136,8 @@ export class GameScene extends Phaser.Scene {
     }
     this.stashGlow = this.add.graphics().setDepth(9);
     this.stashCard = new TileCard(this, STASH_X, TRAY_Y, 'stash');
+    // Слот «отложить» появляется с уровня, где его учат.
+    this.stashCard.setVisible(level.allowStash);
     this.cards = SLOT_X.map((x, i) => new TileCard(this, x, TRAY_Y, i));
     this.deckG = this.add.graphics();
     this.deckText = text(this, DECK_X, TRAY_Y + 8, '0', 56);
@@ -145,7 +147,6 @@ export class GameScene extends Phaser.Scene {
     const showSkip = this.streak >= STUCK.skip;
     const hintX = showSkip ? W / 2 - 190 : W / 2;
     this.hintBtn = new Button(this, hintX, BOTTOM_Y, { w: 340, h: 116, icon: 'bulb', label: 'Подсказка', fontSize: 40, onClick: () => this.onHint() });
-    this.hintBadge = text(this, hintX + 160, BOTTOM_Y - 52, '0', 32, '#2a1a05').setDepth(2);
     if (showSkip) {
       new Button(this, W / 2 + 190, BOTTOM_Y, { w: 340, h: 116, icon: 'skip', label: 'Пропустить', fontSize: 40, onClick: () => this.skipLevel() });
     }
@@ -172,8 +173,8 @@ export class GameScene extends Phaser.Scene {
       this.input.keyboard?.off('keydown', this.onKey, this);
     });
 
-    // Незаметное облегчение после серии поражений.
-    const extra = this.streak >= STUCK.ease2 ? 2 : this.streak >= STUCK.ease1 ? 1 : 0;
+    // Незаметное облегчение после серии поражений (только для уровней с колодой).
+    const extra = !level.tileSet && this.streak >= STUCK.ease ? EASE_TILES : 0;
     let deck = level.deck;
     if (extra > 0) {
       // Обычно колоды посчитаны заранее (npm run ease); если нет — считаем на месте один раз.
@@ -182,13 +183,14 @@ export class GameScene extends Phaser.Scene {
       deck = easedDecks.get(key)!;
     }
 
-    this.state = createGame(level, deck);
+    // Для бесконечной колоды — своё случайное зерно на каждую попытку.
+    this.state = createGame(level, deck, Math.floor(Math.random() * 2 ** 31));
     this.attempt = startAttempt(level.id);
     if (extra > 0) logEvent({ ev: 'auto_ease', level: level.id, attempt: this.attempt, added: extra, streak: this.streak });
     this.t0 = Date.now();
     this.board.setRoad(this.state);
     this.refresh(false);
-    if (this.streak >= STUCK.pulseHint && hintsLeft() > 0) this.pulse(this.hintBtn);
+    if (this.streak >= STUCK.pulseHint) this.pulse(this.hintBtn);
     if (this.state.status === 'lost') this.onLose();
   }
 
@@ -204,14 +206,12 @@ export class GameScene extends Phaser.Scene {
       card.setVisible(kind !== null);
     });
     this.stashCard.setTile(s.stash, playing && canPlace(s, s.stash), s.dir, animate);
+    this.stashCard.setVisible(s.level.allowStash);
     const next = upcoming(s, 2);
     this.previews.forEach((p, i) => p.setTile(next[i] ?? null, s.dir, animate));
     this.drawDeck();
     this.undoBtn.setEnabled(canUndo(s));
-    this.undoBadge.setText(String(s.undoLeft)).setAlpha(s.undoLeft > 0 ? 1 : 0.4);
-    const hints = hintsLeft();
-    this.hintBadge.setText(String(hints)).setAlpha(hints > 0 ? 1 : 0.5);
-    this.hintBtn.setAlpha(hints > 0 && playing ? 1 : 0.45);
+    this.hintBtn.setAlpha(playing ? 1 : 0.45);
     this.drawBadges();
     this.board.setHead(s);
     this.board.updateLanterns(s);
@@ -221,10 +221,6 @@ export class GameScene extends Phaser.Scene {
   private drawBadges() {
     const g = this.badgesG;
     g.clear();
-    g.fillStyle(this.state.undoLeft > 0 ? C.primary : C.starEmpty, 1);
-    g.fillCircle(840 + 52, TOP_Y - 52, 26);
-    g.fillStyle(hintsLeft() > 0 ? C.primary : C.starEmpty, 1);
-    g.fillCircle(this.hintBadge.x, this.hintBadge.y, 26);
     // Фонари уровня под заголовком: зажжённые — те, через которые уже прошла дорога.
     const level = this.state.level;
     const n = level.lanterns.length;
@@ -251,7 +247,7 @@ export class GameScene extends Phaser.Scene {
     g.clear();
     const w = 120;
     const h = 150;
-    const layers = Math.min(3, n);
+    const layers = Math.min(3, n === Infinity ? 3 : n);
     for (let i = layers - 1; i >= 0; i--) {
       const x = DECK_X - w / 2 + i * 8;
       const y = TRAY_Y - h / 2 - i * 10;
@@ -266,7 +262,10 @@ export class GameScene extends Phaser.Scene {
       g.lineStyle(4, C.cardEdge, 0.3);
       g.strokeRoundedRect(DECK_X - w / 2, TRAY_Y - h / 2, w, h, 24);
     }
-    this.deckText.setText(String(n)).setAlpha(n ? 1 : 0.35);
+    this.deckText
+      .setText(n === Infinity ? '∞' : String(n))
+      .setFontSize(n === Infinity ? 90 : 56)
+      .setAlpha(n ? 1 : 0.35);
   }
 
   private pulse(target: Phaser.GameObjects.Container) {
@@ -364,11 +363,6 @@ export class GameScene extends Phaser.Scene {
 
   private onHint() {
     if (this.busy || this.overlay || this.state.status !== 'playing') return;
-    if (hintsLeft() <= 0) {
-      sfx.invalid();
-      this.tweens.add({ targets: this.hintBtn, x: this.hintBtn.x + 12, duration: 45, yoyo: true, repeat: 3 });
-      return;
-    }
     if (this.activeHint) return; // подсказка уже показана
     const hint = findHint(this.state);
     if (hint) {
@@ -383,7 +377,7 @@ export class GameScene extends Phaser.Scene {
     if (!back) return;
     this.showRollbackPanel(back.steps, () => {
       this.spendHint(back.steps);
-      this.state = { ...back.state, undoLeft: this.state.undoLeft };
+      this.state = { ...back.state, undosUsed: this.state.undosUsed };
       this.board.setRoad(this.state);
       this.resetCards();
       this.activeHint = findHint(this.state);
@@ -393,9 +387,9 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  /** Подсказки бесплатные и без ограничений — просто записываем в лог. */
   private spendHint(rollback: number) {
-    const left = useHint();
-    logEvent({ ev: 'hint_used', level: this.state.level.id, attempt: this.attempt, hintsLeft: left, rollback: rollback || undefined });
+    logEvent({ ev: 'hint_used', level: this.state.level.id, attempt: this.attempt, rollback: rollback || undefined });
     this.stopPulse(this.hintBtn);
     sfx.tap();
   }
@@ -727,10 +721,10 @@ export class GameScene extends Phaser.Scene {
       ms: this.elapsed(),
       moves: s.moves,
       stars,
-      tilesLeft: tilesLeft(s),
-      undo: s.undoLeft === 0,
+      tilesLeft: isInfinite(s.level) ? undefined : tilesLeft(s),
+      undos: s.undosUsed,
     });
-    const { hintAwarded } = recordWin(s.level.id, stars, LEVELS.length);
+    recordWin(s.level.id, stars, LEVELS.length);
     this.hideHints();
     this.stopPulse(this.hintBtn);
     this.tweens.add({ targets: [...this.cards, this.stashCard, ...this.previews], alpha: 0.25, duration: 300 });
@@ -740,7 +734,7 @@ export class GameScene extends Phaser.Scene {
       (n) => sfx.lantern(n),
       () => {
         sfx.win();
-        this.showWinPanel(stars, hintAwarded);
+        this.showWinPanel(stars);
       },
     );
   }
@@ -750,7 +744,7 @@ export class GameScene extends Phaser.Scene {
     const s = this.state;
     this.streak = recordLoss(s.level.id);
     logEvent({ ev: 'lose', level: s.level.id, attempt: this.attempt, ms: this.elapsed(), moves: s.moves, streak: this.streak });
-    if (this.streak >= STUCK.pulseHint && hintsLeft() > 0) this.pulse(this.hintBtn);
+    if (this.streak >= STUCK.pulseHint) this.pulse(this.hintBtn);
     this.time.delayedCall(450, () => {
       if (this.state !== s) return;
       sfx.lose();
@@ -784,7 +778,7 @@ export class GameScene extends Phaser.Scene {
     this.overlay = undefined;
   }
 
-  private showWinPanel(stars: number, hintAwarded: boolean) {
+  private showWinPanel(stars: number) {
     const isLast = this.levelIndex >= LEVELS.length - 1;
     const { o, top } = this.makeOverlay('win', 860);
     o.add(text(this, W / 2, top + 110, isLast ? 'Все фонари зажжены!' : `Уровень ${this.state.level.id}`, isLast ? 60 : 50, C.textDim));
@@ -800,7 +794,6 @@ export class GameScene extends Phaser.Scene {
       o.add(sg);
       this.tweens.add({ targets: sg, scale: 1, duration: 380, delay: 300 + i * 260, ease: 'Back.out', onStart: () => sfx.star(i) });
     }
-    if (hintAwarded) o.add(text(this, W / 2, top + 500, '+1 подсказка', 40, '#ffd36b', false));
     const next = () => (isLast ? this.scene.start('Menu') : this.scene.start('Game', { levelIndex: this.levelIndex + 1 }));
     o.add(new Button(this, W / 2, top + 610, { w: 520, h: 140, icon: 'play', label: isLast ? 'Меню' : 'Дальше', primary: true, onClick: next }));
     o.add(new Button(this, W / 2 - 160, top + 750, { w: 120, h: 100, icon: 'restart', onClick: () => this.scene.start('Game', { levelIndex: this.levelIndex }) }));
@@ -820,7 +813,8 @@ export class GameScene extends Phaser.Scene {
     // Раскладка по вертикали считается заранее, чтобы панель была ровно по содержимому.
     const infoRel = total > 0 ? 350 : 210;
     const btnRel = infoRel + 150;
-    const rowRel = btnRel + (extra ? 290 : 170);
+    const twoBig = !!extra || canUndo(s);
+    const rowRel = btnRel + (twoBig ? 290 : 170);
     const panelH = (showSkip ? rowRel + 130 : rowRel) + 110;
     const { o, top } = this.makeOverlay('lose', panelH);
     o.add(text(this, W / 2, top + 100, 'Почти!', 84));
@@ -863,7 +857,15 @@ export class GameScene extends Phaser.Scene {
     };
 
     const btnY = top + btnRel;
-    if (extra) {
+    const undoable = canUndo(s);
+    const undoPrimary = !extra && undoable;
+    if (undoPrimary) {
+      // Отмена без ограничений — самый короткий путь назад, она и главная кнопка.
+      const back = () => this.onUndo();
+      o.add(new Button(this, W / 2, btnY, { w: 560, h: 140, icon: 'undo', label: 'Отменить ход', primary: true, onClick: back }));
+      o.add(new Button(this, W / 2, btnY + 160, { w: 420, h: 110, icon: 'restart', label: 'Заново', fontSize: 42, onClick: again }));
+      o.on('primary', back);
+    } else if (extra) {
       o.add(new Button(this, W / 2, btnY, { w: 560, h: 140, icon: 'plus', label: '+3 плитки', primary: true, onClick: plus3 }));
       o.add(new Button(this, W / 2, btnY + 160, { w: 420, h: 110, icon: 'restart', label: 'Заново', fontSize: 42, onClick: again }));
       o.on('primary', plus3);
@@ -872,9 +874,8 @@ export class GameScene extends Phaser.Scene {
       o.on('primary', again);
     }
     const rowY = top + rowRel;
-    const undoable = canUndo(s);
-    if (undoable) o.add(new Button(this, W / 2 - 160, rowY, { w: 120, h: 100, icon: 'undo', onClick: () => this.onUndo() }));
-    o.add(new Button(this, undoable ? W / 2 + 160 : W / 2, rowY, { w: 120, h: 100, icon: 'menu', onClick: () => this.leave('Menu') }));
+    if (undoable && !undoPrimary) o.add(new Button(this, W / 2 - 160, rowY, { w: 120, h: 100, icon: 'undo', onClick: () => this.onUndo() }));
+    o.add(new Button(this, undoable && !undoPrimary ? W / 2 + 160 : W / 2, rowY, { w: 120, h: 100, icon: 'menu', onClick: () => this.leave('Menu') }));
     if (showSkip) {
       o.add(new Button(this, W / 2, rowY + 130, { w: 520, h: 100, icon: 'skip', label: 'Пропустить уровень', fontSize: 36, onClick: () => this.skipLevel() }));
     }

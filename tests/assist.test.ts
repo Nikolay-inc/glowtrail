@@ -29,8 +29,8 @@ describe('звёзды по формуле', () => {
     expect(starThresholds(5)).toEqual({ two: 2, three: 4 });
   });
 
-  it('звёзды всех уровней совпадают с формулой', () => {
-    for (const l of LEVELS) {
+  it('звёзды всех уровней с колодой совпадают с формулой', () => {
+    for (const l of LEVELS.filter((x) => !x.tileSet)) {
       const r = solveLevel(l, { countRoads: false });
       expect(l.stars, `уровень ${l.id}`).toEqual(starThresholds(r.maxLeftover));
     }
@@ -128,14 +128,14 @@ describe('защита от застревания', () => {
   });
 
   it('облегчение добавляет плитку и не уменьшает число решений', () => {
-    const l = { ...LEVELS[1], easeDecks: undefined };
+    const l = { ...LEVELS.find((x) => !x.tileSet)!, easeDecks: undefined };
     const deck = easeDeck(l, 1);
     expect(deck).toHaveLength(l.deck.length + 1);
     expect(solveLevel(l, { deck }).roads).toBeGreaterThanOrEqual(solveLevel(l).roads);
   });
 
   it('заранее посчитанные колоды облегчения: +1 и +2 плитки, решаемы, решений не меньше', () => {
-    for (const l of LEVELS) {
+    for (const l of LEVELS.filter((x) => !x.tileSet)) {
       const before = solveLevel(l).roads;
       expect(l.easeDecks, `уровень ${l.id}`).toHaveLength(2);
       l.easeDecks!.forEach((d, k) => {
@@ -148,36 +148,20 @@ describe('защита от застревания', () => {
   });
 });
 
-describe('хранилище: подсказки, серии поражений, пропуски', () => {
-  beforeEach(() => {
-    const mem = new Map<string, string>();
-    (globalThis as unknown as { localStorage: Storage }).localStorage = {
-      getItem: (k: string) => mem.get(k) ?? null,
-      setItem: (k: string, v: string) => void mem.set(k, v),
-      removeItem: (k: string) => void mem.delete(k),
-      clear: () => mem.clear(),
-      key: () => null,
-      length: 0,
-    };
+describe('хранилище: серии поражений и пропуски', () => {
+  beforeEach(async () => {
+    const { SaveService, memoryBackend } = await import('../src/save/SaveService');
+    SaveService.setBackend(memoryBackend());
   });
 
-  it('серия поражений растёт и сбрасывается победой, подсказка +1 только за первое прохождение', async () => {
+  it('серия поражений растёт и сбрасывается победой', async () => {
     const st = await import('../src/storage');
-    expect(st.hintsLeft()).toBe(st.START_HINTS);
     expect(st.recordLoss(3)).toBe(1);
     expect(st.recordLoss(3)).toBe(2);
     expect(st.lossStreak(3)).toBe(2);
-    expect(st.recordWin(3, 2, 10).hintAwarded).toBe(true);
+    st.recordWin(3, 2, 10);
     expect(st.lossStreak(3)).toBe(0);
-    expect(st.hintsLeft()).toBe(st.START_HINTS + 1);
-    expect(st.recordWin(3, 3, 10).hintAwarded).toBe(false);
-    expect(st.hintsLeft()).toBe(st.START_HINTS + 1);
-  });
-
-  it('подсказки тратятся и не уходят в минус', async () => {
-    const st = await import('../src/storage');
-    for (let i = st.START_HINTS; i > 0; i--) expect(st.useHint()).toBe(i - 1);
-    expect(st.useHint()).toBe(-1);
+    expect(st.loadProgress()).toMatchObject({ unlocked: 4, stars: { 3: 2 } });
   });
 
   it('пропуск открывает следующий уровень и попадает в сводку', async () => {

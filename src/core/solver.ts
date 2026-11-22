@@ -1,7 +1,8 @@
 // Решатель: поиск в глубину по всем ходам с учётом лотка из 3 плиток и слота «отложить».
 // Используется в npm run verify (проверка уровней), в подсказках, в «+3 плитки» и в облегчении уровня.
 
-import { dealExtra, placeTile, TRAY_SIZE, type Action, type GameState } from './game';
+import { dealExtra, isInfinite, placeTile, tileLeadsToExit, TRAY_SIZE, type Action, type GameState } from './game';
+import { geoCountRoads, geoMinTiles } from './geo';
 import { TILE_KINDS, type Dir, type Level, type TileKind } from './types';
 
 interface Node {
@@ -179,8 +180,23 @@ function nodeOf(state: GameState): Node {
 }
 
 export function solveLevel(level: Level, options: SolveOptions = {}): SolveReport {
+  if (level.tileSet && !options.deck) {
+    // Бесконечная колода: важна только геометрия, плиток всегда хватает.
+    const start = level.start.y * level.width + level.start.x;
+    const min = geoMinTiles(level, level.tileSet, start, level.startDir, 1n << BigInt(start));
+    return {
+      solvable: min >= 0,
+      roads: options.countRoads === false ? 0 : geoCountRoads(level, level.tileSet),
+      maxLeftover: 0,
+      minTiles: min,
+      states: 0,
+    };
+  }
   const deck = options.deck ?? level.deck;
-  const solver = new Solver(level, deck, { allowStash: options.allowStash ?? true, countRoads: options.countRoads ?? true });
+  const solver = new Solver(level, deck, {
+    allowStash: (options.allowStash ?? true) && level.allowStash,
+    countRoads: options.countRoads ?? true,
+  });
   const r = solver.explore(startNode(level, deck));
   return {
     solvable: r.best >= 0,
@@ -194,13 +210,18 @@ export function solveLevel(level: Level, options: SolveOptions = {}): SolveRepor
 /** Лучший остаток плиток, достижимый из состояния партии; -1 — отсюда не выиграть. */
 export function bestFrom(state: GameState): number {
   if (state.status === 'won') return 0;
+  if (isInfinite(state.level)) {
+    const m = nodeOf(state).mask;
+    return geoMinTiles(state.level, state.level.tileSet!, state.head, state.dir, m) >= 0 ? 0 : -1;
+  }
   return new Solver(state.level, state.deck, { allowStash: true, countRoads: false }).explore(nodeOf(state)).best;
 }
 
 /** Подсказка: ход, после которого ещё можно выиграть с наибольшим запасом плиток. */
 export function findHint(state: GameState): Action | null {
   if (state.status !== 'playing') return null;
-  const solver = new Solver(state.level, state.deck, { allowStash: true, countRoads: false });
+  if (isInfinite(state.level)) return infiniteHint(state);
+  const solver = new Solver(state.level, state.deck, { allowStash: state.level.allowStash, countRoads: false });
   let bestScore = -1;
   let bestMove: Move | null = null;
   // При равенстве: поставить из лотка > отложить > поставить из слота > обменять.
@@ -219,6 +240,36 @@ export function findHint(state: GameState): Action | null {
   if (bestMove.from === 'toStash') return { type: 'stash', slot };
   if (bestMove.from === 'swap') return { type: 'swap', slot };
   return { type: 'place', slot };
+}
+
+/** Подсказка в бесконечной колоде: плитка, после которой до выхода ближе всего. */
+function infiniteHint(state: GameState): Action | null {
+  const level = state.level;
+  const kinds = level.tileSet!;
+  const board = { level, onRoad: state.onRoad, head: state.head, dir: state.dir };
+  const remaining = (kind: TileKind) => {
+    const p = placeTile(level, (i) => state.onRoad[i], state.head, state.dir, kind);
+    let m = nodeOf(state).mask;
+    for (const c of p.cells) m |= 1n << BigInt(c.idx);
+    return geoMinTiles(level, kinds, p.cells[p.cells.length - 1].idx, p.newDir, m);
+  };
+  let best: { action: Action; left: number } | null = null;
+  state.tray.forEach((k, slot) => {
+    if (!k || !tileLeadsToExit(board, k)) return;
+    const left = remaining(k);
+    if (!best || left < best.left) best = { action: { type: 'place', slot }, left };
+  });
+  if (state.stash && tileLeadsToExit(board, state.stash)) {
+    const left = remaining(state.stash);
+    if (!best || left < (best as { left: number }).left) best = { action: { type: 'placeStash' }, left };
+  }
+  if (best) return (best as { action: Action }).action;
+  // Ни одна плитка не ведёт к выходу, но дойти ещё можно — отложить и взять новую.
+  if (bestFrom(state) >= 0 && level.allowStash && state.stash === null) {
+    const slot = state.tray.findIndex((t) => t !== null);
+    if (slot >= 0) return { type: 'stash', slot };
+  }
+  return null;
 }
 
 /** Ближайшее предыдущее состояние (или текущее), откуда ещё можно выиграть. steps — сколько ходов назад. */
@@ -255,6 +306,7 @@ function combos(n: number, kinds: readonly TileKind[]): TileKind[][] {
  * откатывается к ближайшему состоянию, где это возможно. Возвращает новое состояние.
  */
 export function findExtraTiles(state: GameState, n = 3): { state: GameState; kinds: TileKind[]; rollback: number } | null {
+  if (isInfinite(state.level)) return null; // без лимита плиток добавлять нечего
   let base: GameState | null = state;
   for (let rollback = 0; base; rollback++, base = base.prev) {
     if (base.status === 'won') continue;
@@ -264,7 +316,7 @@ export function findExtraTiles(state: GameState, n = 3): { state: GameState; kin
       const b = bestFrom(next);
       if (b >= 0 && (!best || b > best.score)) best = { state: next, kinds, score: b };
     }
-    if (best) return { state: { ...best.state, undoLeft: state.undoLeft }, kinds: best.kinds, rollback };
+    if (best) return { state: { ...best.state, undosUsed: state.undosUsed }, kinds: best.kinds, rollback };
   }
   return null;
 }
@@ -273,7 +325,7 @@ const EASE_POSITIONS = 6;
 
 /** Сколько состояний уровня с этой колодой ведут к победе (-1 — не решается). */
 function forgiveness(level: Level, deck: TileKind[]): { winnable: number; left: number } {
-  const solver = new Solver(level, deck, { allowStash: true, countRoads: false });
+  const solver = new Solver(level, deck, { allowStash: level.allowStash, countRoads: false });
   const r = solver.explore(startNode(level, deck));
   return { winnable: r.best >= 0 ? solver.winnableStates : -1, left: r.best };
 }
@@ -284,6 +336,7 @@ function forgiveness(level: Level, deck: TileKind[]): { winnable: number; left: 
  * ещё можно выиграть. Лишняя плитка помогает сильнее всего в начале колоды — перебираем только первые позиции.
  */
 export function easeDeck(level: Level, extra: number, deck: TileKind[] = level.deck): TileKind[] {
+  if (level.tileSet) return [...deck]; // бесконечную колоду облегчать не нужно
   let cur = [...deck];
   for (let k = 0; k < extra; k++) {
     let best: { deck: TileKind[]; winnable: number; left: number } | null = null;

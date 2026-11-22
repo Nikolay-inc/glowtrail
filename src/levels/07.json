@@ -1,60 +1,67 @@
 {
   "id": 7,
-  "name": "Отложи на потом",
+  "name": "Два огонька",
   "grid": [
-    "#.E.#",
-    "#...#",
-    "##.##",
-    "#...#",
-    "#.L.#",
-    "#...#",
-    "##S##"
+    "..E..",
+    ".L...",
+    ".....",
+    "...L.",
+    ".....",
+    "..S.."
   ],
   "startDir": "N",
   "deck": [
-    "left",
-    "left",
-    "right",
     "right",
     "left",
-    "left",
-    "right",
     "straight2",
+    "left",
+    "right",
     "straight",
-    "right"
+    "left",
+    "right",
+    "right",
+    "right",
+    "straight",
+    "right",
+    "straight2"
   ],
   "stars": {
-    "two": 1,
-    "three": 2
+    "two": 2,
+    "three": 4
   },
-  "tutorial": "stash",
   "easeDecks": [
     [
       "straight",
-      "left",
-      "left",
-      "right",
       "right",
       "left",
-      "left",
-      "right",
       "straight2",
+      "left",
+      "right",
       "straight",
-      "right"
+      "left",
+      "right",
+      "right",
+      "right",
+      "straight",
+      "right",
+      "straight2"
     ],
     [
       "straight",
-      "left",
-      "left",
       "right",
-      "right",
-      "straight",
       "left",
-      "left",
-      "right",
       "straight2",
+      "left",
+      "right",
+      "left",
       "straight",
-      "right"
+      "left",
+      "right",
+      "right",
+      "right",
+      "straight",
+      "right",
+      "straight2"
     ]
   ]
 }

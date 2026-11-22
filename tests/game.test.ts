@@ -115,16 +115,18 @@ describe('лоток, колода, отложить и отмена', () => {
     expect(s2.dir).toBe(3);
   });
 
-  it('отменить можно только один раз за уровень', () => {
+  it('отмена без ограничений: можно отменить много ходов подряд, до старта', () => {
     const g = createGame(lvl);
-    const s = place(place(g, 1), 1);
+    const s = place(place(place(g, 1), 2), 0);
+    expect(s.road).toHaveLength(4);
     expect(canUndo(s)).toBe(true);
-    const u = undo(s);
-    expect(u.road).toHaveLength(2);
-    expect(u.undoLeft).toBe(0);
-    const s2 = place(u, 1);
-    expect(canUndo(s2)).toBe(false);
-    expect(undo(s2)).toBe(s2);
+    const u1 = undo(s);
+    const u2 = undo(u1);
+    const u3 = undo(u2);
+    expect(u3.road).toHaveLength(1);
+    expect(u3.undosUsed).toBe(3);
+    expect(canUndo(u3)).toBe(false); // это уже старт
+    expect(undo(u3)).toBe(u3);
   });
 
   it('незаконный ход не меняет состояние', () => {

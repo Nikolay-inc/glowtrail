@@ -1,59 +1,59 @@
 {
   "id": 6,
-  "name": "Камни",
+  "name": "Отложи на потом",
   "grid": [
-    "..E..",
+    ".E...",
     ".....",
-    ".#.#.",
     ".....",
-    ".#...",
     ".....",
-    "..S.."
+    "##.##",
+    "##S##"
   ],
   "startDir": "N",
   "deck": [
-    "straight",
+    "right",
+    "right",
+    "left",
     "straight2",
     "straight",
     "left",
     "right",
-    "right",
-    "left",
-    "left",
-    "right",
-    "straight"
+    "straight",
+    "straight2",
+    "left"
   ],
   "stars": {
-    "two": 1,
-    "three": 2
+    "two": 2,
+    "three": 4
   },
+  "tutorial": "stash",
   "easeDecks": [
     [
       "straight",
+      "right",
+      "right",
+      "left",
       "straight2",
       "straight",
       "left",
       "right",
-      "right",
       "straight",
-      "left",
-      "left",
-      "right",
-      "straight"
+      "straight2",
+      "left"
     ],
     [
       "straight",
+      "right",
+      "right",
+      "left",
       "straight2",
       "straight",
       "left",
+      "left",
       "right",
-      "right",
-      "straight2",
       "straight",
-      "left",
-      "left",
-      "right",
-      "straight"
+      "straight2",
+      "left"
     ]
   ]
 }

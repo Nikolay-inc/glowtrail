@@ -94,7 +94,5 @@ export function isMuted() {
 
 export function setMuted(v: boolean) {
   muted = v;
-  const p = loadProgress();
-  p.muted = v;
-  saveProgress(p);
+  saveProgress({ ...loadProgress(), muted: v });
 }

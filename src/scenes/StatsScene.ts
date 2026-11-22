@@ -3,7 +3,7 @@
 import Phaser from 'phaser';
 import { LEVELS } from '../levels/index';
 import { sfx } from '../audio';
-import { fmtTime, hintsLeft, loadLog, resetAll, statsText, summarize } from '../storage';
+import { fmtTime, loadLog, resetAll, statsText, summarize } from '../storage';
 import { addBackground, Button, text } from '../ui/draw';
 import { C, MONO, W } from '../ui/theme';
 
@@ -29,7 +29,7 @@ export class StatsScene extends Phaser.Scene {
     const attempts = rows.reduce((s, r) => s + r.attempts, 0);
 
     text(this, W / 2, 260, `Пройдено: ${passed} из ${LEVELS.length}`, 56);
-    text(this, W / 2, 335, `Попыток: ${attempts}   Время: ${fmtTime(totalMs)}   Подсказок: ${hintsLeft()}`, 40, C.textDim, false);
+    text(this, W / 2, 335, `Попыток: ${attempts}   Время: ${fmtTime(totalMs)}`, 40, C.textDim, false);
 
     const header = 'Ур Попыт Побед Звёзды  Время Помощь';
     const lines = rows.map((r) => {

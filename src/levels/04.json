@@ -1,61 +1,24 @@
 {
   "id": 4,
-  "name": "Два огонька",
+  "name": "Камни",
   "grid": [
-    "..E..",
-    ".L...",
-    ".....",
-    "...L.",
-    ".....",
-    "..S.."
+    ".E..",
+    "...#",
+    ".L..",
+    ".#..",
+    "..S."
   ],
   "startDir": "N",
-  "deck": [
-    "left",
-    "right",
-    "right",
-    "left",
-    "left",
+  "deck": [],
+  "stars": {
+    "two": 0,
+    "three": 0
+  },
+  "tileSet": [
     "straight",
-    "left",
     "straight2",
-    "right",
-    "right",
+    "left",
     "right"
   ],
-  "stars": {
-    "two": 1,
-    "three": 2
-  },
-  "easeDecks": [
-    [
-      "straight",
-      "left",
-      "right",
-      "right",
-      "left",
-      "left",
-      "straight",
-      "left",
-      "straight2",
-      "right",
-      "right",
-      "right"
-    ],
-    [
-      "straight2",
-      "straight",
-      "left",
-      "right",
-      "right",
-      "left",
-      "left",
-      "straight",
-      "left",
-      "straight2",
-      "right",
-      "right",
-      "right"
-    ]
-  ]
+  "allowStash": false
 }

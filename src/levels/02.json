@@ -2,48 +2,23 @@
   "id": 2,
   "name": "Поворот",
   "grid": [
-    "...E",
-    "....",
-    "....",
-    "....",
-    ".S.."
+    "..E",
+    "...",
+    "...",
+    "...",
+    ".S."
   ],
   "startDir": "N",
-  "deck": [
-    "straight2",
-    "right",
-    "right",
-    "left",
-    "left",
-    "straight",
-    "left"
-  ],
+  "deck": [],
   "stars": {
-    "two": 1,
-    "three": 1
+    "two": 0,
+    "three": 0
   },
-  "tutorial": "place",
-  "easeDecks": [
-    [
-      "straight",
-      "straight2",
-      "right",
-      "right",
-      "left",
-      "left",
-      "straight",
-      "left"
-    ],
-    [
-      "straight",
-      "straight2",
-      "right",
-      "right",
-      "left",
-      "left",
-      "right",
-      "straight",
-      "left"
-    ]
-  ]
+  "tileSet": [
+    "straight",
+    "left",
+    "right"
+  ],
+  "allowStash": false,
+  "tutorial": "place"
 }

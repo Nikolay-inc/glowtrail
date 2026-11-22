@@ -2,64 +2,70 @@
   "id": 8,
   "name": "Река",
   "grid": [
-    "...E..",
-    "......",
-    "~~~~~~",
-    "......",
-    "..L...",
-    "......",
-    "..S..."
+    ".E...",
+    ".....",
+    "~~~~~",
+    ".....",
+    "..L..",
+    ".....",
+    "..S.."
   ],
   "startDir": "N",
   "deck": [
     "straight",
-    "straight",
-    "straight",
+    "left",
+    "right",
     "right",
     "left",
-    "left",
-    "straight",
-    "left",
+    "straight2",
     "bridge",
+    "straight2",
+    "left",
+    "left",
     "right",
     "straight",
-    "bridge"
+    "bridge",
+    "straight2"
   ],
   "stars": {
-    "two": 1,
-    "three": 2
+    "two": 2,
+    "three": 4
   },
   "easeDecks": [
     [
       "straight",
-      "straight",
-      "straight",
-      "right",
       "left",
       "right",
+      "right",
       "left",
-      "straight",
-      "left",
+      "straight2",
+      "right",
       "bridge",
+      "straight2",
+      "left",
+      "left",
       "right",
       "straight",
-      "bridge"
+      "bridge",
+      "straight2"
     ],
     [
       "straight",
-      "straight",
-      "straight",
+      "left",
+      "right",
       "right",
       "left",
+      "straight",
+      "straight2",
       "right",
       "bridge",
+      "straight2",
       "left",
-      "straight",
       "left",
-      "bridge",
       "right",
       "straight",
-      "bridge"
+      "bridge",
+      "straight2"
     ]
   ]
 }

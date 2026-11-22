@@ -1,136 +1,60 @@
-// Прогресс и лог событий в localStorage. Если хранилище недоступно (приватный режим),
-// игра продолжает работать, просто ничего не запоминает.
+// Прогресс и лог событий поверх SaveService (сейчас localStorage, позже — облако).
 
-const PROGRESS_KEY = 'glowtrail.progress.v1';
-const LOG_KEY = 'glowtrail.log.v1';
-const MAX_LOG = 2000;
+import { SaveService, type LogEvent, type Progress } from './save/SaveService';
 
-export interface Progress {
-  /** Номер максимального открытого уровня. */
-  unlocked: number;
-  /** Лучшие звёзды по уровням. */
-  stars: Record<number, number>;
-  /** Сколько раз начинали каждый уровень. */
-  attempts: Record<number, number>;
-  /** Поражений подряд на уровне (сбрасывается победой). */
-  lossStreak: Record<number, number>;
-  /** Пропущенные уровни. */
-  skipped: Record<number, boolean>;
-  /** Сколько подсказок осталось. */
-  hints: number;
-  muted: boolean;
-}
-
-export const START_HINTS = 3;
-
-export type EventType = 'session' | 'start' | 'win' | 'lose' | 'abandon' | 'hint_used' | 'extra_tiles' | 'auto_ease' | 'level_skipped';
-
-export interface LogEvent {
-  /** Время события, ISO. */
-  t: string;
-  ev: EventType;
-  level?: number;
-  attempt?: number;
-  /** Длительность попытки, мс. */
-  ms?: number;
-  moves?: number;
-  stars?: number;
-  tilesLeft?: number;
-  undo?: boolean;
-  /** Серия поражений подряд на момент события. */
-  streak?: number;
-  /** Сколько плиток добавлено (extra_tiles, auto_ease). */
-  added?: number;
-  /** На сколько ходов откатились (hint_used, extra_tiles). */
-  rollback?: number;
-  /** Сколько подсказок осталось после использования. */
-  hintsLeft?: number;
-}
-
-function read<T>(key: string, fallback: T): T {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? { ...fallback, ...JSON.parse(raw) } : fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function readArray<T>(key: string): T[] {
-  try {
-    const raw = localStorage.getItem(key);
-    const v = raw ? JSON.parse(raw) : [];
-    return Array.isArray(v) ? v : [];
-  } catch {
-    return [];
-  }
-}
-
-function write(key: string, value: unknown) {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch {
-    /* хранилище недоступно — молча продолжаем */
-  }
-}
-
-const defaultProgress = (): Progress => ({ unlocked: 1, stars: {}, attempts: {}, lossStreak: {}, skipped: {}, hints: START_HINTS, muted: false });
+export type { EventType, LogEvent, Progress } from './save/SaveService';
 
 export function loadProgress(): Progress {
-  return read(PROGRESS_KEY, defaultProgress());
+  return SaveService.load().progress;
 }
 
 export function saveProgress(p: Progress) {
-  write(PROGRESS_KEY, p);
+  SaveService.update((d) => {
+    d.progress = p;
+  });
 }
 
 export function loadLog(): LogEvent[] {
-  return readArray<LogEvent>(LOG_KEY);
+  return SaveService.load().log;
 }
 
 export function logEvent(e: Omit<LogEvent, 't'>) {
-  const log = loadLog();
-  log.push({ t: new Date().toISOString(), ...e });
-  write(LOG_KEY, log.slice(-MAX_LOG));
+  SaveService.update((d) => {
+    d.log.push({ t: new Date().toISOString(), ...e });
+  });
 }
 
 export function resetAll() {
-  try {
-    localStorage.removeItem(PROGRESS_KEY);
-    localStorage.removeItem(LOG_KEY);
-  } catch {
-    /* ничего */
-  }
+  SaveService.reset();
 }
 
 /** Отмечает начало попытки и возвращает её номер. */
 export function startAttempt(level: number): number {
-  const p = loadProgress();
-  const attempt = (p.attempts[level] ?? 0) + 1;
-  p.attempts[level] = attempt;
-  saveProgress(p);
+  let attempt = 0;
+  SaveService.update((d) => {
+    attempt = (d.progress.attempts[level] ?? 0) + 1;
+    d.progress.attempts[level] = attempt;
+  });
   logEvent({ ev: 'start', level, attempt });
   return attempt;
 }
 
-/** Победа: звёзды, открытие следующего уровня, сброс серии поражений, +1 подсказка за первое прохождение. */
-export function recordWin(level: number, stars: number, totalLevels: number): { hintAwarded: boolean } {
-  const p = loadProgress();
-  const firstWin = !p.stars[level];
-  p.stars[level] = Math.max(p.stars[level] ?? 0, stars);
-  p.unlocked = Math.min(totalLevels, Math.max(p.unlocked, level + 1));
-  p.lossStreak[level] = 0;
-  if (firstWin) p.hints += 1;
-  saveProgress(p);
-  return { hintAwarded: firstWin };
+/** Победа: звёзды, открытие следующего уровня, сброс серии поражений. */
+export function recordWin(level: number, stars: number, totalLevels: number) {
+  SaveService.update(({ progress: p }) => {
+    p.stars[level] = Math.max(p.stars[level] ?? 0, stars);
+    p.unlocked = Math.min(totalLevels, Math.max(p.unlocked, level + 1));
+    p.lossStreak[level] = 0;
+  });
 }
 
 /** Поражение: увеличивает серию и возвращает её. */
 export function recordLoss(level: number): number {
-  const p = loadProgress();
-  const streak = (p.lossStreak[level] ?? 0) + 1;
-  p.lossStreak[level] = streak;
-  saveProgress(p);
+  let streak = 0;
+  SaveService.update(({ progress: p }) => {
+    streak = (p.lossStreak[level] ?? 0) + 1;
+    p.lossStreak[level] = streak;
+  });
   return streak;
 }
 
@@ -138,25 +62,12 @@ export function lossStreak(level: number): number {
   return loadProgress().lossStreak[level] ?? 0;
 }
 
-/** Тратит подсказку. Возвращает остаток или -1, если подсказок нет. */
-export function useHint(): number {
-  const p = loadProgress();
-  if (p.hints <= 0) return -1;
-  p.hints -= 1;
-  saveProgress(p);
-  return p.hints;
-}
-
-export function hintsLeft(): number {
-  return loadProgress().hints;
-}
-
 /** Пропуск уровня: отмечаем и открываем следующий. Пропущенный уровень остаётся доступным. */
 export function recordSkip(level: number, totalLevels: number) {
-  const p = loadProgress();
-  p.skipped[level] = true;
-  p.unlocked = Math.min(totalLevels, Math.max(p.unlocked, level + 1));
-  saveProgress(p);
+  SaveService.update(({ progress: p }) => {
+    p.skipped[level] = true;
+    p.unlocked = Math.min(totalLevels, Math.max(p.unlocked, level + 1));
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -229,7 +140,7 @@ export function statsText(levelCount: number): string {
     '',
     'Лог событий:',
     ...log.map((e) =>
-      [e.t, e.ev, e.level && `ур${e.level}`, e.attempt && `#${e.attempt}`, e.ms !== undefined && fmtTime(e.ms), e.stars !== undefined && `${e.stars}★`, e.moves !== undefined && `ходов ${e.moves}`, e.tilesLeft !== undefined && `осталось ${e.tilesLeft}`, e.undo && 'отмена', e.streak !== undefined && `серия ${e.streak}`, e.added !== undefined && `+${e.added} плит.`, e.rollback && `откат ${e.rollback}`, e.hintsLeft !== undefined && `подсказок ${e.hintsLeft}`]
+      [e.t, e.ev, e.level && `ур${e.level}`, e.attempt && `#${e.attempt}`, e.ms !== undefined && fmtTime(e.ms), e.stars !== undefined && `${e.stars}★`, e.moves !== undefined && `ходов ${e.moves}`, e.tilesLeft !== undefined && `осталось ${e.tilesLeft}`, e.undos ? `отмен ${e.undos}` : e.undo && 'отмена', e.streak !== undefined && `серия ${e.streak}`, e.added !== undefined && `+${e.added} плит.`, e.rollback && `откат ${e.rollback}`]
         .filter(Boolean)
         .join(' '),
     ),

@@ -35,8 +35,12 @@ export interface LevelData {
   grid: string[];
   /** Куда смотрит фонарщик на старте: N, E, S, W. */
   startDir: 'N' | 'E' | 'S' | 'W';
-  /** Колода плиток сверху вниз: первые три сразу попадают в лоток. */
+  /** Колода плиток сверху вниз: первые три сразу попадают в лоток. Пусто, если колода бесконечная. */
   deck: TileKind[];
+  /** Бесконечная колода: плитки выдаются случайно из этого набора (обучающие уровни). */
+  tileSet?: TileKind[];
+  /** Можно ли пользоваться слотом «отложить» (по умолчанию да). */
+  allowStash?: boolean;
   /** Сколько плиток должно остаться для 2 и 3 звёзд. */
   stars: { two: number; three: number };
   /** Подсказка без текста: place — рука показывает нужную плитку, stash — показывает слот «отложить». */
@@ -62,6 +66,9 @@ export interface Level {
   exit: Point;
   lanterns: number[]; // индексы клеток с фонарями
   deck: TileKind[];
+  /** Набор бесконечной колоды или null, если колода конечная. */
+  tileSet: TileKind[] | null;
+  allowStash: boolean;
   stars: { two: number; three: number };
   tutorial?: 'place' | 'stash';
   easeDecks?: TileKind[][];

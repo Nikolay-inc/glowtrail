@@ -1,58 +1,59 @@
 {
   "id": 5,
-  "name": "Передышка",
+  "name": "Счёт плиток",
   "grid": [
-    "..E..",
-    ".....",
-    "..L..",
-    ".....",
-    ".....",
-    "..S.."
+    "..E.",
+    "....",
+    ".L..",
+    "..#.",
+    "....",
+    ".S.."
   ],
   "startDir": "N",
   "deck": [
+    "left",
     "straight2",
     "right",
     "right",
-    "left",
     "straight",
     "left",
     "straight",
     "straight2",
-    "right",
-    "left"
+    "left",
+    "right"
   ],
   "stars": {
     "two": 2,
-    "three": 3
+    "three": 4
   },
+  "allowStash": false,
   "easeDecks": [
     [
+      "straight",
+      "left",
       "straight2",
       "right",
       "right",
-      "left",
       "straight",
       "left",
-      "straight",
       "straight",
       "straight2",
-      "right",
-      "left"
+      "left",
+      "right"
     ],
     [
+      "straight",
+      "left",
       "straight2",
       "right",
       "right",
-      "left",
       "straight",
       "left",
       "left",
-      "straight",
       "straight",
       "straight2",
-      "right",
-      "left"
+      "left",
+      "right"
     ]
   ]
 }

@@ -2,56 +2,22 @@
   "id": 3,
   "name": "Огонёк",
   "grid": [
-    ".E...",
-    ".....",
-    "...L.",
-    ".....",
-    ".S..."
+    ".E..",
+    "....",
+    "..L.",
+    "....",
+    ".S.."
   ],
   "startDir": "N",
-  "deck": [
-    "straight",
-    "left",
-    "right",
-    "straight",
-    "right",
-    "left",
-    "left",
-    "straight",
-    "right",
-    "straight2"
-  ],
+  "deck": [],
   "stars": {
-    "two": 1,
-    "three": 2
+    "two": 0,
+    "three": 0
   },
-  "easeDecks": [
-    [
-      "straight2",
-      "straight",
-      "left",
-      "right",
-      "straight",
-      "right",
-      "left",
-      "left",
-      "straight",
-      "right",
-      "straight2"
-    ],
-    [
-      "straight2",
-      "straight",
-      "left",
-      "right",
-      "straight",
-      "right",
-      "straight",
-      "left",
-      "left",
-      "straight",
-      "right",
-      "straight2"
-    ]
-  ]
+  "tileSet": [
+    "straight",
+    "left",
+    "right"
+  ],
+  "allowStash": false
 }
