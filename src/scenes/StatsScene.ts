@@ -3,7 +3,7 @@
 import Phaser from 'phaser';
 import { LEVELS } from '../levels/index';
 import { sfx } from '../audio';
-import { fmtTime, loadLog, resetAll, statsText, summarize } from '../storage';
+import { fmtTime, hintsLeft, loadLog, resetAll, statsText, summarize } from '../storage';
 import { addBackground, Button, text } from '../ui/draw';
 import { C, MONO, W } from '../ui/theme';
 
@@ -29,16 +29,17 @@ export class StatsScene extends Phaser.Scene {
     const attempts = rows.reduce((s, r) => s + r.attempts, 0);
 
     text(this, W / 2, 260, `Пройдено: ${passed} из ${LEVELS.length}`, 56);
-    text(this, W / 2, 335, `Попыток: ${attempts}   Время: ${fmtTime(totalMs)}`, 42, C.textDim, false);
+    text(this, W / 2, 335, `Попыток: ${attempts}   Время: ${fmtTime(totalMs)}   Подсказок: ${hintsLeft()}`, 40, C.textDim, false);
 
-    const header = 'Ур  Попыт  Побед  Звёзды   Время';
-    const lines = rows.map(
-      (r) =>
-        `${String(r.level).padStart(2)}  ${String(r.attempts).padStart(5)}  ${String(r.wins).padStart(5)}  ${('★'.repeat(r.bestStars) + '·'.repeat(3 - r.bestStars)).padStart(6)}  ${fmtTime(r.timeMs).padStart(6)}`,
-    );
+    const header = 'Ур Попыт Побед Звёзды  Время Помощь';
+    const lines = rows.map((r) => {
+      const stars = r.wins ? '★'.repeat(r.bestStars) + '·'.repeat(3 - r.bestStars) : r.skipped ? 'проп.' : '···';
+      const help = r.hints + r.extras + r.eased;
+      return `${String(r.level).padStart(2)} ${String(r.attempts).padStart(5)} ${String(r.wins).padStart(5)} ${stars.padStart(6)} ${fmtTime(r.timeMs).padStart(6)} ${String(help || '·').padStart(6)}`;
+    });
     this.add.text(W / 2, 430, [header, ...lines].join('\n'), {
       fontFamily: MONO,
-      fontSize: '42px',
+      fontSize: '40px',
       color: C.text,
       lineSpacing: 22,
     }).setOrigin(0.5, 0);

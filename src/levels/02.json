@@ -10,15 +10,40 @@
   ],
   "startDir": "N",
   "deck": [
-    "right",
-    "straight",
-    "left",
     "straight2",
-    "straight"
+    "right",
+    "right",
+    "left",
+    "left",
+    "straight",
+    "left"
   ],
   "stars": {
-    "two": 0,
-    "three": 0
+    "two": 1,
+    "three": 1
   },
-  "tutorial": "place"
+  "tutorial": "place",
+  "easeDecks": [
+    [
+      "straight",
+      "straight2",
+      "right",
+      "right",
+      "left",
+      "left",
+      "straight",
+      "left"
+    ],
+    [
+      "straight",
+      "straight2",
+      "right",
+      "right",
+      "left",
+      "left",
+      "right",
+      "straight",
+      "left"
+    ]
+  ]
 }

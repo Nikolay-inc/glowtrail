@@ -11,21 +11,51 @@
   ],
   "startDir": "N",
   "deck": [
+    "left",
     "right",
     "right",
     "left",
     "left",
-    "right",
+    "straight",
+    "left",
     "straight2",
     "right",
-    "straight",
     "right",
-    "straight",
-    "left",
     "right"
   ],
   "stars": {
-    "two": 2,
-    "three": 4
-  }
+    "two": 1,
+    "three": 2
+  },
+  "easeDecks": [
+    [
+      "straight",
+      "left",
+      "right",
+      "right",
+      "left",
+      "left",
+      "straight",
+      "left",
+      "straight2",
+      "right",
+      "right",
+      "right"
+    ],
+    [
+      "straight2",
+      "straight",
+      "left",
+      "right",
+      "right",
+      "left",
+      "left",
+      "straight",
+      "left",
+      "straight2",
+      "right",
+      "right",
+      "right"
+    ]
+  ]
 }

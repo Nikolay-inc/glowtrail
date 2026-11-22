@@ -125,3 +125,48 @@ export class TileCard extends Phaser.GameObjects.Container {
     return Math.abs(x - this.homeX) <= CARD / 2 + slack && Math.abs(y - this.homeY) <= CARD / 2 + slack;
   }
 }
+
+/** Маленькая полупрозрачная карточка превью колоды: следующая плитка, взять её нельзя. */
+export class MiniCard extends Phaser.GameObjects.Container {
+  private bg: Phaser.GameObjects.Graphics;
+  private icon: Phaser.GameObjects.Graphics;
+  private iconWrap: Phaser.GameObjects.Container;
+  private kind: TileKind | null = null;
+
+  constructor(
+    scene: Phaser.Scene,
+    x: number,
+    y: number,
+    private size: number,
+  ) {
+    super(scene, x, y);
+    this.bg = scene.add.graphics();
+    this.icon = scene.add.graphics();
+    this.iconWrap = scene.add.container(0, 0, [this.icon]);
+    this.add([this.bg, this.iconWrap]);
+    this.setAlpha(0.55).setDepth(8);
+    scene.add.existing(this);
+  }
+
+  setTile(kind: TileKind | null, dir: Dir, animate = true) {
+    if (kind !== this.kind) {
+      this.kind = kind;
+      const s = this.size;
+      this.bg.clear();
+      this.icon.clear();
+      if (kind) {
+        this.bg.fillStyle(C.cardDisabled, 1);
+        this.bg.fillRoundedRect(-s / 2, -s / 2, s, s, s * 0.22);
+        this.bg.lineStyle(3, C.cardEdge, 0.8);
+        this.bg.strokeRoundedRect(-s / 2, -s / 2, s, s, s * 0.22);
+        drawTileIcon(this.icon, kind, s * 0.78, C.icon);
+      }
+    }
+    const target = (dir * Math.PI) / 2;
+    const delta = Phaser.Math.Angle.Wrap(target - this.iconWrap.rotation);
+    if (Math.abs(delta) < 0.001) return;
+    this.scene.tweens.killTweensOf(this.iconWrap);
+    if (!animate) this.iconWrap.rotation = target;
+    else this.scene.tweens.add({ targets: this.iconWrap, rotation: this.iconWrap.rotation + delta, duration: 260, ease: 'Back.out' });
+  }
+}

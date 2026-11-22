@@ -105,6 +105,8 @@ export type Status = 'playing' | 'won' | 'lost';
 
 export interface GameState {
   level: Level;
+  /** Колода этой попытки (может отличаться от колоды уровня: облегчение, «+3 плитки»). */
+  deck: TileKind[];
   road: RoadCell[];
   onRoad: boolean[];
   head: number;
@@ -115,28 +117,30 @@ export interface GameState {
   undoLeft: number;
   moves: number;
   status: Status;
-  /** Состояние до последнего действия — для кнопки «отменить». */
+  /** Состояние до последнего действия — для кнопки «отменить» и отката подсказкой. */
   prev: GameState | null;
 }
 
 export type Action =
   | { type: 'place'; slot: number } // плитка из лотка
   | { type: 'placeStash' } // плитка из слота «отложить»
-  | { type: 'stash'; slot: number }; // убрать плитку из лотка в слот «отложить»
+  | { type: 'stash'; slot: number } // убрать плитку из лотка в пустой слот «отложить»
+  | { type: 'swap'; slot: number }; // поменять отложенную плитку с плиткой лотка
 
-export function createGame(level: Level): GameState {
+export function createGame(level: Level, deck: TileKind[] = level.deck): GameState {
   const startIdx = level.start.y * level.width + level.start.x;
   const onRoad = new Array<boolean>(level.cells.length).fill(false);
   onRoad[startIdx] = true;
   const tray: (TileKind | null)[] = [];
-  for (let i = 0; i < TRAY_SIZE; i++) tray.push(level.deck[i] ?? null);
+  for (let i = 0; i < TRAY_SIZE; i++) tray.push(deck[i] ?? null);
   const state: GameState = {
     level,
+    deck: [...deck],
     road: [{ ...level.start, idx: startIdx, kind: 'start', dirIn: level.startDir, dirOut: level.startDir }],
     onRoad,
     head: startIdx,
     dir: level.startDir,
-    deckIndex: Math.min(TRAY_SIZE, level.deck.length),
+    deckIndex: Math.min(TRAY_SIZE, deck.length),
     tray,
     stash: null,
     undoLeft: UNDO_PER_LEVEL,
@@ -157,12 +161,17 @@ export function canPlace(state: GameState, kind: TileKind | null): boolean {
 
 /** Плиток осталось всего: колода + лоток + отложенная. */
 export function tilesLeft(state: GameState): number {
-  return state.level.deck.length - state.deckIndex + state.tray.filter((t) => t !== null).length + (state.stash ? 1 : 0);
+  return deckLeft(state) + state.tray.filter((t) => t !== null).length + (state.stash ? 1 : 0);
 }
 
 /** Сколько плиток ещё лежит в колоде (не в лотке). */
 export function deckLeft(state: GameState): number {
-  return state.level.deck.length - state.deckIndex;
+  return state.deck.length - state.deckIndex;
+}
+
+/** Следующие плитки колоды (для превью). */
+export function upcoming(state: GameState, n: number): TileKind[] {
+  return state.deck.slice(state.deckIndex, state.deckIndex + n);
 }
 
 export function lanternsOnRoad(state: GameState): number {
@@ -173,7 +182,20 @@ export function isExitOpen(state: GameState): boolean {
   return lanternsOnRoad(state) === state.level.lanterns.length;
 }
 
-/** Есть ли хоть одно осмысленное действие. */
+/** Сколько клеток (по прямой сетке) от конца дороги до выхода. */
+export function distanceToExit(state: GameState): number {
+  const w = state.level.width;
+  const hx = state.head % w;
+  const hy = Math.floor(state.head / w);
+  return Math.abs(hx - state.level.exit.x) + Math.abs(hy - state.level.exit.y);
+}
+
+/** Крайний левый занятый слот лотка (или -1). */
+export function leftmostTile(state: GameState): number {
+  return state.tray.findIndex((t) => t !== null);
+}
+
+/** Есть ли хоть одно осмысленное действие. Обмен с отложенной плиткой новых плиток не даёт и не считается. */
 export function hasAnyMove(state: GameState): boolean {
   if (state.tray.some((t) => canPlace(state, t))) return true;
   if (canPlace(state, state.stash)) return true;
@@ -196,6 +218,8 @@ export function isLegal(state: GameState, action: Action): boolean {
       return canPlace(state, state.stash);
     case 'stash':
       return state.stash === null && (state.tray[action.slot] ?? null) !== null;
+    case 'swap':
+      return state.stash !== null && action.slot >= 0 && action.slot < state.tray.length;
   }
 }
 
@@ -205,14 +229,22 @@ export function applyAction(state: GameState, action: Action): GameState {
   const tray = [...state.tray];
   let deckIndex = state.deckIndex;
   const refill = (slot: number) => {
-    tray[slot] = deckIndex < state.level.deck.length ? state.level.deck[deckIndex++] : null;
+    tray[slot] = deckIndex < state.deck.length ? state.deck[deckIndex++] : null;
+  };
+  const finish = (patch: Partial<GameState>): GameState => {
+    const next: GameState = { ...state, tray, deckIndex, moves: state.moves + 1, prev: state, ...patch };
+    return { ...next, status: computeStatus(next) };
   };
 
   if (action.type === 'stash') {
     const kind = tray[action.slot]!;
     refill(action.slot);
-    const next: GameState = { ...state, tray, deckIndex, stash: kind, moves: state.moves + 1, prev: state };
-    return { ...next, status: computeStatus(next) };
+    return finish({ stash: kind });
+  }
+  if (action.type === 'swap') {
+    const kind = tray[action.slot];
+    tray[action.slot] = state.stash;
+    return finish({ stash: kind });
   }
 
   let kind: TileKind;
@@ -228,27 +260,13 @@ export function applyAction(state: GameState, action: Action): GameState {
   const p = previewTile(state, kind);
   const onRoad = [...state.onRoad];
   const road = [...state.road];
-  let dirIn = state.dir;
   p.cells.forEach((c, i) => {
     onRoad[c.idx] = true;
     const last = i === p.cells.length - 1;
-    road.push({ ...c, kind, dirIn, dirOut: last ? p.newDir : state.dir });
-    dirIn = state.dir;
+    road.push({ ...c, kind, dirIn: state.dir, dirOut: last ? p.newDir : state.dir });
   });
 
-  const next: GameState = {
-    ...state,
-    road,
-    onRoad,
-    head: p.cells[p.cells.length - 1].idx,
-    dir: p.newDir,
-    tray,
-    deckIndex,
-    stash,
-    moves: state.moves + 1,
-    prev: state,
-  };
-  return { ...next, status: computeStatus(next) };
+  return finish({ road, onRoad, head: p.cells[p.cells.length - 1].idx, dir: p.newDir, stash });
 }
 
 export function canUndo(state: GameState): boolean {
@@ -258,6 +276,28 @@ export function canUndo(state: GameState): boolean {
 export function undo(state: GameState): GameState {
   if (!canUndo(state)) return state;
   return { ...state.prev!, undoLeft: state.undoLeft - 1 };
+}
+
+/**
+ * «+3 плитки»: новые плитки сразу ложатся в лоток, а прежние плитки лотка
+ * возвращаются наверх колоды. Всего плиток становится больше на kinds.length.
+ */
+export function dealExtra(state: GameState, kinds: TileKind[]): GameState {
+  const old = state.tray.filter((t): t is TileKind => t !== null);
+  const deck = [...state.deck.slice(0, state.deckIndex), ...old, ...state.deck.slice(state.deckIndex)];
+  const tray: (TileKind | null)[] = [];
+  let deckIndex = state.deckIndex;
+  for (let i = 0; i < TRAY_SIZE; i++) tray.push(kinds[i] ?? (deckIndex < deck.length ? deck[deckIndex++] : null));
+  // Если плиток больше, чем слотов, лишние идут наверх колоды.
+  const rest = kinds.slice(TRAY_SIZE);
+  deck.splice(deckIndex, 0, ...rest);
+  const next: GameState = { ...state, deck, tray, deckIndex, prev: state };
+  return { ...next, status: computeStatus(next) };
+}
+
+/** Пороги звёзд по максимальному остатку плиток: 3 — не меньше (макс − 1), 2 — не меньше половины (вниз). */
+export function starThresholds(maxLeftover: number): { two: number; three: number } {
+  return { two: Math.floor(Math.max(0, maxLeftover) / 2), three: Math.max(0, maxLeftover - 1) };
 }
 
 /** Звёзды за победу: зависят от того, сколько плиток осталось неиспользованными. */

@@ -32,27 +32,36 @@ export class MenuScene extends Phaser.Scene {
     const gapY = 240;
     const x0 = W / 2 - ((cols - 1) * gapX) / 2;
     const y0 = 850;
-    const next = this.nextLevel(progress.unlocked, progress.stars);
+    const next = this.nextLevel(progress.unlocked, progress.stars, progress.skipped);
 
     LEVELS.forEach((lvl, i) => {
       const x = x0 + (i % cols) * gapX;
       const y = y0 + Math.floor(i / cols) * gapY;
       const unlocked = lvl.id <= progress.unlocked;
       const stars = progress.stars[lvl.id] ?? 0;
+      const skipped = !stars && !!progress.skipped[lvl.id];
       const c = this.add.container(x, y);
       const g = this.add.graphics();
       g.fillStyle(0x000000, 0.3);
       g.fillRoundedRect(-size / 2, -size / 2 + 8, size, size, 40);
       g.fillStyle(unlocked ? (i === next ? 0x3a46a0 : C.card) : C.cardDisabled, 1);
       g.fillRoundedRect(-size / 2, -size / 2, size, size, 40);
-      g.lineStyle(5, i === next ? C.primary : unlocked ? C.cardEdge : 0x2a3160, 1);
+      g.lineStyle(5, i === next ? C.primary : skipped ? 0x7a6440 : unlocked ? C.cardEdge : 0x2a3160, 1);
       g.strokeRoundedRect(-size / 2, -size / 2, size, size, 40);
       c.add(g);
       if (unlocked) {
         c.add(text(this, 0, -4, String(lvl.id), 70));
-        const sg = this.add.graphics();
-        for (let k = 0; k < 3; k++) drawStar(sg, (k - 1) * 46, size / 2 + 38, 22, k < stars ? C.star : C.starEmpty);
-        c.add(sg);
+        if (skipped) {
+          // Пропущенный уровень: вместо звёзд — значок пропуска, уровень остаётся доступным.
+          const sg = this.add.graphics();
+          drawIcon(sg, 'skip', 44, 0xd98a1f);
+          sg.setPosition(0, size / 2 + 38);
+          c.add(sg);
+        } else {
+          const sg = this.add.graphics();
+          for (let k = 0; k < 3; k++) drawStar(sg, (k - 1) * 46, size / 2 + 38, 22, k < stars ? C.star : C.starEmpty);
+          c.add(sg);
+        }
       } else {
         const lg = this.add.graphics();
         drawIcon(lg, 'lock', 70, C.iconDisabled);
@@ -84,9 +93,9 @@ export class MenuScene extends Phaser.Scene {
     this.input.keyboard?.once('keydown-ENTER', () => this.play(next));
   }
 
-  /** Первый открытый уровень без трёх звёзд, иначе последний открытый. */
-  private nextLevel(unlocked: number, stars: Record<number, number>): number {
-    for (let id = 1; id <= unlocked; id++) if (!stars[id]) return id - 1;
+  /** Первый открытый непройденный и непропущенный уровень, иначе последний открытый. */
+  private nextLevel(unlocked: number, stars: Record<number, number>, skipped: Record<number, boolean>): number {
+    for (let id = 1; id <= unlocked; id++) if (!stars[id] && !skipped[id]) return id - 1;
     return Math.min(unlocked, LEVELS.length) - 1;
   }
 

@@ -41,6 +41,8 @@ export interface LevelData {
   stars: { two: number; three: number };
   /** Подсказка без текста: place — рука показывает нужную плитку, stash — показывает слот «отложить». */
   tutorial?: 'place' | 'stash';
+  /** Колоды с 1 и 2 лишними плитками для незаметного облегчения (считает npm run ease). */
+  easeDecks?: TileKind[][];
 }
 
 export interface Point {
@@ -62,4 +64,5 @@ export interface Level {
   deck: TileKind[];
   stars: { two: number; three: number };
   tutorial?: 'place' | 'stash';
+  easeDecks?: TileKind[][];
 }

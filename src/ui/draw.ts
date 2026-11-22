@@ -100,7 +100,7 @@ export function drawTileIcon(g: G, kind: TileKind, s: number, color: number) {
 // ---------------------------------------------------------------------------
 // Иконки интерфейса
 
-export type IconName = 'restart' | 'undo' | 'menu' | 'stats' | 'sound' | 'mute' | 'play' | 'lock' | 'copy' | 'back' | 'trash';
+export type IconName = 'restart' | 'undo' | 'menu' | 'stats' | 'sound' | 'mute' | 'play' | 'lock' | 'copy' | 'back' | 'trash' | 'bulb' | 'skip' | 'plus';
 
 export function drawIcon(g: G, name: IconName, s: number, color: number) {
   const lw = s * 0.12;
@@ -177,6 +177,25 @@ export function drawIcon(g: G, name: IconName, s: number, color: number) {
     case 'back':
       g.lineBetween(s * 0.3, 0, -s * 0.16, 0);
       arrowHead(g, -s * 0.34, 0, Math.PI, s * 0.32);
+      break;
+    case 'bulb':
+      g.fillCircle(0, -s * 0.1, s * 0.24);
+      g.fillRoundedRect(-s * 0.12, s * 0.08, s * 0.24, s * 0.16, s * 0.04);
+      g.fillRect(-s * 0.09, s * 0.27, s * 0.18, s * 0.06);
+      g.lineStyle(lw * 0.6, color, 1);
+      for (const a of [-150, -110, -70, -30]) {
+        const r = (a * Math.PI) / 180;
+        g.lineBetween(Math.cos(r) * s * 0.33, -s * 0.1 + Math.sin(r) * s * 0.33, Math.cos(r) * s * 0.44, -s * 0.1 + Math.sin(r) * s * 0.44);
+      }
+      break;
+    case 'skip':
+      g.fillTriangle(-s * 0.34, -s * 0.26, -s * 0.34, s * 0.26, 0, 0);
+      g.fillTriangle(-s * 0.04, -s * 0.26, -s * 0.04, s * 0.26, s * 0.3, 0);
+      g.fillRect(s * 0.26, -s * 0.26, s * 0.08, s * 0.52);
+      break;
+    case 'plus':
+      g.fillRoundedRect(-s * 0.06, -s * 0.3, s * 0.12, s * 0.6, s * 0.04);
+      g.fillRoundedRect(-s * 0.3, -s * 0.06, s * 0.6, s * 0.12, s * 0.04);
       break;
     case 'trash':
       g.fillRoundedRect(-s * 0.22, -s * 0.16, s * 0.44, s * 0.48, s * 0.06);
@@ -294,7 +313,11 @@ export class Button extends Phaser.GameObjects.Container {
       this.iconG.setPosition(label ? -w / 2 + h * 0.55 : 0, 0);
       drawIcon(this.iconG, icon, s, primary ? 0x2a1a05 : C.icon);
     }
-    if (this.labelT && icon) this.labelT.setX(h * 0.3);
+    if (this.labelT && icon) {
+      // Подпись — по центру места справа от иконки.
+      const iconRight = -w / 2 + h * 0.55 + h * 0.36;
+      this.labelT.setX((iconRight + w / 2 - h * 0.12) / 2);
+    }
   }
 }
 

@@ -32,7 +32,7 @@ export function parseLevel(data: LevelData): Level {
   if (!exit) throw new Error(`Уровень ${data.id}: нет выхода`);
   const startDir = DIR_BY_LETTER[data.startDir];
   if (startDir === undefined) throw new Error(`Уровень ${data.id}: неверное направление старта`);
-  for (const t of data.deck) {
+  for (const t of [...data.deck, ...(data.easeDecks ?? []).flat()]) {
     if (!TILE_KINDS.includes(t)) throw new Error(`Уровень ${data.id}: неизвестная плитка «${t}»`);
   }
 
@@ -49,5 +49,6 @@ export function parseLevel(data: LevelData): Level {
     deck: [...data.deck],
     stars: { ...data.stars },
     tutorial: data.tutorial,
+    easeDecks: data.easeDecks?.map((d) => [...d]),
   };
 }

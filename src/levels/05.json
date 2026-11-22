@@ -1,29 +1,58 @@
 {
   "id": 5,
-  "name": "Камни",
+  "name": "Передышка",
   "grid": [
     "..E..",
-    ".###.",
+    ".....",
     "..L..",
-    ".#.#.",
+    ".....",
     ".....",
     "..S.."
   ],
   "startDir": "N",
   "deck": [
     "straight2",
-    "straight2",
-    "straight",
-    "straight",
     "right",
-    "straight",
+    "right",
     "left",
     "straight",
     "left",
+    "straight",
+    "straight2",
+    "right",
     "left"
   ],
   "stars": {
     "two": 2,
     "three": 3
-  }
+  },
+  "easeDecks": [
+    [
+      "straight2",
+      "right",
+      "right",
+      "left",
+      "straight",
+      "left",
+      "straight",
+      "straight",
+      "straight2",
+      "right",
+      "left"
+    ],
+    [
+      "straight2",
+      "right",
+      "right",
+      "left",
+      "straight",
+      "left",
+      "left",
+      "straight",
+      "straight",
+      "straight2",
+      "right",
+      "left"
+    ]
+  ]
 }

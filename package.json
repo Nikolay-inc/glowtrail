@@ -8,7 +8,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "verify": "vite-node scripts/verify.ts"
+    "verify": "vite-node scripts/verify.ts",
+    "ease": "vite-node scripts/ease.ts"
   },
   "dependencies": {
     "phaser": "^3.90.0"

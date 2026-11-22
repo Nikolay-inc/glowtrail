@@ -12,10 +12,18 @@ export interface Progress {
   stars: Record<number, number>;
   /** Сколько раз начинали каждый уровень. */
   attempts: Record<number, number>;
+  /** Поражений подряд на уровне (сбрасывается победой). */
+  lossStreak: Record<number, number>;
+  /** Пропущенные уровни. */
+  skipped: Record<number, boolean>;
+  /** Сколько подсказок осталось. */
+  hints: number;
   muted: boolean;
 }
 
-export type EventType = 'session' | 'start' | 'win' | 'lose' | 'abandon';
+export const START_HINTS = 3;
+
+export type EventType = 'session' | 'start' | 'win' | 'lose' | 'abandon' | 'hint_used' | 'extra_tiles' | 'auto_ease' | 'level_skipped';
 
 export interface LogEvent {
   /** Время события, ISO. */
@@ -29,6 +37,14 @@ export interface LogEvent {
   stars?: number;
   tilesLeft?: number;
   undo?: boolean;
+  /** Серия поражений подряд на момент события. */
+  streak?: number;
+  /** Сколько плиток добавлено (extra_tiles, auto_ease). */
+  added?: number;
+  /** На сколько ходов откатились (hint_used, extra_tiles). */
+  rollback?: number;
+  /** Сколько подсказок осталось после использования. */
+  hintsLeft?: number;
 }
 
 function read<T>(key: string, fallback: T): T {
@@ -58,7 +74,7 @@ function write(key: string, value: unknown) {
   }
 }
 
-const defaultProgress = (): Progress => ({ unlocked: 1, stars: {}, attempts: {}, muted: false });
+const defaultProgress = (): Progress => ({ unlocked: 1, stars: {}, attempts: {}, lossStreak: {}, skipped: {}, hints: START_HINTS, muted: false });
 
 export function loadProgress(): Progress {
   return read(PROGRESS_KEY, defaultProgress());
@@ -97,9 +113,48 @@ export function startAttempt(level: number): number {
   return attempt;
 }
 
-export function recordWin(level: number, stars: number, totalLevels: number) {
+/** Победа: звёзды, открытие следующего уровня, сброс серии поражений, +1 подсказка за первое прохождение. */
+export function recordWin(level: number, stars: number, totalLevels: number): { hintAwarded: boolean } {
   const p = loadProgress();
+  const firstWin = !p.stars[level];
   p.stars[level] = Math.max(p.stars[level] ?? 0, stars);
+  p.unlocked = Math.min(totalLevels, Math.max(p.unlocked, level + 1));
+  p.lossStreak[level] = 0;
+  if (firstWin) p.hints += 1;
+  saveProgress(p);
+  return { hintAwarded: firstWin };
+}
+
+/** Поражение: увеличивает серию и возвращает её. */
+export function recordLoss(level: number): number {
+  const p = loadProgress();
+  const streak = (p.lossStreak[level] ?? 0) + 1;
+  p.lossStreak[level] = streak;
+  saveProgress(p);
+  return streak;
+}
+
+export function lossStreak(level: number): number {
+  return loadProgress().lossStreak[level] ?? 0;
+}
+
+/** Тратит подсказку. Возвращает остаток или -1, если подсказок нет. */
+export function useHint(): number {
+  const p = loadProgress();
+  if (p.hints <= 0) return -1;
+  p.hints -= 1;
+  saveProgress(p);
+  return p.hints;
+}
+
+export function hintsLeft(): number {
+  return loadProgress().hints;
+}
+
+/** Пропуск уровня: отмечаем и открываем следующий. Пропущенный уровень остаётся доступным. */
+export function recordSkip(level: number, totalLevels: number) {
+  const p = loadProgress();
+  p.skipped[level] = true;
   p.unlocked = Math.min(totalLevels, Math.max(p.unlocked, level + 1));
   saveProgress(p);
 }
@@ -118,6 +173,10 @@ export interface LevelSummary {
   timeMs: number;
   /** С какой попытки впервые пройден. */
   firstWinAttempt: number | null;
+  hints: number;
+  extras: number;
+  eased: number;
+  skipped: boolean;
 }
 
 export function summarize(log: LogEvent[], levelCount: number): LevelSummary[] {
@@ -134,6 +193,10 @@ export function summarize(log: LogEvent[], levelCount: number): LevelSummary[] {
       bestStars: Math.max(0, ...wins.map((e) => e.stars ?? 0)),
       timeMs: ev.reduce((s, e) => s + (e.ms ?? 0), 0),
       firstWinAttempt: wins.length ? (wins[0].attempt ?? null) : null,
+      hints: ev.filter((e) => e.ev === 'hint_used').length,
+      extras: ev.filter((e) => e.ev === 'extra_tiles').length,
+      eased: ev.filter((e) => e.ev === 'auto_ease').length,
+      skipped: ev.some((e) => e.ev === 'level_skipped'),
     });
   }
   return rows;
@@ -158,15 +221,15 @@ export function statsText(levelCount: number): string {
     `Первый запуск: ${log[0]?.t ?? '—'}`,
     `Устройство: ${typeof navigator !== 'undefined' ? navigator.userAgent : '—'}`,
     '',
-    'Ур | попыток | побед | пораж. | бросил | звёзды | время | 1-я победа',
+    'Ур | попыток | побед | пораж. | бросил | звёзды | время | подск. | +3 | облегч. | 1-я победа',
     ...rows.map(
       (r) =>
-        `${String(r.level).padStart(2)} | ${String(r.attempts).padStart(7)} | ${String(r.wins).padStart(5)} | ${String(r.losses).padStart(6)} | ${String(r.abandons).padStart(6)} | ${'★'.repeat(r.bestStars).padEnd(6)} | ${fmtTime(r.timeMs).padStart(5)} | ${r.firstWinAttempt ? `попытка ${r.firstWinAttempt}` : '—'}`,
+        `${String(r.level).padStart(2)} | ${String(r.attempts).padStart(7)} | ${String(r.wins).padStart(5)} | ${String(r.losses).padStart(6)} | ${String(r.abandons).padStart(6)} | ${'★'.repeat(r.bestStars).padEnd(6)} | ${fmtTime(r.timeMs).padStart(5)} | ${String(r.hints).padStart(6)} | ${String(r.extras).padStart(2)} | ${String(r.eased).padStart(7)} | ${r.firstWinAttempt ? `попытка ${r.firstWinAttempt}` : r.skipped ? 'пропущен' : '—'}`,
     ),
     '',
     'Лог событий:',
     ...log.map((e) =>
-      [e.t, e.ev, e.level && `ур${e.level}`, e.attempt && `#${e.attempt}`, e.ms !== undefined && fmtTime(e.ms), e.stars !== undefined && `${e.stars}★`, e.moves !== undefined && `ходов ${e.moves}`, e.tilesLeft !== undefined && `осталось ${e.tilesLeft}`, e.undo && 'отмена']
+      [e.t, e.ev, e.level && `ур${e.level}`, e.attempt && `#${e.attempt}`, e.ms !== undefined && fmtTime(e.ms), e.stars !== undefined && `${e.stars}★`, e.moves !== undefined && `ходов ${e.moves}`, e.tilesLeft !== undefined && `осталось ${e.tilesLeft}`, e.undo && 'отмена', e.streak !== undefined && `серия ${e.streak}`, e.added !== undefined && `+${e.added} плит.`, e.rollback && `откат ${e.rollback}`, e.hintsLeft !== undefined && `подсказок ${e.hintsLeft}`]
         .filter(Boolean)
         .join(' '),
     ),

@@ -19,5 +19,22 @@
     "two": 0,
     "three": 0
   },
-  "tutorial": "place"
+  "tutorial": "place",
+  "easeDecks": [
+    [
+      "straight2",
+      "straight",
+      "straight",
+      "straight",
+      "straight"
+    ],
+    [
+      "left",
+      "straight2",
+      "straight",
+      "straight",
+      "straight",
+      "straight"
+    ]
+  ]
 }

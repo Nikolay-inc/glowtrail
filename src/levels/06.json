@@ -1,27 +1,59 @@
 {
   "id": 6,
-  "name": "Узкий проход",
+  "name": "Камни",
   "grid": [
-    "##E##",
-    "##.##",
-    "##.##",
-    "#...#",
-    "##.##",
-    "##S##"
+    "..E..",
+    ".....",
+    ".#.#.",
+    ".....",
+    ".#...",
+    ".....",
+    "..S.."
   ],
   "startDir": "N",
   "deck": [
-    "left",
-    "right",
-    "straight2",
-    "left",
+    "straight",
     "straight2",
     "straight",
-    "right"
+    "left",
+    "right",
+    "right",
+    "left",
+    "left",
+    "right",
+    "straight"
   ],
   "stars": {
-    "two": 2,
-    "three": 4
+    "two": 1,
+    "three": 2
   },
-  "tutorial": "stash"
+  "easeDecks": [
+    [
+      "straight",
+      "straight2",
+      "straight",
+      "left",
+      "right",
+      "right",
+      "straight",
+      "left",
+      "left",
+      "right",
+      "straight"
+    ],
+    [
+      "straight",
+      "straight2",
+      "straight",
+      "left",
+      "right",
+      "right",
+      "straight2",
+      "straight",
+      "left",
+      "left",
+      "right",
+      "straight"
+    ]
+  ]
 }

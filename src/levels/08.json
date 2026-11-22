@@ -1,35 +1,65 @@
 {
   "id": 8,
-  "name": "Брод",
+  "name": "Река",
   "grid": [
-    "E....",
-    "..#..",
-    "~~~.#",
-    ".L...",
-    "...#.",
-    ".....",
-    "...S."
+    "...E..",
+    "......",
+    "~~~~~~",
+    "......",
+    "..L...",
+    "......",
+    "..S..."
   ],
   "startDir": "N",
   "deck": [
-    "left",
-    "left",
-    "right",
-    "straight2",
-    "right",
     "straight",
-    "straight2",
+    "straight",
+    "straight",
     "right",
     "left",
-    "right",
     "left",
     "straight",
     "left",
-    "left",
+    "bridge",
+    "right",
+    "straight",
     "bridge"
   ],
   "stars": {
-    "two": 2,
-    "three": 4
-  }
+    "two": 1,
+    "three": 2
+  },
+  "easeDecks": [
+    [
+      "straight",
+      "straight",
+      "straight",
+      "right",
+      "left",
+      "right",
+      "left",
+      "straight",
+      "left",
+      "bridge",
+      "right",
+      "straight",
+      "bridge"
+    ],
+    [
+      "straight",
+      "straight",
+      "straight",
+      "right",
+      "left",
+      "right",
+      "bridge",
+      "left",
+      "straight",
+      "left",
+      "bridge",
+      "right",
+      "straight",
+      "bridge"
+    ]
+  ]
 }
