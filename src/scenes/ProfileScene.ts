@@ -7,6 +7,8 @@ import { sfx } from '../audio';
 import { displayName, getProfile, levelsPassed, setAvatar, totalStars } from '../profile';
 import { addBackground, Button, createAvatarBadge, text } from '../ui/draw';
 import { showNameDialog } from '../ui/NameDialog';
+import { Account } from '../cloud/account';
+import { openAuthDialog } from '../ui/AuthDialog';
 import { C, W } from '../ui/theme';
 
 const MAX_STARS = () => LEVELS.length * 3;
@@ -57,10 +59,10 @@ export class ProfileScene extends Phaser.Scene {
     });
 
     // Выбор аватарки: 4 открыты сразу, остальные — за звёзды
-    text(this, W / 2, 1220, 'Выбери фонарщика', 44, C.textDim, false);
+    text(this, W / 2, 1185, 'Выбери фонарщика', 44, C.textDim, false);
     AVATARS.forEach((a, i) => {
       const x = W / 2 + ((i % 4) - 1.5) * 225;
-      const y = 1390 + Math.floor(i / 4) * 230;
+      const y = 1345 + Math.floor(i / 4) * 220;
       const unlocked = isAvatarUnlocked(a.id, stars);
       const badge = createAvatarBadge(this, x, y, 95, a.id, { locked: !unlocked, selected: a.id === profile.avatar });
       badge.setSize(200, 200).setInteractive({ useHandCursor: true });
@@ -77,13 +79,45 @@ export class ProfileScene extends Phaser.Scene {
       });
     });
 
+    // Аккаунт: гость — предложение войти; вошёл — email и управление аккаунтом.
+    const user = Account.user;
+    const label = user ? shortEmail(user.email) : 'Войти или зарегистрироваться';
+    new Button(this, W / 2, 1790, {
+      w: 760,
+      h: 112,
+      icon: user ? 'cloud' : 'user',
+      label,
+      fontSize: user ? 36 : 38,
+      primary: !user,
+      onClick: () => {
+        sfx.tap();
+        openAuthDialog(user ? 'account' : 'register', { onClose: () => this.scene.isActive() && this.scene.restart() });
+      },
+    });
     text(this, W / 2, 1880, `ID игрока: ${profile.playerId.slice(0, 8)}`, 26, C.textDim, false).setAlpha(0.4);
+
+    // Вошли/вышли или облако подтянуло прогресс с другого устройства — обновляем экран.
+    const off = Account.on((e) => {
+      if (e.type === 'changed' || (e.type === 'sync' && e.status === 'synced' && !this.syncedOnce)) {
+        this.syncedOnce = e.type === 'sync';
+        this.scene.restart();
+      }
+    });
+    this.events.once('shutdown', off);
   }
+
+  private syncedOnce = false;
 
   private back() {
     sfx.tap();
     this.scene.start('Menu');
   }
+}
+
+/** Длинный email укорачиваем, чтобы влез в кнопку. */
+function shortEmail(email: string | null): string {
+  if (!email) return 'Аккаунт';
+  return email.length > 26 ? `${email.slice(0, 23)}…` : email;
 }
 
 function dayWord(n: number) {

@@ -4,6 +4,8 @@ import { MenuScene } from './scenes/MenuScene';
 import { StatsScene } from './scenes/StatsScene';
 import { ProfileScene } from './scenes/ProfileScene';
 import { recordPlayDay } from './profile';
+import { Account } from './cloud/account';
+import { openAuthDialog } from './ui/AuthDialog';
 import { loadProgress, logEvent } from './storage';
 import { createTextures } from './ui/draw';
 import { C, H, W } from './ui/theme';
@@ -42,6 +44,14 @@ const game = new Phaser.Game({
   dom: { createContainer: true },
   render: { antialias: true },
   scene: [BootScene, MenuScene, GameScene, StatsScene, ProfileScene],
+});
+
+// Аккаунт и облачное сохранение (если заданы ключи Supabase).
+Account.init();
+// Пришли по ссылке «сбросить пароль» — сразу просим новый пароль.
+Account.on((e) => {
+  if (e.type === 'recovery') openAuthDialog('recovery');
+  if (e.type === 'link_error') openAuthDialog('login', { message: { text: e.message } });
 });
 
 // Для отладки в консоли браузера во время разработки.

@@ -101,7 +101,7 @@ export function drawTileIcon(g: G, kind: TileKind, s: number, color: number) {
 // ---------------------------------------------------------------------------
 // Иконки интерфейса
 
-export type IconName = 'restart' | 'undo' | 'menu' | 'stats' | 'sound' | 'mute' | 'play' | 'lock' | 'copy' | 'back' | 'trash' | 'bulb' | 'skip' | 'plus';
+export type IconName = 'restart' | 'undo' | 'menu' | 'stats' | 'sound' | 'mute' | 'play' | 'lock' | 'copy' | 'back' | 'trash' | 'bulb' | 'skip' | 'plus' | 'cloud' | 'user';
 
 export function drawIcon(g: G, name: IconName, s: number, color: number) {
   const lw = s * 0.12;
@@ -197,6 +197,16 @@ export function drawIcon(g: G, name: IconName, s: number, color: number) {
     case 'plus':
       g.fillRoundedRect(-s * 0.06, -s * 0.3, s * 0.12, s * 0.6, s * 0.04);
       g.fillRoundedRect(-s * 0.3, -s * 0.06, s * 0.6, s * 0.12, s * 0.04);
+      break;
+    case 'cloud':
+      g.fillCircle(-s * 0.16, s * 0.04, s * 0.17);
+      g.fillCircle(s * 0.06, -s * 0.06, s * 0.22);
+      g.fillCircle(s * 0.24, s * 0.08, s * 0.14);
+      g.fillRoundedRect(-s * 0.33, s * 0.04, s * 0.71, s * 0.18, s * 0.09);
+      break;
+    case 'user':
+      g.fillCircle(0, -s * 0.12, s * 0.17);
+      g.fillRoundedRect(-s * 0.3, s * 0.1, s * 0.6, s * 0.26, { tl: s * 0.2, tr: s * 0.2, bl: s * 0.04, br: s * 0.04 });
       break;
     case 'trash':
       g.fillRoundedRect(-s * 0.22, -s * 0.16, s * 0.44, s * 0.48, s * 0.06);

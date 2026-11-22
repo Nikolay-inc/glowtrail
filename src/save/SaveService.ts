@@ -44,7 +44,7 @@ export interface Profile {
   bestDayStreak: number;
 }
 
-export type EventType = 'session' | 'start' | 'win' | 'lose' | 'abandon' | 'hint_used' | 'extra_tiles' | 'auto_ease' | 'level_skipped';
+export type EventType = 'session' | 'start' | 'win' | 'lose' | 'abandon' | 'hint_used' | 'extra_tiles' | 'auto_ease' | 'level_skipped' | 'signup' | 'login' | 'logout';
 
 export interface LogEvent {
   /** Время события, ISO. */
@@ -219,6 +219,18 @@ export function migrate(raw: unknown, legacy?: { progress: unknown; log: unknown
 class SaveServiceImpl {
   private backend: SaveBackend = localStorageBackend;
   private cache: SaveData | null = null;
+  private listeners = new Set<(data: SaveData) => void>();
+
+  /** Подписка на каждое сохранение (облачная синхронизация). Возвращает функцию отписки. */
+  subscribe(fn: (data: SaveData) => void): () => void {
+    this.listeners.add(fn);
+    return () => this.listeners.delete(fn);
+  }
+
+  /** Заменить сохранение целиком (после слияния с облаком, выхода из аккаунта). */
+  replace(data: SaveData) {
+    this.save(migrate(JSON.parse(JSON.stringify(data))));
+  }
 
   /** Подменить хранилище (облако, тесты). Сбрасывает кэш. */
   setBackend(backend: SaveBackend) {
@@ -249,6 +261,7 @@ class SaveServiceImpl {
     const d = { ...data, version: SAVE_VERSION, log: data.log.slice(-MAX_LOG) };
     this.cache = d;
     this.write(d);
+    for (const fn of this.listeners) fn(d);
   }
 
   /** Изменить сохранение функцией и записать. */

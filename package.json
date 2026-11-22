@@ -12,6 +12,7 @@
     "ease": "vite-node scripts/ease.ts"
   },
   "dependencies": {
+    "@supabase/supabase-js": "2.118.0",
     "phaser": "^3.90.0"
   },
   "devDependencies": {
