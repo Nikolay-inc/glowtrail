@@ -90,7 +90,7 @@ export class BoardView {
       .renderTexture(this.darkX, this.darkY, w, h)
       .setOrigin(0)
       .setDepth(6.5)
-      .setAlpha(level.night ? 0.88 : 0.66);
+      .setAlpha(level.night ? 0.72 : 0.48);
     this.darkShape = this.scene.make.graphics({}, false);
     this.darkShape.fillStyle(0x03040f, 1);
     this.darkShape.fillRoundedRect(0, 0, w, h, cell * 0.25);
