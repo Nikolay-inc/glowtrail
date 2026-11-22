@@ -6,6 +6,8 @@ import { AVATARS, isAvatarUnlocked } from '../core/avatars';
 import { sfx } from '../audio';
 import { DEFAULT_NAME, getProfile, NAME_MAX, setAvatar, setName, skipName, totalStars } from '../profile';
 import { Button, createAvatarBadge, text } from './draw';
+import { Account } from '../cloud/account';
+import { openAuthDialog } from './AuthDialog';
 import { C, FONT, H, W } from './theme';
 
 export interface NameDialogOptions {
@@ -114,6 +116,17 @@ export function showNameDialog(scene: Phaser.Scene, opts: NameDialogOptions) {
       },
     }),
   );
+  // При знакомстве — путь для тех, у кого уже есть аккаунт (прогресс подтянется из облака).
+  if (opts.withAvatars && Account.configured && !Account.user) {
+    const link = text(scene, W / 2, top + panelH + 70, 'У меня есть аккаунт — войти', 40, C.textDim, false);
+    link.setInteractive({ useHandCursor: true });
+    link.on('pointerup', () => {
+      skipName();
+      close();
+      openAuthDialog('login');
+    });
+    o.add(link);
+  }
   o.setAlpha(0);
   scene.tweens.add({ targets: o, alpha: 1, duration: 200 });
   input.setAlpha(0);

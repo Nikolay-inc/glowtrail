@@ -5,6 +5,8 @@ import { LEVELS } from '../levels/index';
 import { isMuted, setMuted, sfx } from '../audio';
 import { loadProgress } from '../storage';
 import { displayName, getProfile } from '../profile';
+import { Account } from '../cloud/account';
+import { openAuthDialog } from '../ui/AuthDialog';
 import { addBackground, Button, createAvatarBadge, createLumo, drawIcon, drawStar, text } from '../ui/draw';
 import { C, FONT, H, W } from '../ui/theme';
 
@@ -35,6 +37,23 @@ export class MenuScene extends Phaser.Scene {
       .setOrigin(0, 0.5)
       .setInteractive({ useHandCursor: true });
     nameT.on('pointerup', () => this.go('Profile'));
+
+    // Вход в аккаунт — на виду, в правом верхнем углу. После входа — значок облака.
+    const loggedIn = !!Account.user;
+    const authBtn = new Button(this, loggedIn ? W - 100 : W - 150, 100, {
+      w: loggedIn ? 130 : 230,
+      h: 110,
+      icon: loggedIn ? 'cloud' : 'user',
+      label: loggedIn ? undefined : 'Войти',
+      fontSize: 40,
+      onClick: () => {
+        sfx.tap();
+        openAuthDialog(Account.user ? 'account' : 'login', { onClose: () => this.scene.isActive() && this.scene.restart() });
+      },
+    });
+    authBtn.setDepth(5);
+    const offAuth = Account.on((e) => e.type === 'changed' && this.scene.isActive() && this.scene.restart());
+    this.events.once('shutdown', offAuth);
     this.tweens.add({ targets: lumo, y: 545, duration: 1600, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
 
     // Сетка уровней 5×2

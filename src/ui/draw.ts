@@ -2,6 +2,7 @@
 
 import Phaser from 'phaser';
 import { AVATARS, avatarById, type Avatar } from '../core/avatars';
+import { addDust, addFog, addVignette, createFxTextures } from './fx';
 import type { TileKind } from '../core/types';
 import { C, FONT, H, W } from './theme';
 
@@ -9,6 +10,7 @@ type G = Phaser.GameObjects.Graphics;
 
 /** Создаёт общие текстуры: мягкое свечение и точку. Вызывается один раз при загрузке. */
 export function createTextures(scene: Phaser.Scene) {
+  createFxTextures(scene);
   if (!scene.textures.exists('glow')) {
     const size = 128;
     const tex = scene.textures.createCanvas('glow', size, size)!;
@@ -444,7 +446,7 @@ export function createAvatarBadge(
 // ---------------------------------------------------------------------------
 // Ночной фон: градиент, мерцающие звёзды и светлячки
 
-export function addBackground(scene: Phaser.Scene) {
+export function addBackground(scene: Phaser.Scene, opts: { dust?: boolean } = {}) {
   const g = scene.add.graphics().setDepth(-10);
   g.fillGradientStyle(C.bgTop, C.bgTop, C.bgBottom, C.bgBottom, 1);
   g.fillRect(0, 0, W, H);
@@ -486,6 +488,10 @@ export function addBackground(scene: Phaser.Scene) {
     };
     scene.time.delayedCall(i * 500, wander);
   }
+  // Атмосфера: туман, пылинки и тёмные края.
+  addFog(scene);
+  if (opts.dust !== false) addDust(scene);
+  addVignette(scene);
 }
 
 export function text(scene: Phaser.Scene, x: number, y: number, str: string, size: number, color: string = C.text, bold = true) {
