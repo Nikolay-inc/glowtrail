@@ -17,6 +17,8 @@ export class TileCard extends Phaser.GameObjects.Container {
   private bg: Phaser.GameObjects.Graphics;
   private iconWrap: Phaser.GameObjects.Container;
   private icon: Phaser.GameObjects.Graphics;
+  /** Тёплое свечение рамки: доступная плитка «дышит». */
+  private shine: Phaser.GameObjects.Graphics;
 
   constructor(
     scene: Phaser.Scene,
@@ -30,8 +32,24 @@ export class TileCard extends Phaser.GameObjects.Container {
     this.bg = scene.add.graphics();
     this.icon = scene.add.graphics();
     this.iconWrap = scene.add.container(0, 0, [this.icon]);
-    this.add([this.bg, this.iconWrap]);
+    this.shine = scene.add.graphics();
+    this.shine.lineStyle(7, C.lanternOn, 1);
+    this.shine.strokeRoundedRect(-CARD / 2, -CARD / 2, CARD, CARD, CARD * 0.2);
+    this.shine.setAlpha(0).setBlendMode(Phaser.BlendModes.ADD);
+    this.add([this.bg, this.shine, this.iconWrap]);
     this.setSize(CARD, CARD);
+    if (slot !== 'stash') {
+      scene.tweens.add({
+        targets: this.shine,
+        alpha: { from: 0, to: 0.45 },
+        duration: 900,
+        yoyo: true,
+        repeat: -1,
+        repeatDelay: 2600,
+        delay: 400 + (typeof slot === 'number' ? slot : 0) * 300,
+        ease: 'Sine.inOut',
+      });
+    }
     this.setInteractive({ useHandCursor: true });
     this.setDepth(10);
     scene.add.existing(this);
@@ -66,6 +84,7 @@ export class TileCard extends Phaser.GameObjects.Container {
     const r = s * 0.2;
     g.clear();
     this.icon.clear();
+    this.shine.setVisible(this.enabled && this.kind !== null);
     if (!this.kind) {
       if (this.slot === 'stash') this.drawEmptyStash();
       return;

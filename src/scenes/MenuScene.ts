@@ -9,6 +9,7 @@ import { Account } from '../cloud/account';
 import { openAuthDialog } from '../ui/AuthDialog';
 import { addBackground, Button, createAvatarBadge, createLumo, drawIcon, drawStar, text } from '../ui/draw';
 import { C, FONT, H, W } from '../ui/theme';
+import { irisIn, reducedMotion } from '../ui/fx';
 
 export class MenuScene extends Phaser.Scene {
   constructor() {
@@ -17,15 +18,35 @@ export class MenuScene extends Phaser.Scene {
 
   create() {
     addBackground(this);
-    this.cameras.main.fadeIn(250, 11, 15, 39);
     const progress = loadProgress();
+    const calm = reducedMotion();
 
+    // Заголовок светится изнутри, по нему изредка пробегает блик.
+    const titleGlow = this.add.image(W / 2, 235, 'glow').setTint(C.lanternOn).setBlendMode(Phaser.BlendModes.ADD).setScale(7, 2.2).setAlpha(0.18);
+    this.tweens.add({ targets: titleGlow, alpha: 0.32, scaleX: 7.6, duration: 2200, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
     const title = text(this, W / 2, 230, 'Glowtrail', 150).setPadding(60, 40, 60, 40);
     title.setShadow(0, 0, '#ffc65c', 40, true, true);
-    this.tweens.add({ targets: title, y: 240, duration: 2200, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+    this.tweens.add({ targets: [title, titleGlow], y: '+=10', duration: 2200, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+    if (!calm) {
+      const sweep = this.add.image(170, 235, 'glow').setTint(0xffffff).setBlendMode(Phaser.BlendModes.ADD).setScale(1.1, 2.4).setAlpha(0);
+      this.tweens.add({
+        targets: sweep,
+        x: { from: 170, to: W - 170 },
+        alpha: { from: 0, to: 0.0 },
+        duration: 1500,
+        repeat: -1,
+        repeatDelay: 3800,
+        delay: 1200,
+        ease: 'Sine.inOut',
+        onUpdate: (tw) => sweep.setAlpha(Math.sin(tw.progress * Math.PI) * 0.38),
+      });
+    }
     text(this, W / 2, 350, 'Проложи дорогу фонарщику Lumo', 44, C.textDim, false);
 
     const profile = getProfile();
+    // Круг тёплого света от фонаря Lumo — единственное светлое пятно в ночи.
+    const pool = this.add.image(W / 2 + 40, 560, 'glow').setTint(C.lanternOn).setBlendMode(Phaser.BlendModes.ADD).setScale(5.5, 4.5).setAlpha(0.16);
+    this.tweens.add({ targets: pool, alpha: 0.24, scale: 5.9, duration: 1700, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
     const lumo = createLumo(this, 260, profile.avatar).setPosition(W / 2, 560);
 
     // Кнопка профиля в углу: аватарка и имя
@@ -71,6 +92,27 @@ export class MenuScene extends Phaser.Scene {
       const unlocked = lvl.id <= progress.unlocked;
       const stars = progress.stars[lvl.id] ?? 0;
       const skipped = !stars && !!progress.skipped[lvl.id];
+      // Открытые уровни мягко вспыхивают волной, за следующим — вращающиеся лучи.
+      if (unlocked && !calm) {
+        const glow = this.add.image(x, y, 'glow').setTint(C.lanternOn).setBlendMode(Phaser.BlendModes.ADD).setScale(2.2).setAlpha(0);
+        this.tweens.add({ targets: glow, alpha: 0.28, duration: 700, yoyo: true, repeat: -1, repeatDelay: 2600, delay: 600 + i * 140, ease: 'Sine.inOut' });
+      }
+      if (i === next) {
+        const rays = this.add.container(x, y);
+        for (let k = 0; k < 10; k++) {
+          rays.add(
+            this.add
+              .image(0, 0, 'ray')
+              .setOrigin(0.5, 1)
+              .setRotation((k / 10) * Math.PI * 2)
+              .setScale(0.8, 0.75)
+              .setTint(C.lanternOn)
+              .setBlendMode(Phaser.BlendModes.ADD)
+              .setAlpha(0.42),
+          );
+        }
+        if (!calm) this.tweens.add({ targets: rays, angle: 360, duration: 24000, repeat: -1 });
+      }
       const c = this.add.container(x, y);
       const g = this.add.graphics();
       g.fillStyle(0x000000, 0.3);
@@ -122,6 +164,8 @@ export class MenuScene extends Phaser.Scene {
 
     text(this, W / 2, H - 50, 'прототип v0.1', 28, C.textDim, false).setAlpha(0.5);
     this.input.keyboard?.once('keydown-ENTER', () => this.play(next));
+    // Меню появляется из темноты — свет расходится от фонаря Lumo.
+    irisIn(this, W / 2 + 60, 540, 750);
   }
 
   /** Первый открытый непройденный и непропущенный уровень, иначе последний открытый. */

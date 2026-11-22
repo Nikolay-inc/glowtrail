@@ -32,6 +32,7 @@ import { addBackground, Button, createAvatarBadge, drawStar, text } from '../ui/
 import { C, H, W } from '../ui/theme';
 import { CARD, MiniCard, TileCard } from '../ui/TileCard';
 import { trayLayout, type TrayLayout } from '../ui/layout';
+import { irisIn } from '../ui/fx';
 
 const TOP_Y = 105;
 const TRAY_Y = 1640;
@@ -120,7 +121,6 @@ export class GameScene extends Phaser.Scene {
     const level = LEVELS[this.levelIndex];
     this.L = trayLayout(level.allowStash);
     addBackground(this);
-    this.cameras.main.fadeIn(250, 11, 15, 39);
     this.streak = lossStreak(level.id);
 
     // Верхняя панель
@@ -197,8 +197,14 @@ export class GameScene extends Phaser.Scene {
     this.t0 = Date.now();
     this.board.setRoad(this.state);
     this.refresh(false);
+    // Уровень появляется из темноты — свет расходится от фонаря Lumo.
+    irisIn(this, this.board.lumo.x, this.board.lumo.y);
     if (this.streak >= STUCK.pulseHint) this.pulse(this.hintBtn);
     if (this.state.status === 'lost') this.onLose();
+  }
+
+  update(time: number) {
+    this.board?.update(time);
   }
 
   // -------------------------------------------------------------------------
@@ -743,7 +749,8 @@ export class GameScene extends Phaser.Scene {
       (n) => sfx.lantern(n),
       () => {
         sfx.win();
-        this.showWinPanel(stars);
+        // Короткая пауза: игрок видит поле, залитое светом, — и только потом окно победы.
+        this.time.delayedCall(700, () => this.showWinPanel(stars));
       },
     );
   }

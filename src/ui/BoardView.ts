@@ -6,6 +6,7 @@ import type { GameState, Placement } from '../core/game';
 import { DX, DY, type Dir, type Level } from '../core/types';
 import { C } from './theme';
 import { createLumo } from './draw';
+import { raysBurst } from './fx';
 
 interface LanternView {
   idx: number;
@@ -29,6 +30,15 @@ export class BoardView {
   readonly lumo: Phaser.GameObjects.Container;
   private burst: Phaser.GameObjects.Particles.ParticleEmitter;
   private roadAnim?: Phaser.Tweens.Tween;
+  // Темнота над полем и источники света
+  private dark!: Phaser.GameObjects.RenderTexture;
+  private darkShape!: Phaser.GameObjects.Graphics;
+  private lightImg!: Phaser.GameObjects.Image;
+  private darkX = 0;
+  private darkY = 0;
+  private roadLights: { x: number; y: number }[] = [];
+  private flashes: { x: number; y: number; t0: number; dur: number; d: number }[] = [];
+  private won = false;
 
   constructor(
     private scene: Phaser.Scene,
@@ -41,11 +51,11 @@ export class BoardView {
     this.oy = area.y + (area.h - this.cell * level.height) / 2;
 
     this.drawCells();
-    if (level.night) this.addNight();
     this.roadG = scene.add.graphics().setDepth(2);
-    this.hintG = scene.add.graphics().setDepth(3);
-    this.ghostG = scene.add.graphics().setDepth(3);
-    this.headG = scene.add.graphics().setDepth(4);
+    // Предпросмотр и стрелка — поверх темноты, чтобы всегда было видно, куда ляжет плитка.
+    this.hintG = scene.add.graphics().setDepth(6.6);
+    this.ghostG = scene.add.graphics().setDepth(6.6);
+    this.headG = scene.add.graphics().setDepth(6.7);
     scene.tweens.add({ targets: this.headG, alpha: 0.35, duration: 650, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
     this.drawLanternsAndExit();
 
@@ -63,6 +73,64 @@ export class BoardView {
         emitting: false,
       })
       .setDepth(8);
+    this.initDarkness();
+  }
+
+  // -------------------------------------------------------------------------
+  // Темнота и свет: поле в полумраке, светятся Lumo, дорога, зажжённые фонари и открытый выход.
+
+  private initDarkness() {
+    const { cell, level } = this;
+    const pad = cell * 0.12;
+    const w = Math.ceil(cell * (level.width + 0.24));
+    const h = Math.ceil(cell * (level.height + 0.24));
+    this.darkX = this.ox - pad;
+    this.darkY = this.oy - pad;
+    this.dark = this.scene.add
+      .renderTexture(this.darkX, this.darkY, w, h)
+      .setOrigin(0)
+      .setDepth(6.5)
+      .setAlpha(level.night ? 0.88 : 0.66);
+    this.darkShape = this.scene.make.graphics({}, false);
+    this.darkShape.fillStyle(0x03040f, 1);
+    this.darkShape.fillRoundedRect(0, 0, w, h, cell * 0.25);
+    this.lightImg = this.scene.make.image({ x: 0, y: 0, key: 'glow' }, false);
+    this.update(0);
+  }
+
+  private light(x: number, y: number, diameter: number, alpha: number) {
+    this.lightImg.setScale(diameter / 128).setAlpha(Math.min(1, alpha));
+    this.dark.erase(this.lightImg, x - this.darkX, y - this.darkY);
+  }
+
+  /** Каждый кадр: перерисовать темноту и «вырезать» в ней свет (с лёгким мерцанием пламени). */
+  update(time: number) {
+    if (!this.dark) return;
+    const { cell } = this;
+    const flicker = 1 + Math.sin(time * 0.006) * 0.03 + Math.sin(time * 0.0173) * 0.02;
+    this.dark.clear();
+    this.dark.draw(this.darkShape, 0, 0);
+    for (const p of this.roadLights) this.light(p.x, p.y, cell * 2.1, 0.85);
+    for (const l of this.lanterns) {
+      if (l.state === 'off') continue;
+      const c = this.center(l.idx);
+      this.light(c.x, c.y - cell * 0.2, cell * (l.state === 'lit' ? 4.6 : 3.2) * flicker, 0.95);
+    }
+    if (this.exitOpen) {
+      const e = this.center(this.level.exit.y * this.level.width + this.level.exit.x);
+      this.light(e.x, e.y, cell * (this.won ? 4 : 2.8) * flicker, 0.8);
+    }
+    if (this.lumo.alpha > 0.05) this.light(this.lumo.x + cell * 0.2, this.lumo.y - cell * 0.1, cell * 3 * flicker, 1);
+    this.flashes = this.flashes.filter((f) => time - f.t0 < f.dur);
+    for (const f of this.flashes) {
+      const k = 1 - (time - f.t0) / f.dur;
+      this.light(f.x, f.y, f.d * (1.4 - k * 0.4), k);
+    }
+  }
+
+  /** Вспышка света в точке (новая плитка, фонарь). */
+  private flash(x: number, y: number, d: number, dur = 700) {
+    this.flashes.push({ x, y, d, dur, t0: this.scene.time.now });
   }
 
   center(idx: number): { x: number; y: number } {
@@ -131,17 +199,6 @@ export class BoardView {
     });
   }
 
-  /**
-   * Ночной уровень: затемняем только поле (клетки, камни, воду). Дорога, фонари и Lumo рисуются
-   * поверх и светятся ярче, а кнопки и лоток остаются нормальной яркости.
-   */
-  private addNight() {
-    const { cell, level } = this;
-    const g = this.scene.add.graphics().setDepth(1.5);
-    g.fillStyle(0x03040f, 0.55);
-    g.fillRoundedRect(this.ox - cell * 0.12, this.oy - cell * 0.12, cell * (level.width + 0.24), cell * (level.height + 0.24), cell * 0.25);
-  }
-
   private addWaves(x: number, y: number) {
     const { cell } = this;
     const w = this.scene.add.graphics().setDepth(1);
@@ -174,10 +231,11 @@ export class BoardView {
         .setBlendMode(Phaser.BlendModes.ADD)
         .setScale((cell * 1.6) / 128)
         .setAlpha(0)
-        .setDepth(5);
+        .setDepth(6.8);
       const lamp = scene.add.graphics().setDepth(6).setPosition(c.x, c.y);
       this.lanterns.push({ idx, glow, lamp, state: 'off' });
       this.drawLamp(lamp, false);
+      this.ember(glow);
     }
     const e = this.center(level.exit.y * level.width + level.exit.x);
     this.exitGlow = scene.add
@@ -186,9 +244,27 @@ export class BoardView {
       .setBlendMode(Phaser.BlendModes.ADD)
       .setScale((cell * 1.7) / 128)
       .setAlpha(0)
-      .setDepth(5);
+      .setDepth(6.8);
     this.exitDoor = scene.add.graphics().setDepth(6).setPosition(e.x, e.y);
     this.drawExit(false);
+    // Закрытый выход тлеет таинственным фиолетовым — его ещё нужно открыть.
+    this.exitGlow.setTint(0x9b7bff);
+    this.ember(this.exitGlow, 0.32);
+  }
+
+  /** Слабое тление в темноте: незажжённый фонарь или закрытый выход зовут к себе. */
+  private ember(glow: Phaser.GameObjects.Image, max = 0.3) {
+    this.scene.tweens.killTweensOf(glow);
+    glow.setAlpha(max * 0.4);
+    this.scene.tweens.add({
+      targets: glow,
+      alpha: max,
+      duration: Phaser.Math.Between(1100, 1600),
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.inOut',
+      delay: Phaser.Math.Between(0, 800),
+    });
   }
 
   private drawLamp(g: Phaser.GameObjects.Graphics, on: boolean) {
@@ -243,6 +319,9 @@ export class BoardView {
   setRoad(state: GameState, newCells = 0, onDone?: () => void) {
     const pts = this.roadPoints(state);
     this.roadAnim?.stop();
+    this.roadLights = pts.map((p) => ({ x: p.x, y: p.y }));
+    // Новые клетки вспыхивают светом.
+    for (const p of pts.slice(pts.length - newCells)) if (newCells > 0) this.flash(p.x, p.y, this.cell * 2.4);
     if (newCells <= 0) {
       this.drawRoad(pts, pts.length - 1);
       onDone?.();
@@ -387,12 +466,13 @@ export class BoardView {
         this.scene.tweens.killTweensOf(l.glow);
         this.scene.tweens.add({ targets: l.glow, alpha: { from: 0.55, to: 0.25 }, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
         const c = this.center(l.idx);
-        this.burst.explode(6, c.x, c.y - this.cell * 0.22);
+        this.burst.explode(10, c.x, c.y - this.cell * 0.22);
+        this.flash(c.x, c.y - this.cell * 0.2, this.cell * 4, 900);
+        raysBurst(this.scene, c.x, c.y - this.cell * 0.22, C.lanternOn, this.cell * 1.6);
       } else if (!onRoad && l.state !== 'off') {
         l.state = 'off';
-        this.scene.tweens.killTweensOf(l.glow);
-        this.scene.tweens.add({ targets: l.glow, alpha: 0, duration: 200 });
         this.drawLamp(l.lamp, false);
+        this.ember(l.glow);
       }
     }
     const open = this.level.lanterns.every((i) => state.onRoad[i]);
@@ -401,10 +481,15 @@ export class BoardView {
       this.drawExit(open);
       this.scene.tweens.killTweensOf(this.exitGlow);
       if (open) {
+        const e = this.center(this.level.exit.y * this.level.width + this.level.exit.x);
+        this.exitGlow.setTint(C.exitOpen);
         this.scene.tweens.add({ targets: this.exitDoor, scale: { from: 1.25, to: 1 }, duration: 350, ease: 'Back.out' });
-        this.scene.tweens.add({ targets: this.exitGlow, alpha: { from: 0.8, to: 0.35 }, duration: 1000, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+        this.scene.tweens.add({ targets: this.exitGlow, alpha: { from: 0.9, to: 0.4 }, duration: 1000, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+        raysBurst(this.scene, e.x, e.y, C.exitOpen, this.cell * 1.8);
+        this.flash(e.x, e.y, this.cell * 3.5, 1000);
       } else {
-        this.exitGlow.setAlpha(0);
+        this.exitGlow.setTint(0x9b7bff);
+        this.ember(this.exitGlow, 0.32);
       }
     }
   }
@@ -417,6 +502,9 @@ export class BoardView {
     const cells = state.road.slice(1);
     let litCount = 0;
     const stepDur = Phaser.Math.Clamp(1700 / cells.length, 110, 200);
+    this.won = true;
+    // Свет возвращается: пока Lumo идёт и зажигает фонари, темнота над полем рассеивается.
+    this.scene.tweens.add({ targets: this.dark, alpha: 0.12, duration: stepDur * cells.length + 600, ease: 'Sine.in' });
     const chain = cells.map((r, i) => {
       const c = this.center(r.idx);
       return {
@@ -438,7 +526,10 @@ export class BoardView {
             l.glow.setAlpha(1);
             this.scene.tweens.add({ targets: l.glow, alpha: 0.75, scale: l.glow.scale * 1.1, duration: 800, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
             this.scene.tweens.add({ targets: l.lamp, scale: { from: 1.35, to: 1 }, duration: 400, ease: 'Back.out' });
-            this.burst.explode(18, this.center(l.idx).x, this.center(l.idx).y - this.cell * 0.22);
+            const lc = this.center(l.idx);
+            this.burst.explode(24, lc.x, lc.y - this.cell * 0.22);
+            raysBurst(this.scene, lc.x, lc.y - this.cell * 0.22, C.lanternOn, this.cell * 2.4);
+            this.flash(lc.x, lc.y - this.cell * 0.2, this.cell * 5, 1100);
             onLantern(litCount++);
           }
         },
@@ -450,6 +541,8 @@ export class BoardView {
       onComplete: () => {
         const e = this.center(state.head);
         this.burst.explode(30, e.x, e.y);
+        raysBurst(this.scene, e.x, e.y, C.exitOpen, this.cell * 3);
+        this.flash(e.x, e.y, this.cell * 6, 1200);
         this.scene.tweens.add({ targets: this.exitGlow, alpha: 1, scale: this.exitGlow.scale * 1.6, duration: 500 });
         this.scene.tweens.add({ targets: this.lumo, alpha: 0, scale: 0.4, y: e.y - this.cell * 0.2, duration: 450, ease: 'Quad.in', onComplete: onDone });
       },
