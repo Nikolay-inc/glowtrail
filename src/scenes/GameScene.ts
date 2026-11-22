@@ -25,7 +25,9 @@ import type { TileKind } from '../core/types';
 import { LEVELS } from '../levels/index';
 import { sfx } from '../audio';
 import { logEvent, lossStreak, recordLoss, recordSkip, recordWin, startAttempt } from '../storage';
-import { countHint, getProfile, recordPlayDay, shouldAskName } from '../profile';
+import { countHint, getProfile, markAuthPrompted, recordPlayDay, shouldAskName, shouldPromptAuth } from '../profile';
+import { Account } from '../cloud/account';
+import { openAuthDialog } from '../ui/AuthDialog';
 import { showNameDialog } from '../ui/NameDialog';
 import { BoardView } from '../ui/BoardView';
 import { addBackground, Button, createAvatarBadge, drawStar, text } from '../ui/draw';
@@ -817,8 +819,18 @@ export class GameScene extends Phaser.Scene {
     o.add(new Button(this, W / 2 - 160, top + 750, { w: 120, h: 100, icon: 'restart', onClick: () => this.scene.start('Game', { levelIndex: this.levelIndex }) }));
     o.add(new Button(this, W / 2 + 160, top + 750, { w: 120, h: 100, icon: 'menu', onClick: () => this.scene.start('Menu') }));
     o.on('primary', next);
-    // Мягкое знакомство: после уровня 3 спрашиваем имя и аватарку (можно пропустить).
-    if (shouldAskName(this.state.level.id)) {
+    // После первой победы гостю один раз предлагаем войти или зарегистрироваться (можно «Позже»).
+    if (shouldPromptAuth({ configured: Account.configured, signedIn: !!Account.user })) {
+      this.time.delayedCall(1500, () => {
+        if (this.overlay !== o) return;
+        markAuthPrompted();
+        openAuthDialog('register', {
+          intro: { title: 'Сохрани прогресс', text: 'Зарегистрируйся или войди — звёзды и уровни сохранятся в облаке, и можно продолжить на любом устройстве.' },
+          later: true,
+        });
+      });
+    } else if (shouldAskName(this.state.level.id)) {
+      // Мягкое знакомство: после уровня 3 спрашиваем имя и аватарку (можно пропустить).
       this.time.delayedCall(1500, () => {
         if (this.overlay !== o) return;
         showNameDialog(this, { title: 'Как тебя зовут?', withAvatars: true, secondary: 'skip', onClose: () => this.refreshWinAvatar(o, top) });

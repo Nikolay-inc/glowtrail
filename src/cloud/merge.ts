@@ -50,6 +50,7 @@ export function mergeSaves(local: SaveData, cloud: CloudPayload | null): SaveDat
     avatar: c.name !== null || c.nameAsked ? c.avatar : l.avatar,
     createdAt: c.createdAt < l.createdAt ? c.createdAt : l.createdAt,
     nameAsked: l.nameAsked || c.nameAsked,
+    authPrompted: l.authPrompted || c.authPrompted,
     hintsUsed: Math.max(l.hintsUsed, c.hintsUsed),
     lastPlayDay: later.lastPlayDay,
     dayStreak: later.dayStreak,

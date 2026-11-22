@@ -58,6 +58,21 @@ export function countHint() {
   });
 }
 
+/**
+ * Предложить войти или зарегистрироваться: один раз, после первой победы, только гостю
+ * и только если облако настроено. Кнопка «Войти» в меню при этом есть всегда.
+ */
+export function shouldPromptAuth(opts: { configured: boolean; signedIn: boolean }): boolean {
+  return opts.configured && !opts.signedIn && !getProfile().authPrompted;
+}
+
+export function markAuthPrompted() {
+  SaveService.update((d) => {
+    d.profile.authPrompted = true;
+    d.log.push({ t: new Date().toISOString(), ev: 'auth_prompt' });
+  });
+}
+
 /** Нужно ли показать окно «Как тебя зовут?» после победы на этом уровне. */
 export function shouldAskName(levelId: number): boolean {
   const p = getProfile();

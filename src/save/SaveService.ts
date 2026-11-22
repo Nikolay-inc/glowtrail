@@ -35,6 +35,8 @@ export interface Profile {
   createdAt: string;
   /** Окно «Как тебя зовут?» уже показывали. */
   nameAsked: boolean;
+  /** Предложение войти или зарегистрироваться уже показывали (после первой победы). */
+  authPrompted: boolean;
   /** Сколько раз игрок пользовался подсказкой. */
   hintsUsed: number;
   /** Последний день игры (YYYY-MM-DD по местному времени). */
@@ -44,7 +46,7 @@ export interface Profile {
   bestDayStreak: number;
 }
 
-export type EventType = 'session' | 'start' | 'win' | 'lose' | 'abandon' | 'hint_used' | 'extra_tiles' | 'auto_ease' | 'level_skipped' | 'signup' | 'login' | 'logout';
+export type EventType = 'session' | 'start' | 'win' | 'lose' | 'abandon' | 'hint_used' | 'extra_tiles' | 'auto_ease' | 'level_skipped' | 'signup' | 'login' | 'logout' | 'auth_prompt';
 
 export interface LogEvent {
   /** Время события, ISO. */
@@ -138,6 +140,7 @@ export const defaultProfile = (): Profile => ({
   avatar: 0,
   createdAt: new Date().toISOString(),
   nameAsked: false,
+  authPrompted: false,
   hintsUsed: 0,
   lastPlayDay: null,
   dayStreak: 0,
@@ -177,6 +180,7 @@ function normalizeProfile(raw: unknown): Profile {
   if (typeof raw.avatar === 'number' && raw.avatar >= 0 && raw.avatar < 8) p.avatar = Math.floor(raw.avatar);
   if (typeof raw.createdAt === 'string') p.createdAt = raw.createdAt;
   if (typeof raw.nameAsked === 'boolean') p.nameAsked = raw.nameAsked;
+  if (typeof raw.authPrompted === 'boolean') p.authPrompted = raw.authPrompted;
   for (const key of ['hintsUsed', 'dayStreak', 'bestDayStreak'] as const) {
     if (typeof raw[key] === 'number' && raw[key] >= 0) p[key] = Math.floor(raw[key] as number);
   }

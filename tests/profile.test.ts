@@ -173,3 +173,29 @@ describe('раскладка лотка', () => {
     expect(l.slotX[1]).toBeLessThan(W / 2); // колода справа — лоток чуть левее центра
   });
 });
+
+describe('предложение войти после первой победы', () => {
+  beforeEach(() => SaveService.setBackend(memoryBackend()));
+
+  it('гостю — один раз, если облако настроено', async () => {
+    const { shouldPromptAuth, markAuthPrompted } = await import('../src/profile');
+    expect(getProfile().authPrompted).toBe(false);
+    expect(shouldPromptAuth({ configured: true, signedIn: false })).toBe(true);
+    markAuthPrompted();
+    expect(shouldPromptAuth({ configured: true, signedIn: false })).toBe(false);
+    expect(SaveService.load().log.at(-1)?.ev).toBe('auth_prompt');
+  });
+
+  it('не предлагаем, если уже вошёл или облако не настроено', async () => {
+    const { shouldPromptAuth } = await import('../src/profile');
+    expect(shouldPromptAuth({ configured: true, signedIn: true })).toBe(false);
+    expect(shouldPromptAuth({ configured: false, signedIn: false })).toBe(false);
+  });
+
+  it('старые сохранения без флага — флаг выключен', () => {
+    SaveService.setBackend(
+      memoryBackend({ [SAVE_KEY]: JSON.stringify({ version: 3, profile: { playerId: '11111111-2222-4333-8444-555555555555' }, progress: {}, log: [] }) }),
+    );
+    expect(getProfile().authPrompted).toBe(false);
+  });
+});

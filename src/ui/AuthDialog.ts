@@ -78,7 +78,18 @@ let current: { close: () => void } | null = null;
  * Открывает окно аккаунта. onClose вызывается при закрытии (после входа/выхода — чтобы экран обновился).
  * Повторный вызов заменяет открытое окно.
  */
-export function openAuthDialog(mode: AuthMode, opts: { onClose?: () => void; email?: string; message?: { text: string; ok?: boolean } } = {}) {
+export function openAuthDialog(
+  mode: AuthMode,
+  opts: {
+    onClose?: () => void;
+    email?: string;
+    message?: { text: string; ok?: boolean };
+    /** Заголовок и пояснение вместо стандартных (например, «Сохрани прогресс» после первой победы). */
+    intro?: { title: string; text: string };
+    /** Показать ссылку «Позже» под формой. */
+    later?: boolean;
+  } = {},
+) {
   ensureStyle();
   current?.close();
   const root = el('div', { class: 'gt-auth', role: 'dialog', 'aria-modal': 'true' });
@@ -165,10 +176,14 @@ export function openAuthDialog(mode: AuthMode, opts: { onClose?: () => void; ema
           }
         });
       });
-      card.append(el('h2', { textContent: m === 'login' ? 'Вход' : 'Регистрация' }));
-      if (m === 'register') card.append(el('p', { textContent: 'Прогресс сохранится в облаке — можно играть на любом устройстве.' }));
+      if (opts.intro) card.append(el('h2', { textContent: opts.intro.title }), el('p', { textContent: opts.intro.text }));
+      else {
+        card.append(el('h2', { textContent: m === 'login' ? 'Вход' : 'Регистрация' }));
+        if (m === 'register') card.append(el('p', { textContent: 'Прогресс сохранится в облаке — можно играть на любом устройстве.' }));
+      }
       card.append(tabs, form);
       if (m === 'login') card.append(el('button', { type: 'button', class: 'gt-auth__link', textContent: 'Забыли пароль?', onclick: () => render('forgot', emailIn.value) }));
+      if (opts.later) card.append(el('button', { type: 'button', class: 'gt-auth__link', textContent: 'Позже', onclick: close }));
       setTimeout(() => (emailIn.value ? pw.input : emailIn).focus(), 50);
       return;
     }

@@ -104,6 +104,12 @@ describe('слияние облачного и локального сохран
     expect(mergeSaves(local, cloud).profile).toMatchObject({ lastPlayDay: '2026-11-22', dayStreak: 2, bestDayStreak: 6 });
   });
 
+  it('предложение войти, показанное на любом устройстве, не повторяется', () => {
+    const local = save((d) => (d.profile.authPrompted = false));
+    const cloud = toCloudPayload(save((d) => (d.profile.authPrompted = true)));
+    expect(mergeSaves(local, cloud).profile.authPrompted).toBe(true);
+  });
+
   it('есть ли у гостя прогресс', () => {
     expect(hasProgress(emptySave())).toBe(false);
     expect(hasProgress(save((d) => (d.progress.stars = { 1: 1 })))).toBe(true);
