@@ -1,5 +1,6 @@
 // Главное меню: выбор уровня, звёзды, статистика, звук.
 
+import { stretchLayout } from '../ui/viewport';
 import { isVibrationOn, setVibration } from '../haptics';
 import Phaser from 'phaser';
 import { LEVELS } from '../levels/index';
@@ -21,6 +22,10 @@ export class MenuScene extends Phaser.Scene {
   }
 
   create() {
+    // Высокий экран: профиль и «Войти» — к верху безопасной зоны, нижний ряд кнопок — к низу.
+    const bounds = stretchLayout(this);
+    const topY = 100 + bounds.top;
+    const rowY = 1700 + (bounds.bottom - H);
     addBackground(this);
     const progress = loadProgress();
     const calm = reducedMotion();
@@ -54,18 +59,18 @@ export class MenuScene extends Phaser.Scene {
     const lumo = createLumo(this, 260, profile.avatar).setPosition(W / 2, 560);
 
     // Кнопка профиля в углу: аватарка и имя
-    const badge = createAvatarBadge(this, 100, 100, 62, profile.avatar);
+    const badge = createAvatarBadge(this, 100, topY, 62, profile.avatar);
     badge.setSize(140, 140).setInteractive({ useHandCursor: true });
     badge.on('pointerup', () => this.go('Profile'));
     const nameT = this.add
-      .text(180, 100, displayName(profile), { fontFamily: FONT, fontSize: '40px', color: C.text, fontStyle: 'bold' })
+      .text(180, topY, displayName(profile), { fontFamily: FONT, fontSize: '40px', color: C.text, fontStyle: 'bold' })
       .setOrigin(0, 0.5)
       .setInteractive({ useHandCursor: true });
     nameT.on('pointerup', () => this.go('Profile'));
 
     // Вход в аккаунт — на виду, в правом верхнем углу. После входа — значок облака.
     const loggedIn = !!Account.user;
-    const authBtn = new Button(this, loggedIn ? W - 100 : W - 150, 100, {
+    const authBtn = new Button(this, loggedIn ? W - 100 : W - 150, topY, {
       w: loggedIn ? 130 : 230,
       h: 110,
       icon: loggedIn ? 'cloud' : 'user',
@@ -154,9 +159,9 @@ export class MenuScene extends Phaser.Scene {
 
     new Button(this, W / 2, 1450, { w: 560, h: 160, icon: 'play', label: 'Играть', primary: true, fontSize: 64, onClick: () => this.play(next) });
 
-    new Button(this, W / 2 - 330, 1700, { w: 160, h: 140, icon: 'stats', onClick: () => this.go('Stats') });
+    new Button(this, W / 2 - 330, rowY, { w: 160, h: 140, icon: 'stats', onClick: () => this.go('Stats') });
     // «Как играть»: все карточки правил с живой анимацией; в конце — «Пройти обучение с начала».
-    new Button(this, W / 2 + 330, 1700, {
+    new Button(this, W / 2 + 330, rowY, {
       w: 160,
       h: 140,
       icon: 'help',
@@ -166,9 +171,9 @@ export class MenuScene extends Phaser.Scene {
         this.scene.pause();
       },
     });
-    text(this, W / 2 + 330, 1800, t('tutorial_replay'), 30, C.textDim, false);
+    text(this, W / 2 + 330, rowY + 100, t('tutorial_replay'), 30, C.textDim, false);
     // Вибрация (в браузере — где поддерживается, в приложении — Taptic Engine / вибромотор).
-    const vibro = new Button(this, W / 2 + 110, 1700, {
+    const vibro = new Button(this, W / 2 + 110, rowY, {
       w: 160,
       h: 140,
       icon: isVibrationOn() ? 'vibrate' : 'novibrate',
@@ -178,7 +183,7 @@ export class MenuScene extends Phaser.Scene {
         sfx.tap();
       },
     });
-    const sound = new Button(this, W / 2 - 110, 1700, {
+    const sound = new Button(this, W / 2 - 110, rowY, {
       w: 160,
       h: 140,
       icon: isMuted() ? 'mute' : 'sound',
@@ -189,7 +194,7 @@ export class MenuScene extends Phaser.Scene {
       },
     });
 
-    text(this, W / 2, H - 50, 'прототип v0.1', 28, C.textDim, false).setAlpha(0.5);
+    text(this, W / 2, rowY + 170, 'прототип v0.1', 28, C.textDim, false).setAlpha(0.5);
     this.input.keyboard?.once('keydown-ENTER', () => this.play(next));
     // Меню появляется из темноты — свет расходится от фонаря Lumo.
     irisIn(this, W / 2 + 60, 540, 750);

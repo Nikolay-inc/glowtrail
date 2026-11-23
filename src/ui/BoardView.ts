@@ -61,9 +61,9 @@ export class BoardView {
     private scene: Phaser.Scene,
     private level: Level,
     area: { x: number; y: number; w: number; h: number },
-    opts: { avatar?: number; dark?: boolean } = {},
+    opts: { avatar?: number; dark?: boolean; maxCell?: number } = {},
   ) {
-    this.cell = Math.floor(Math.min(area.w / level.width, area.h / level.height, 200));
+    this.cell = Math.floor(Math.min(area.w / level.width, area.h / level.height, opts.maxCell ?? 200));
     this.ox = area.x + (area.w - this.cell * level.width) / 2;
     this.oy = area.y + (area.h - this.cell * level.height) / 2;
 

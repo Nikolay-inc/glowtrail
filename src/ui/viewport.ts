@@ -22,23 +22,48 @@ export interface ViewRect {
   /** Точка мира в центре экрана. */
   cx: number;
   cy: number;
+  /** Верх и низ безопасной зоны в координатах игры (на высоком экране — выше 0 и ниже H). */
+  safeTop: number;
+  safeBottom: number;
+}
+
+/** Вертикальные границы раскладки: по умолчанию 0…H, растянутая сцена — шире. */
+export interface LayoutBounds {
+  top: number;
+  bottom: number;
+}
+
+const DEFAULT_BOUNDS: LayoutBounds = { top: 0, bottom: H };
+
+/**
+ * Где показать раскладку (ширина W, по высоте bounds.top…bottom) на экране gameW×gameH с отступами
+ * безопасной зоны (в пикселях игры). Раскладка целиком внутри безопасной зоны и по центру неё;
+ * если не помещается — камера уменьшает её.
+ */
+export function computeView(gameW: number, gameH: number, insets: Insets, bounds: LayoutBounds = DEFAULT_BOUNDS): ViewRect {
+  const layoutH = bounds.bottom - bounds.top;
+  const availW = Math.max(1, gameW - insets.left - insets.right);
+  const availH = Math.max(1, gameH - insets.top - insets.bottom);
+  const zoom = Math.min(1, availW / W, availH / layoutH);
+  const leftScreen = insets.left + (availW - W * zoom) / 2;
+  const topScreen = insets.top + (availH - layoutH * zoom) / 2;
+  const cx = (gameW / 2 - leftScreen) / zoom;
+  const cy = (gameH / 2 - topScreen) / zoom + bounds.top;
+  const w = gameW / zoom;
+  const h = gameH / zoom;
+  const y = cy - h / 2;
+  return { x: cx - w / 2, y, w, h, zoom, cx, cy, safeTop: y + insets.top / zoom, safeBottom: y + (gameH - insets.bottom) / zoom };
 }
 
 /**
- * Где показать раскладку W×H на экране gameW×gameH с отступами безопасной зоны (в пикселях игры).
- * Раскладка целиком внутри безопасной зоны и по центру неё; если не помещается — камера уменьшает её.
+ * Высокий экран: насколько можно растянуть раскладку вверх и вниз (не больше maxExtra с каждой стороны),
+ * чтобы верхняя панель встала к верху безопасной зоны, нижняя — к низу, а поле стало крупнее.
  */
-export function computeView(gameW: number, gameH: number, insets: Insets): ViewRect {
-  const availW = Math.max(1, gameW - insets.left - insets.right);
-  const availH = Math.max(1, gameH - insets.top - insets.bottom);
-  const zoom = Math.min(1, availW / W, availH / H);
-  const leftScreen = insets.left + (availW - W * zoom) / 2;
-  const topScreen = insets.top + (availH - H * zoom) / 2;
-  const cx = (gameW / 2 - leftScreen) / zoom;
-  const cy = (gameH / 2 - topScreen) / zoom;
-  const w = gameW / zoom;
-  const h = gameH / zoom;
-  return { x: cx - w / 2, y: cy - h / 2, w, h, zoom, cx, cy };
+export function stretchBounds(view: ViewRect, maxExtra: number): LayoutBounds {
+  return {
+    top: Math.max(-maxExtra, Math.min(0, view.safeTop)),
+    bottom: Math.min(H + maxExtra, Math.max(H, view.safeBottom)),
+  };
 }
 
 let probe: HTMLDivElement | null = null;
@@ -58,6 +83,7 @@ export function readSafeInsets(): Insets {
 }
 
 const views = new WeakMap<Phaser.Scene, ViewRect>();
+const sceneBounds = new WeakMap<Phaser.Scene, LayoutBounds>();
 
 /** Текущая видимая область сцены (после fitView). */
 export function currentView(scene: Phaser.Scene): ViewRect {
@@ -73,12 +99,27 @@ export function fitView(scene: Phaser.Scene): ViewRect {
   const canvas = scene.game.canvas;
   const kx = canvas.clientWidth ? gameW / canvas.clientWidth : 1;
   const ky = canvas.clientHeight ? gameH / canvas.clientHeight : 1;
-  const view = computeView(gameW, gameH, { top: css.top * ky, bottom: css.bottom * ky, left: css.left * kx, right: css.right * kx });
+  const insets = { top: css.top * ky, bottom: css.bottom * ky, left: css.left * kx, right: css.right * kx };
+  const view = computeView(gameW, gameH, insets, sceneBounds.get(scene));
   const cam = scene.cameras.main;
   cam.setZoom(view.zoom);
   cam.centerOn(view.cx, view.cy);
   views.set(scene, view);
   return view;
+}
+
+/**
+ * Растянуть раскладку сцены на высокий экран (вызывать в начале create, до addBackground).
+ * Возвращает границы: элементы сверху ставим от top, снизу — до bottom. При изменении размера окна
+ * камера держит именно эти границы в безопасной зоне (если не влезают — уменьшает).
+ */
+export function stretchLayout(scene: Phaser.Scene, maxExtra = 320): LayoutBounds {
+  sceneBounds.delete(scene);
+  const bounds = stretchBounds(fitView(scene), maxExtra);
+  sceneBounds.set(scene, bounds);
+  scene.events.once('shutdown', () => sceneBounds.delete(scene));
+  fitView(scene);
+  return bounds;
 }
 
 /**

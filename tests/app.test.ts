@@ -1,6 +1,6 @@
 // Приложение (Capacitor): раскладка в безопасной зоне, сохранение в Preferences, вибрация.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { computeView } from '../src/ui/viewport';
+import { computeView, stretchBounds } from '../src/ui/viewport';
 import { createPreferencesBackend, type PrefsApi } from '../src/save/preferencesBackend';
 import { memoryBackend, SAVE_KEY, SaveService } from '../src/save/SaveService';
 import { haptics, isVibrationOn, setVibration, WEB_PATTERNS } from '../src/haptics';
@@ -40,6 +40,35 @@ describe('computeView — раскладка 1080×1920 в безопасной 
     expect(v.x).toBeLessThan(0);
     expect(v.y).toBeCloseTo(0);
     expect(v.h).toBeCloseTo(H);
+  });
+
+  it('растянутая раскладка: верх и низ встают к краям безопасной зоны, камера та же', () => {
+    const ins = { top: 125, right: 0, bottom: 89, left: 0 }; // iPhone 11
+    const v = computeView(1080, 2337, ins);
+    const b = stretchBounds(v, 320);
+    expect(b.top).toBeCloseTo(v.safeTop);
+    expect(b.bottom).toBeCloseTo(v.safeBottom);
+    expect(b.top).toBeLessThan(0);
+    expect(b.bottom).toBeGreaterThan(H);
+    const v2 = computeView(1080, 2337, ins, b);
+    expect(v2.zoom).toBe(1);
+    expect(v2.cy).toBeCloseTo(v.cy);
+  });
+
+  it('растягиваем не больше maxExtra; на экране 9:16 и на компьютере — без изменений', () => {
+    const tall = stretchBounds(computeView(1080, 3000, none), 320);
+    expect(tall).toEqual({ top: -320, bottom: H + 320 });
+    expect(stretchBounds(computeView(W, H, none), 320)).toEqual({ top: 0, bottom: H });
+    expect(stretchBounds(computeView(3000, 1500, none), 320)).toEqual({ top: 0, bottom: H });
+  });
+
+  it('окно стало ниже — растянутая раскладка целиком помещается (камера уменьшает)', () => {
+    const b = { top: -200, bottom: H + 200 };
+    const v = computeView(1080, 1920, none, b);
+    expect(v.zoom).toBeCloseTo(1920 / (H + 400));
+    expect(v.y).toBeCloseTo(b.top - (v.h - (H + 400)) / 2);
+    expect(v.y).toBeLessThanOrEqual(b.top + 0.01);
+    expect(v.y + v.h).toBeGreaterThanOrEqual(b.bottom - 0.01);
   });
 
   it('не помещается по высоте с отступами — уменьшаем', () => {

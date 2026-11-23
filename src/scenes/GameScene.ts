@@ -55,11 +55,15 @@ import { C, H, W } from '../ui/theme';
 import { CARD, MiniCard, TileCard } from '../ui/TileCard';
 import { trayLayout, type TrayLayout } from '../ui/layout';
 import { irisIn } from '../ui/fx';
+import { stretchLayout } from '../ui/viewport';
 
+// Позиции панелей в раскладке 1080×1920; на высоком экране верх поднимается, низ опускается (stretchLayout).
 const TOP_Y = 105;
 const TRAY_Y = 1640;
 const PREVIEW_Y = 1492;
 const BOTTOM_Y = 1835;
+const BOARD_Y = 250;
+const BOARD_H = 1190;
 
 /** Сколько поражений подряд нужно для каждой меры защиты от застревания. */
 export const STUCK = { pulseHint: 2, ease: 2, skip: 4 } as const;
@@ -114,6 +118,10 @@ export class GameScene extends Phaser.Scene {
   private busy = false;
   private ended = false;
   private attempt = 0;
+  private topY = TOP_Y;
+  private trayY = TRAY_Y;
+  private previewY = PREVIEW_Y;
+  private bottomY = BOTTOM_Y;
   private t0 = 0;
   private overlay?: Phaser.GameObjects.Container;
   private hintKey = '';
@@ -148,43 +156,51 @@ export class GameScene extends Phaser.Scene {
   create() {
     const level = LEVELS[this.levelIndex];
     this.L = trayLayout(level.allowStash);
+    // Высокий экран: верхняя панель — к верху безопасной зоны, лоток и подсказка — к низу, поле крупнее.
+    const bounds = stretchLayout(this);
+    const up = -bounds.top;
+    const down = bounds.bottom - H;
+    this.topY = TOP_Y - up;
+    this.trayY = TRAY_Y + down;
+    this.previewY = PREVIEW_Y + down;
+    this.bottomY = BOTTOM_Y + down;
     addBackground(this);
     this.streak = lossStreak(level.id);
 
     // Верхняя панель: уровень и строка цели (арка + фонари «зажжено/всего»)
-    new Button(this, 90, TOP_Y, { w: 130, h: 130, icon: 'menu', onClick: () => this.leave('Menu') });
-    text(this, W / 2, TOP_Y - 22, `Уровень ${level.id}`, 50);
+    new Button(this, 90, this.topY, { w: 130, h: 130, icon: 'menu', onClick: () => this.leave('Menu') });
+    text(this, W / 2, this.topY - 22, `Уровень ${level.id}`, 50);
     this.badgesG = this.add.graphics().setDepth(1);
-    this.goalText = text(this, 0, TOP_Y + 58, '', 40).setOrigin(0, 0.5).setDepth(2);
-    this.undoBtn = new Button(this, 840, TOP_Y, { w: 130, h: 130, icon: 'undo', onClick: () => this.onUndo() });
-    this.restartBtn = new Button(this, 990, TOP_Y, { w: 130, h: 130, icon: 'restart', onClick: () => this.restart() });
+    this.goalText = text(this, 0, this.topY + 58, '', 40).setOrigin(0, 0.5).setDepth(2);
+    this.undoBtn = new Button(this, 840, this.topY, { w: 130, h: 130, icon: 'undo', onClick: () => this.onUndo() });
+    this.restartBtn = new Button(this, 990, this.topY, { w: 130, h: 130, icon: 'restart', onClick: () => this.restart() });
 
     recordPlayDay(); // если сессия перешла через полночь
-    this.board = new BoardView(this, level, { x: 40, y: 250, w: 1000, h: 1190 }, { avatar: getProfile().avatar });
+    this.board = new BoardView(this, level, { x: 40, y: BOARD_Y - up, w: 1000, h: BOARD_H + up + down }, { avatar: getProfile().avatar, maxCell: 250 });
 
     // Лоток
     const slotsG = this.add.graphics();
     slotsG.fillStyle(0x000000, 0.22);
-    slotsG.fillRoundedRect(this.L.slotX[0] - CARD / 2 - 24, TRAY_Y - CARD / 2 - 24, this.L.slotX[2] - this.L.slotX[0] + CARD + 48, CARD + 48, 50);
+    slotsG.fillRoundedRect(this.L.slotX[0] - CARD / 2 - 24, this.trayY - CARD / 2 - 24, this.L.slotX[2] - this.L.slotX[0] + CARD + 48, CARD + 48, 50);
     for (const x of this.L.slotX) {
       slotsG.lineStyle(4, C.cardEdge, 0.25);
-      slotsG.strokeRoundedRect(x - CARD / 2, TRAY_Y - CARD / 2, CARD, CARD, CARD * 0.2);
+      slotsG.strokeRoundedRect(x - CARD / 2, this.trayY - CARD / 2, CARD, CARD, CARD * 0.2);
     }
     this.stashGlow = this.add.graphics().setDepth(9);
-    this.stashCard = new TileCard(this, this.stashX, TRAY_Y, 'stash');
+    this.stashCard = new TileCard(this, this.stashX, this.trayY, 'stash');
     // Слот «отложить» появляется с уровня, где его учат.
     this.stashCard.setVisible(level.allowStash);
-    this.cards = this.L.slotX.map((x, i) => new TileCard(this, x, TRAY_Y, i));
+    this.cards = this.L.slotX.map((x, i) => new TileCard(this, x, this.trayY, i));
     this.deckG = this.add.graphics();
-    this.deckText = text(this, this.L.deckX, TRAY_Y + 8, '0', 56);
-    this.previews = this.L.previewX.map((x) => new MiniCard(this, x, PREVIEW_Y, 72));
+    this.deckText = text(this, this.L.deckX, this.trayY + 8, '0', 56);
+    this.previews = this.L.previewX.map((x) => new MiniCard(this, x, this.previewY, 72));
 
     // Нижняя панель: подсказка и (после серии поражений) пропуск уровня
     const showSkip = this.streak >= STUCK.skip;
     const hintX = showSkip ? W / 2 - 190 : W / 2;
-    this.hintBtn = new Button(this, hintX, BOTTOM_Y, { w: 340, h: 116, icon: 'bulb', label: 'Подсказка', fontSize: 40, onClick: () => this.onHint() });
+    this.hintBtn = new Button(this, hintX, this.bottomY, { w: 340, h: 116, icon: 'bulb', label: 'Подсказка', fontSize: 40, onClick: () => this.onHint() });
     if (showSkip) {
-      new Button(this, W / 2 + 190, BOTTOM_Y, { w: 340, h: 116, icon: 'skip', label: 'Пропустить', fontSize: 40, onClick: () => this.skipLevel() });
+      new Button(this, W / 2 + 190, this.bottomY, { w: 340, h: 116, icon: 'skip', label: 'Пропустить', fontSize: 40, onClick: () => this.skipLevel() });
     }
 
     this.hintRing = this.add.graphics().setDepth(9);
@@ -313,18 +329,18 @@ export class GameScene extends Phaser.Scene {
     // Фонари, вход сбоку и вода объясняются карточками правил перед уровнем; здесь — только то, что
     // удобнее показать прямо на игровом экране.
     if (tip === 'stash' && level.allowStash) {
-      this.tip('stash', { x: this.stashX, y: TRAY_Y - CARD / 2 }, 'above');
+      this.tip('stash', { x: this.stashX, y: this.trayY - CARD / 2 }, 'above');
     } else if (tip === 'water') {
       // Первая вода: подсвечиваем мост в лотке.
       const slot = this.state.tray.indexOf('bridge');
       if (slot >= 0) {
         const card = this.cards[slot];
         this.ring(card.homeX, card.homeY);
-        this.tip('water', { x: card.homeX, y: TRAY_Y - CARD / 2 }, 'above');
+        this.tip('water', { x: card.homeX, y: this.trayY - CARD / 2 }, 'above');
       }
     }
     // Две неудачи подряд — показываем, где подсказка.
-    if (this.streak >= STUCK.pulseHint) this.tip('hint', { x: this.hintBtn.x, y: BOTTOM_Y - 58 }, 'above');
+    if (this.streak >= STUCK.pulseHint) this.tip('hint', { x: this.hintBtn.x, y: this.bottomY - 58 }, 'above');
   }
 
   /** Подсказка обучения по id (один раз за игру). */
@@ -337,7 +353,7 @@ export class GameScene extends Phaser.Scene {
     this.idleTimer?.remove();
     if (hasSeenTip('hint')) return;
     this.idleTimer = this.time.delayedCall(IDLE_HINT_SECONDS * 1000, () => {
-      if (this.state.status === 'playing' && !this.overlay && !this.busy) this.tip('hint', { x: this.hintBtn.x, y: BOTTOM_Y - 58 }, 'above');
+      if (this.state.status === 'playing' && !this.overlay && !this.busy) this.tip('hint', { x: this.hintBtn.x, y: this.bottomY - 58 }, 'above');
     });
   }
 
@@ -375,7 +391,7 @@ export class GameScene extends Phaser.Scene {
     g.clear();
     const level = this.state.level;
     const n = level.lanterns.length;
-    const y = TOP_Y + 58;
+    const y = this.topY + 58;
     const open = lanternsLeft(this.state) === 0;
     if (n === 0) {
       drawPortalIcon(g, W / 2, y, 22, true);
@@ -412,7 +428,7 @@ export class GameScene extends Phaser.Scene {
     const layers = Math.min(3, n === Infinity ? 3 : n);
     for (let i = layers - 1; i >= 0; i--) {
       const x = this.L.deckX - w / 2 + i * 8;
-      const y = TRAY_Y - h / 2 - i * 10;
+      const y = this.trayY - h / 2 - i * 10;
       g.fillStyle(0x000000, 0.25);
       g.fillRoundedRect(x, y + 8, w, h, 24);
       g.fillStyle(i === 0 ? C.card : 0x232b5e, 1);
@@ -422,7 +438,7 @@ export class GameScene extends Phaser.Scene {
     }
     if (n === 0) {
       g.lineStyle(4, C.cardEdge, 0.3);
-      g.strokeRoundedRect(this.L.deckX - w / 2, TRAY_Y - h / 2, w, h, 24);
+      g.strokeRoundedRect(this.L.deckX - w / 2, this.trayY - h / 2, w, h, 24);
     }
     this.deckText
       .setText(n === Infinity ? '∞' : String(n))
@@ -471,14 +487,14 @@ export class GameScene extends Phaser.Scene {
     if (hint.type === 'stash' || hint.type === 'swap') {
       const from = this.cards[hint.slot];
       this.ring(from.homeX, from.homeY);
-      this.showHandDrag(from.homeX, from.homeY, this.stashX, TRAY_Y);
+      this.showHandDrag(from.homeX, from.homeY, this.stashX, this.trayY);
       return;
     }
     if (hint.type === 'placeStash') {
       // Отложенную плитку ставят, перетащив её на поле.
       const head = this.board.center(s.head);
-      this.ring(this.stashX, TRAY_Y);
-      this.showHandDrag(this.stashX, TRAY_Y, head.x, head.y);
+      this.ring(this.stashX, this.trayY);
+      this.showHandDrag(this.stashX, this.trayY, head.x, head.y);
       this.board.showGhost(s, previewTile(s, s.stash!), 'hint');
       return;
     }
@@ -601,7 +617,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private overStash(x: number, y: number) {
-    return Math.abs(x - this.stashX) < CARD * 0.75 && Math.abs(y - TRAY_Y) < CARD * 0.9;
+    return Math.abs(x - this.stashX) < CARD * 0.75 && Math.abs(y - this.trayY) < CARD * 0.9;
   }
 
   private traySlotAt(x: number, y: number): number {
@@ -625,7 +641,7 @@ export class GameScene extends Phaser.Scene {
       this.stashGlow.clear();
       if (typeof pr.slot === 'number' && this.overStash(p.worldX, p.worldY)) {
         this.stashGlow.lineStyle(10, C.lanternOn, 0.9);
-        this.stashGlow.strokeRoundedRect(this.stashX - CARD / 2 - 12, TRAY_Y - CARD / 2 - 12, CARD + 24, CARD + 24, CARD * 0.25);
+        this.stashGlow.strokeRoundedRect(this.stashX - CARD / 2 - 12, this.trayY - CARD / 2 - 12, CARD + 24, CARD + 24, CARD * 0.25);
       }
     }
   }
@@ -666,7 +682,7 @@ export class GameScene extends Phaser.Scene {
         this.doAction({ type: 'swap', slot });
         return;
       }
-      if (p.worldY < TRAY_Y - CARD * 0.75) {
+      if (p.worldY < this.trayY - CARD * 0.75) {
         pr.card.setPosition(pr.card.homeX, pr.card.homeY);
         this.tryPlace('stash', 'drag');
         return;
@@ -749,7 +765,7 @@ export class GameScene extends Phaser.Scene {
       this.tip('water', at, 'above');
     }
     // Первая ошибка — показываем, что ход можно вернуть.
-    if (canUndo(this.state)) this.tip('undo', { x: this.undoBtn.x, y: TOP_Y + 70 }, 'below');
+    if (canUndo(this.state)) this.tip('undo', { x: this.undoBtn.x, y: this.topY + 70 }, 'below');
   }
 
   // -------------------------------------------------------------------------
@@ -773,7 +789,7 @@ export class GameScene extends Phaser.Scene {
     }
     // После первой плитки на первом уровне — подсказка, что плитку можно и перетащить.
     if (action.type === 'place' && next.level.id === 1 && next.moves === 1) {
-      this.time.delayedCall(700, () => this.tip('drag', { x: this.L.slotX[1], y: TRAY_Y - CARD / 2 }, 'above'));
+      this.time.delayedCall(700, () => this.tip('drag', { x: this.L.slotX[1], y: this.trayY - CARD / 2 }, 'above'));
     }
 
     const finish = () => {
@@ -789,7 +805,7 @@ export class GameScene extends Phaser.Scene {
       this.tweens.add({
         targets: card,
         x: this.stashX,
-        y: TRAY_Y,
+        y: this.trayY,
         duration: 200,
         ease: 'Quad.out',
         onComplete: () => {
@@ -804,7 +820,7 @@ export class GameScene extends Phaser.Scene {
     if (action.type === 'swap') {
       const card = this.cards[action.slot];
       sfx.stash();
-      this.tweens.add({ targets: card, x: this.stashX, y: TRAY_Y, duration: 220, ease: 'Quad.inOut' });
+      this.tweens.add({ targets: card, x: this.stashX, y: this.trayY, duration: 220, ease: 'Quad.inOut' });
       this.tweens.add({
         targets: this.stashCard,
         x: card.homeX,
@@ -813,7 +829,7 @@ export class GameScene extends Phaser.Scene {
         ease: 'Quad.inOut',
         onComplete: () => {
           card.setPosition(card.homeX, card.homeY);
-          this.stashCard.setPosition(this.stashX, TRAY_Y);
+          this.stashCard.setPosition(this.stashX, this.trayY);
           card.setTile(next.tray[action.slot], false, next.dir, false);
           this.stashCard.setTile(next.stash, false, next.dir, false);
           finish();
@@ -855,12 +871,12 @@ export class GameScene extends Phaser.Scene {
     for (const card of this.cards) {
       if (!card.visible) continue;
       g.lineStyle(10, C.lanternOn, 1);
-      g.strokeRoundedRect(card.homeX - CARD / 2 - 10, TRAY_Y - CARD / 2 - 10, CARD + 20, CARD + 20, CARD * 0.24);
+      g.strokeRoundedRect(card.homeX - CARD / 2 - 10, this.trayY - CARD / 2 - 10, CARD + 20, CARD + 20, CARD * 0.24);
     }
     this.tweens.add({ targets: g, alpha: { from: 1, to: 0 }, duration: 700, repeat: 2, yoyo: true, onComplete: () => g.destroy() });
     // Иконки ещё раз «докручиваются» на глазах у игрока.
     for (const card of this.cards) this.tweens.add({ targets: card, scale: 1.08, duration: 200, yoyo: true, repeat: 1 });
-    this.tip('turn', { x: this.L.slotX[1], y: TRAY_Y - CARD / 2 - 10 }, 'above');
+    this.tip('turn', { x: this.L.slotX[1], y: this.trayY - CARD / 2 - 10 }, 'above');
   }
 
   /** Новая плитка приезжает из колоды в слот. */
@@ -871,13 +887,13 @@ export class GameScene extends Phaser.Scene {
       done();
       return;
     }
-    card.setVisible(true).setPosition(this.L.deckX, TRAY_Y).setScale(0.6).setAlpha(1);
+    card.setVisible(true).setPosition(this.L.deckX, this.trayY).setScale(0.6).setAlpha(1);
     this.tweens.add({ targets: card, x: card.homeX, y: card.homeY, scale: 1, duration: 230, ease: 'Back.out', onComplete: done });
   }
 
   private resetCards() {
     this.cards.forEach((c) => c.setPosition(c.homeX, c.homeY).setScale(1).setAlpha(1));
-    this.stashCard.setPosition(this.stashX, TRAY_Y).setScale(1).setAlpha(1);
+    this.stashCard.setPosition(this.stashX, this.trayY).setScale(1).setAlpha(1);
   }
 
   private onUndo() {
