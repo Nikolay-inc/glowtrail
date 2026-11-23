@@ -1,0 +1,92 @@
+{
+  "id": "valley-30",
+  "name": "Сердце долины",
+  "grid": [
+    "....L.",
+    ".#....",
+    "......",
+    "..E..#",
+    "~~~~~.",
+    "......",
+    "...L..",
+    ".....S"
+  ],
+  "startDir": "N",
+  "deck": [
+    "straight",
+    "right",
+    "left",
+    "right",
+    "left",
+    "straight2",
+    "bridge",
+    "straight",
+    "left",
+    "left",
+    "bridge",
+    "left",
+    "right",
+    "straight",
+    "left",
+    "left",
+    "straight2",
+    "right"
+  ],
+  "stars": {
+    "two": 2,
+    "three": 3
+  },
+  "night": true,
+  "easeDecks": [
+    [
+      "straight",
+      "right",
+      "left",
+      "right",
+      "left",
+      "straight2",
+      "right",
+      "bridge",
+      "straight",
+      "left",
+      "left",
+      "bridge",
+      "left",
+      "right",
+      "straight",
+      "left",
+      "left",
+      "straight2",
+      "right"
+    ],
+    [
+      "straight",
+      "right",
+      "left",
+      "right",
+      "left",
+      "straight2",
+      "straight",
+      "right",
+      "bridge",
+      "straight",
+      "left",
+      "left",
+      "bridge",
+      "left",
+      "right",
+      "straight",
+      "left",
+      "left",
+      "straight2",
+      "right"
+    ]
+  ],
+  "metrics": {
+    "rating": 7,
+    "roads": 2,
+    "minTiles": 14,
+    "reserve": 4,
+    "trap": 0.463
+  }
+}

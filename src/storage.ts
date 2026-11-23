@@ -28,28 +28,49 @@ export function resetAll() {
   SaveService.reset();
 }
 
+/** Метрики уровня, которые пишем в лог на старте попытки. */
+export interface LevelMetricsLog {
+  rating?: number;
+  trap?: number;
+  roads?: number;
+}
+
 /** Отмечает начало попытки и возвращает её номер. */
-export function startAttempt(level: number): number {
+export function startAttempt(level: string, metrics: LevelMetricsLog = {}): number {
   let attempt = 0;
   SaveService.update((d) => {
     attempt = (d.progress.attempts[level] ?? 0) + 1;
     d.progress.attempts[level] = attempt;
   });
-  logEvent({ ev: 'start', level, attempt });
+  logEvent({ ev: 'start', level, attempt, ...metrics });
   return attempt;
 }
 
-/** Победа: звёзды, открытие следующего уровня, сброс серии поражений. */
-export function recordWin(level: number, stars: number, totalLevels: number) {
+function unlock(p: Progress, id: string | null) {
+  if (id && !p.unlocked.includes(id)) p.unlocked.push(id);
+}
+
+/**
+ * Открыт ли уровень: первый — всегда, остальные — после победы или пропуска предыдущего (prevId).
+ * Список unlocked нужен для уровней, открытых в обход порядка; новые уровни после пройденного открываются сами.
+ */
+export function isUnlocked(p: Progress, id: string, prevId: string | null): boolean {
+  return prevId === null || p.unlocked.includes(id) || !!p.stars[prevId] || !!p.skipped[prevId];
+}
+
+/** Победа: звёзды, светлячки, открытие следующего уровня (nextId), сброс серии поражений. */
+export function recordWin(level: string, stars: number, nextId: string | null, fireflies = 0) {
   SaveService.update(({ progress: p }) => {
     p.stars[level] = Math.max(p.stars[level] ?? 0, stars);
-    p.unlocked = Math.min(totalLevels, Math.max(p.unlocked, level + 1));
+    if (fireflies > 0) p.fireflies[level] = Math.max(p.fireflies[level] ?? 0, fireflies);
+    unlock(p, level);
+    unlock(p, nextId);
     p.lossStreak[level] = 0;
   });
 }
 
 /** Поражение: увеличивает серию и возвращает её. */
-export function recordLoss(level: number): number {
+export function recordLoss(level: string): number {
   let streak = 0;
   SaveService.update(({ progress: p }) => {
     streak = (p.lossStreak[level] ?? 0) + 1;
@@ -58,15 +79,16 @@ export function recordLoss(level: number): number {
   return streak;
 }
 
-export function lossStreak(level: number): number {
+export function lossStreak(level: string): number {
   return loadProgress().lossStreak[level] ?? 0;
 }
 
 /** Пропуск уровня: отмечаем и открываем следующий. Пропущенный уровень остаётся доступным. */
-export function recordSkip(level: number, totalLevels: number) {
+export function recordSkip(level: string, nextId: string | null) {
   SaveService.update(({ progress: p }) => {
     p.skipped[level] = true;
-    p.unlocked = Math.min(totalLevels, Math.max(p.unlocked, level + 1));
+    unlock(p, level);
+    unlock(p, nextId);
   });
 }
 
@@ -74,7 +96,9 @@ export function recordSkip(level: number, totalLevels: number) {
 // Сводка для экрана «Статистика»
 
 export interface LevelSummary {
-  level: number;
+  level: string;
+  /** Номер уровня по порядку (для таблицы). */
+  num: number;
   attempts: number;
   wins: number;
   losses: number;
@@ -88,15 +112,24 @@ export interface LevelSummary {
   extras: number;
   eased: number;
   skipped: boolean;
+  /** Лучший сбор светлячков за победу. */
+  fireflies: number;
 }
 
-export function summarize(log: LogEvent[], levelCount: number): LevelSummary[] {
+/** Уровень для сводки: id и номер по порядку. */
+export interface LevelRef {
+  id: string;
+  num: number;
+}
+
+export function summarize(log: LogEvent[], levels: readonly LevelRef[]): LevelSummary[] {
   const rows: LevelSummary[] = [];
-  for (let id = 1; id <= levelCount; id++) {
+  for (const { id, num } of levels) {
     const ev = log.filter((e) => e.level === id);
     const wins = ev.filter((e) => e.ev === 'win');
     rows.push({
       level: id,
+      num,
       attempts: ev.filter((e) => e.ev === 'start').length,
       wins: wins.length,
       losses: ev.filter((e) => e.ev === 'lose').length,
@@ -108,6 +141,7 @@ export function summarize(log: LogEvent[], levelCount: number): LevelSummary[] {
       extras: ev.filter((e) => e.ev === 'extra_tiles').length,
       eased: ev.filter((e) => e.ev === 'auto_ease').length,
       skipped: ev.some((e) => e.ev === 'level_skipped'),
+      fireflies: Math.max(0, ...ev.filter((e) => e.ev === 'fireflies_collected').map((e) => e.fireflies ?? 0)),
     });
   }
   return rows;
@@ -119,10 +153,11 @@ const fmtTime = (ms: number) => {
 };
 
 /** Текст, который игрок копирует и присылает после плейтеста. */
-export function statsText(levelCount: number): string {
+export function statsText(levels: readonly LevelRef[]): string {
+  const levelCount = levels.length;
   const save = SaveService.load();
   const log = save.log;
-  const rows = summarize(log, levelCount);
+  const rows = summarize(log, levels);
   const passed = rows.filter((r) => r.wins > 0).length;
   const totalMs = rows.reduce((s, r) => s + r.timeMs, 0);
   const sessions = log.filter((e) => e.ev === 'session').length;
@@ -134,15 +169,15 @@ export function statsText(levelCount: number): string {
     `Первый запуск: ${log[0]?.t ?? '—'}`,
     `Устройство: ${typeof navigator !== 'undefined' ? navigator.userAgent : '—'}`,
     '',
-    'Ур | попыток | побед | пораж. | бросил | звёзды | время | подск. | +3 | облегч. | 1-я победа',
+    'Ур | попыток | побед | пораж. | бросил | звёзды | время | подск. | +3 | облегч. | светл. | 1-я победа',
     ...rows.map(
       (r) =>
-        `${String(r.level).padStart(2)} | ${String(r.attempts).padStart(7)} | ${String(r.wins).padStart(5)} | ${String(r.losses).padStart(6)} | ${String(r.abandons).padStart(6)} | ${'★'.repeat(r.bestStars).padEnd(6)} | ${fmtTime(r.timeMs).padStart(5)} | ${String(r.hints).padStart(6)} | ${String(r.extras).padStart(2)} | ${String(r.eased).padStart(7)} | ${r.firstWinAttempt ? `попытка ${r.firstWinAttempt}` : r.skipped ? 'пропущен' : '—'}`,
+        `${String(r.num).padStart(2)} | ${String(r.attempts).padStart(7)} | ${String(r.wins).padStart(5)} | ${String(r.losses).padStart(6)} | ${String(r.abandons).padStart(6)} | ${'★'.repeat(r.bestStars).padEnd(6)} | ${fmtTime(r.timeMs).padStart(5)} | ${String(r.hints).padStart(6)} | ${String(r.extras).padStart(2)} | ${String(r.eased).padStart(7)} | ${String(r.fireflies).padStart(6)} | ${r.firstWinAttempt ? `попытка ${r.firstWinAttempt}` : r.skipped ? 'пропущен' : '—'}`,
     ),
     '',
     'Лог событий:',
     ...log.map((e) =>
-      [e.t, e.ev, e.level && `ур${e.level}`, e.attempt && `#${e.attempt}`, e.ms !== undefined && fmtTime(e.ms), e.stars !== undefined && `${e.stars}★`, e.moves !== undefined && `ходов ${e.moves}`, e.tilesLeft !== undefined && `осталось ${e.tilesLeft}`, e.undos ? `отмен ${e.undos}` : e.undo && 'отмена', e.streak !== undefined && `серия ${e.streak}`, e.added !== undefined && `+${e.added} плит.`, e.rollback && `откат ${e.rollback}`]
+      [e.t, e.ev, e.level && `ур ${e.level}`, e.attempt && `#${e.attempt}`, e.ms !== undefined && fmtTime(e.ms), e.stars !== undefined && `${e.stars}★`, e.moves !== undefined && `ходов ${e.moves}`, e.tilesLeft !== undefined && `осталось ${e.tilesLeft}`, e.undos ? `отмен ${e.undos}` : e.undo && 'отмена', e.streak !== undefined && `серия ${e.streak}`, e.added !== undefined && `+${e.added} плит.`, e.rollback && `откат ${e.rollback}`, e.fireflies !== undefined && `светлячки ${e.fireflies}/${e.firefliesTotal ?? '?'}`, e.rating !== undefined && `сложность ${e.rating}`]
         .filter(Boolean)
         .join(' '),
     ),

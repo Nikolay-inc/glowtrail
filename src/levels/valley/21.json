@@ -1,60 +1,76 @@
 {
-  "id": 6,
-  "name": "Отложи на потом",
+  "id": "valley-21",
+  "name": "Светлячки в ночи",
   "grid": [
     ".E...",
+    "..F..",
     ".....",
     ".....",
+    ".L...",
     ".....",
-    "##.##",
-    "##S##"
+    "...S."
   ],
   "startDir": "N",
   "deck": [
-    "right",
-    "right",
+    "straight",
     "left",
     "straight2",
     "straight",
+    "straight",
+    "straight",
+    "right",
+    "right",
+    "straight2",
     "left",
     "right",
-    "straight",
     "straight2",
     "left"
   ],
   "stars": {
-    "two": 2,
-    "three": 4
+    "two": 3,
+    "three": 6
   },
-  "tutorial": "stash",
+  "night": true,
   "easeDecks": [
     [
       "straight",
-      "right",
-      "right",
       "left",
       "straight2",
       "straight",
       "left",
-      "right",
       "straight",
+      "straight",
+      "right",
+      "right",
+      "straight2",
+      "left",
+      "right",
       "straight2",
       "left"
     ],
     [
+      "right",
       "straight",
-      "right",
-      "right",
       "left",
       "straight2",
       "straight",
       "left",
+      "straight",
+      "straight",
+      "right",
+      "right",
+      "straight2",
       "left",
       "right",
-      "straight",
       "straight2",
       "left"
     ]
   ],
-  "tip": "stash"
+  "metrics": {
+    "rating": 3,
+    "roads": 26,
+    "minTiles": 6,
+    "reserve": 7,
+    "trap": 0.3
+  }
 }

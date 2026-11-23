@@ -1,0 +1,81 @@
+{
+  "id": "valley-15",
+  "name": "Мельничный ручей",
+  "grid": [
+    "...E.#",
+    "L.....",
+    "L#.#..",
+    "......",
+    "~~.~~~",
+    "#.....",
+    "..S..."
+  ],
+  "startDir": "N",
+  "deck": [
+    "left",
+    "right",
+    "bridge",
+    "left",
+    "straight",
+    "right",
+    "right",
+    "straight2",
+    "right",
+    "left",
+    "straight",
+    "left",
+    "right",
+    "straight",
+    "straight"
+  ],
+  "stars": {
+    "two": 2,
+    "three": 4
+  },
+  "easeDecks": [
+    [
+      "left",
+      "right",
+      "bridge",
+      "left",
+      "straight",
+      "right",
+      "straight",
+      "right",
+      "straight2",
+      "right",
+      "left",
+      "straight",
+      "left",
+      "right",
+      "straight",
+      "straight"
+    ],
+    [
+      "straight2",
+      "left",
+      "right",
+      "bridge",
+      "left",
+      "straight",
+      "right",
+      "straight",
+      "right",
+      "straight2",
+      "right",
+      "left",
+      "straight",
+      "left",
+      "right",
+      "straight",
+      "straight"
+    ]
+  ],
+  "metrics": {
+    "rating": 3.5,
+    "roads": 12,
+    "minTiles": 10,
+    "reserve": 5,
+    "trap": 0.217
+  }
+}

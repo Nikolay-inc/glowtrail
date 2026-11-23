@@ -1,68 +1,66 @@
 {
-  "id": 9,
-  "name": "Тихая заводь",
+  "id": "valley-11",
+  "name": "Каменная тропа",
   "grid": [
-    "..E..",
     ".#...",
-    "~~.~~",
-    "...L.",
-    ".L...",
+    "E....",
+    "...##",
     "...#.",
-    "..S.."
+    ".L...",
+    ".....",
+    ".S..."
   ],
   "startDir": "N",
   "deck": [
-    "left",
-    "right",
-    "straight",
     "straight2",
     "left",
-    "right",
     "straight",
-    "left",
     "right",
     "left",
+    "left",
     "straight",
-    "bridge",
-    "straight2"
+    "right",
+    "straight2",
+    "right"
   ],
   "stars": {
     "two": 2,
-    "three": 3
+    "three": 4
   },
   "easeDecks": [
     [
-      "left",
       "right",
-      "straight",
       "straight2",
       "left",
-      "right",
-      "bridge",
       "straight",
-      "left",
       "right",
       "left",
+      "left",
       "straight",
-      "bridge",
-      "straight2"
+      "right",
+      "straight2",
+      "right"
     ],
     [
-      "left",
       "right",
-      "straight",
       "straight2",
       "left",
-      "right",
-      "right",
-      "bridge",
       "straight",
-      "left",
       "right",
       "left",
       "straight",
-      "bridge",
-      "straight2"
+      "left",
+      "straight",
+      "right",
+      "straight2",
+      "right"
     ]
-  ]
+  ],
+  "metrics": {
+    "rating": 2.1,
+    "roads": 25,
+    "minTiles": 5,
+    "reserve": 5,
+    "trap": 0.213
+  }
 }

@@ -1,5 +1,5 @@
 {
-  "id": 3,
+  "id": "valley-03",
   "name": "Огонёк",
   "grid": [
     ".E..",
@@ -20,5 +20,12 @@
     "right"
   ],
   "allowStash": false,
-  "tip": "lantern"
+  "tip": "lantern",
+  "metrics": {
+    "rating": 2.5,
+    "roads": 127,
+    "minTiles": 6,
+    "reserve": -1,
+    "trap": 0.27
+  }
 }

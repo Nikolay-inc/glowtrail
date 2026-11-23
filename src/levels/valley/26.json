@@ -1,0 +1,79 @@
+{
+  "id": "valley-26",
+  "name": "Два берега",
+  "grid": [
+    "....#S",
+    "......",
+    "#.....",
+    "...L..",
+    "..L..#",
+    "~~~~~~",
+    "....L.",
+    "..#E.#"
+  ],
+  "startDir": "S",
+  "deck": [
+    "straight2",
+    "right",
+    "straight",
+    "straight",
+    "left",
+    "right",
+    "left",
+    "left",
+    "left",
+    "bridge",
+    "straight2",
+    "right",
+    "straight",
+    "right"
+  ],
+  "stars": {
+    "two": 1,
+    "three": 1
+  },
+  "easeDecks": [
+    [
+      "straight2",
+      "right",
+      "straight",
+      "straight",
+      "left",
+      "right",
+      "right",
+      "left",
+      "left",
+      "left",
+      "bridge",
+      "straight2",
+      "right",
+      "straight",
+      "right"
+    ],
+    [
+      "straight2",
+      "right",
+      "straight",
+      "straight",
+      "left",
+      "right",
+      "straight",
+      "right",
+      "left",
+      "left",
+      "left",
+      "bridge",
+      "straight2",
+      "right",
+      "straight",
+      "right"
+    ]
+  ],
+  "metrics": {
+    "rating": 5,
+    "roads": 10,
+    "minTiles": 12,
+    "reserve": 2,
+    "trap": 0.258
+  }
+}

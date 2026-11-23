@@ -1,13 +1,17 @@
-// npm run verify — проверяет, что каждый уровень решаем, и что кривая сложности соответствует плану.
-// Ошибки (уровень не решается, неверные звёзды, битые колоды облегчения) роняют команду;
-// отклонения от кривой — предупреждения.
+// npm run verify — проверяет все уровни и кривую сложности.
+// Ошибки (не решается, неверные звёзды, битые колоды облегчения, устаревшие метрики, недоступные светлячки,
+// уровень с одним решением) роняют команду; отклонения от кривой — предупреждения.
+// Обучающие уровни 1–10 сверяются со своей таблицей (CURVE ниже), уровни 11–30 — с планом мира (src/levels/curve.ts).
 
 import { LEVELS } from '../src/levels/index';
+import { analyzeLevel } from '../src/core/difficulty';
 import { solveLevel } from '../src/core/solver';
 import { starThresholds } from '../src/core/game';
+import { featuresOf } from '../src/core/generator';
 import type { Level } from '../src/core/types';
 import { portalSides } from '../src/core/portal';
 import { TIP_TEXT } from '../src/tutorial';
+import { FIREFLY_FROM, MAX_H, MAX_W, RATING_TOLERANCE, slotOf, VALLEY_PLAN, type Role } from '../src/levels/curve';
 
 /** Целевая кривая обучающих уровней 1–10. */
 interface Target {
@@ -44,6 +48,8 @@ const CURVE: Target[] = [
   { size: '6x7', infinite: false, reserve: [4, 4], minRoads: 5, maxTiles: lin(9), allows: A(true, 3, true, true), note: 'финал' },
 ];
 
+const ROLE_RU: Record<Role, string> = { easy: 'лёгкий', medium: 'средний', breather: 'передышка', harder: 'сложнее', challenge: 'испытание' };
+
 function contents(level: Level) {
   const tiles = level.tileSet ?? level.deck;
   return {
@@ -66,22 +72,32 @@ let warnings = 0;
 let stashLevels = 0;
 const rows: string[][] = [];
 const notes: string[] = [];
+const ratings = new Map<number, number>();
 
 for (const [i, level] of LEVELS.entries()) {
   const t0 = performance.now();
-  const r = solveLevel(level);
-  const noStash = solveLevel(level, { allowStash: false, countRoads: false });
+  const base = { ...level, easeDecks: undefined, metrics: undefined };
+  const r = analyzeLevel(base);
+  const m = r.metrics;
+  ratings.set(level.num, m.rating);
   const ms = Math.round(performance.now() - t0);
   const infinite = level.tileSet !== null;
   const size = `${level.width}x${level.height}`;
-  const reserve = infinite ? Infinity : r.solvable ? level.deck.length - r.minTiles : -1;
-  const needsStash = r.solvable && !noStash.solvable;
+  const needsStash = r.solvable && !r.solvableWithoutStash;
   if (needsStash) stashLevels++;
   const err: string[] = [];
   const warn: string[] = [];
 
   if (!r.solvable) err.push('НЕ РЕШАЕТСЯ');
   if (level.tip && !(level.tip in TIP_TEXT)) err.push(`неизвестная подсказка tip: "${level.tip}"`);
+  if (level.fireflies.length && r.maxFireflies < level.fireflies.length) {
+    err.push(`светлячков ${level.fireflies.length}, а собрать за одну победу можно только ${r.maxFireflies}`);
+  }
+  const jm = level.metrics;
+  if (!jm) err.push('нет метрик сложности — запусти npm run ease');
+  else if (jm.rating !== m.rating || jm.roads !== m.roads || jm.minTiles !== m.minTiles || jm.reserve !== m.reserve || jm.trap !== m.trap) {
+    err.push(`метрики в JSON устарели (рейтинг ${jm.rating} → ${m.rating}) — запусти npm run ease`);
+  }
   if (!infinite && r.solvable) {
     const want = starThresholds(r.maxLeftover);
     if (level.stars.two !== want.two || level.stars.three !== want.three) {
@@ -89,7 +105,7 @@ for (const [i, level] of LEVELS.entries()) {
     }
     // Колоды незаметного облегчения: +1 и +2 плитки к исходной, обе решаемы.
     if (!level.easeDecks || level.easeDecks.length < 2) {
-      warn.push('нет колод облегчения — запусти npm run ease');
+      err.push('нет колод облегчения — запусти npm run ease');
     } else {
       level.easeDecks.forEach((d, k) => {
         if (d.length !== level.deck.length + k + 1 || !isSubsequence(level.deck, d)) err.push(`колода облегчения +${k + 1} не продолжает исходную — запусти npm run ease`);
@@ -99,12 +115,15 @@ for (const [i, level] of LEVELS.entries()) {
   }
 
   const t = CURVE[i];
+  const slot = slotOf(level.num);
+  let plan = '';
   if (t) {
+    plan = t.note;
     const c = contents(level);
     if (size !== t.size) warn.push(`поле ${size}, по плану ${t.size}`);
     if (infinite !== t.infinite) warn.push(t.infinite ? 'по плану колода бесконечная' : 'по плану колода с лимитом');
-    if (t.reserve && !infinite && (reserve < t.reserve[0] || reserve > t.reserve[1])) {
-      warn.push(`запас ${reserve}, по плану ${t.reserve[0] === t.reserve[1] ? t.reserve[0] : `${t.reserve[0]}–${t.reserve[1]}`}`);
+    if (t.reserve && !infinite && (m.reserve < t.reserve[0] || m.reserve > t.reserve[1])) {
+      warn.push(`запас ${m.reserve}, по плану ${t.reserve[0] === t.reserve[1] ? t.reserve[0] : `${t.reserve[0]}–${t.reserve[1]}`}`);
     }
     if (t.minRoads && r.roads < t.minRoads) warn.push(`решений ${r.roads}, по плану не меньше ${t.minRoads}`);
     if (r.minTiles > t.maxTiles) warn.push(`нужно ${r.minTiles} плиток, по плану не больше ${t.maxTiles}`);
@@ -112,8 +131,8 @@ for (const [i, level] of LEVELS.entries()) {
     if (c.lanterns > t.allows.lanterns) warn.push(`фонарей ${c.lanterns}, можно не больше ${t.allows.lanterns}`);
     if (c.rocks && !t.allows.rocks) warn.push('камни раньше времени');
     if (c.water && !t.allows.water) warn.push('вода или мост раньше времени');
+    if (level.fireflies.length) warn.push('светлячки раньше времени');
     if (t.teachesStash && !needsStash) warn.push('учит «отложить», но решается без него');
-    if (!t.teachesStash && needsStash) warn.push('требует «отложить» — это можно только на обучающем уровне');
     if (t.teachesStash && level.tutorial !== 'stash') warn.push('нет подсказки-обучения «отложить» (tutorial: "stash")');
     if (t.sideEntry) {
       const sides = portalSides(level);
@@ -121,43 +140,96 @@ for (const [i, level] of LEVELS.entries()) {
       const horizontal = sides[1].open || sides[3].open;
       if (vertical || !horizontal) warn.push('в арку должно быть можно войти только сбоку');
     }
+  } else if (slot) {
+    plan = `${ROLE_RU[slot.role]} ~${slot.rating}`;
+    if (r.roads < 2) err.push('одно решение — по плану мира таких уровней нет');
+    if (level.width > slot.maxW || level.height > slot.maxH) warn.push(`поле ${size}, по плану не больше ${slot.maxW}x${slot.maxH}`);
+    if (level.width > MAX_W || level.height > MAX_H) warn.push(`поле больше ${MAX_W}x${MAX_H}`);
+    const f = featuresOf(level);
+    const missing = slot.needs.filter((x) => !f.includes(x));
+    const extra = f.filter((x) => !slot.needs.includes(x) && !slot.allows.includes(x));
+    if (missing.length) warn.push(`по плану нужны: ${missing.join(', ')}`);
+    if (extra.length) warn.push(`по плану нельзя: ${extra.join(', ')}`);
+    if (level.num < FIREFLY_FROM && level.fireflies.length) warn.push(`светлячки — только с уровня ${FIREFLY_FROM}`);
+    if (!!slot.night !== level.night) warn.push(slot.night ? 'по плану ночной уровень' : 'по плану не ночной');
+    if (Math.abs(m.rating - slot.rating) > RATING_TOLERANCE) warn.push(`рейтинг ${m.rating}, по плану ${slot.rating} ± ${RATING_TOLERANCE}`);
   } else {
-    warn.push('уровня нет в целевой кривой');
+    warn.push('уровня нет в плане мира');
   }
+  if (!t && needsStash) warn.push('требует «отложить» — это можно только на обучающем уровне');
+  if (r.states > 60_000) warn.push(`решатель перебирает ${r.states} состояний — подсказка на телефоне будет думать долго`);
   errors += err.length ? 1 : 0;
   warnings += warn.length;
 
   const status = err.length ? '✗' : warn.length ? '!' : '✓';
   rows.push([
-    String(level.id),
+    String(level.num),
     level.name,
     size,
     infinite ? '∞' : String(level.deck.length),
-    infinite ? '∞' : String(reserve),
+    infinite ? '∞' : String(m.reserve),
     String(r.minTiles),
-    String(r.roads),
+    r.roads >= 500 ? '500+' : String(r.roads),
+    `${Math.round(m.trap * 100)}%`,
+    m.rating.toFixed(1),
+    plan,
+    level.fireflies.length ? `${level.fireflies.length}` : '',
     infinite ? 'по отменам' : `${level.stars.two}/${level.stars.three} из ${r.maxLeftover}`,
     !level.allowStash ? '—' : needsStash ? 'нужно' : 'можно',
     `${ms} мс`,
     status,
   ]);
-  for (const m of err) notes.push(`✗ ${level.id}. ${m}`);
-  for (const m of warn) notes.push(`! ${level.id}. ${m}`);
+  for (const x of err) notes.push(`✗ ${level.num}. ${x}`);
+  for (const x of warn) notes.push(`! ${level.num}. ${x}`);
 }
 if (stashLevels > 1) {
   notes.push(`! «Отложить» обязателен на ${stashLevels} уровнях, по плану — только на одном`);
   warnings++;
 }
 
-const head = ['#', 'Уровень', 'Поле', 'Колода', 'Запас', 'Мин. плиток', 'Решений', 'Звёзды 2/3', '«Отложить»', 'Время', ''];
+// «Пила» внутри каждого десятка мира: передышка легче средних, 9-й сложнее передышки, испытание — самое сложное.
+const decades = [...new Set(VALLEY_PLAN.map((s) => Math.floor((s.num - 1) / 10)))];
+for (const d of decades) {
+  const slots = VALLEY_PLAN.filter((s) => Math.floor((s.num - 1) / 10) === d && ratings.has(s.num));
+  if (slots.length < 10) continue;
+  const rt = (role: Role) => slots.filter((s) => s.role === role).map((s) => ratings.get(s.num)!);
+  const avg = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / Math.max(1, xs.length);
+  const [lo, hi] = [d * 10 + 1, d * 10 + 10];
+  const breather = rt('breather')[0];
+  const harder = rt('harder')[0];
+  const challenge = rt('challenge')[0];
+  const others = slots.filter((s) => s.role !== 'challenge').map((s) => ratings.get(s.num)!);
+  const saw: string[] = [];
+  if (!(breather < avg(rt('medium')))) saw.push(`передышка (${breather}) не легче средних (${avg(rt('medium')).toFixed(1)})`);
+  if (!(harder > breather)) saw.push(`9-й (${harder}) не сложнее передышки (${breather})`);
+  if (!(avg(rt('easy')) < avg(rt('medium')))) saw.push('лёгкие не легче средних');
+  if (!(challenge >= Math.max(...others))) saw.push(`испытание (${challenge}) не самое сложное в десятке (${Math.max(...others)})`);
+  for (const x of saw) notes.push(`! ${lo}–${hi}. «Пила»: ${x}`);
+  warnings += saw.length;
+}
+// Рост сложности по миру: средний рейтинг второго десятка ниже третьего.
+const decadeAvg = (lo: number) => {
+  const xs = [...ratings.entries()].filter(([n]) => n >= lo && n < lo + 10).map(([, r]) => r);
+  return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : NaN;
+};
+const avg2 = decadeAvg(11);
+const avg3 = decadeAvg(21);
+
+const head = ['#', 'Уровень', 'Поле', 'Колода', 'Запас', 'Мин.', 'Решений', 'Тупики', 'Рейтинг', 'План', 'Светл.', 'Звёзды 2/3', '«Отложить»', 'Время', ''];
 const widths = head.map((h, c) => Math.max(h.length, ...rows.map((r) => r[c].length)));
-const line = (r: string[]) => r.map((v, c) => (c === 1 ? v.padEnd(widths[c]) : v.padStart(widths[c]))).join(' | ');
+const line = (r: string[]) => r.map((v, c) => (c === 1 || c === 9 ? v.padEnd(widths[c]) : v.padStart(widths[c]))).join(' | ');
 console.log(line(head));
 console.log(widths.map((w) => '-'.repeat(w)).join('-|-'));
 for (const r of rows) console.log(line(r));
-console.log('\nЗапас — плиток в колоде сверх минимума (∞ — колода бесконечная). Решений — разных дорог до выхода.');
+console.log('\nЗапас — плиток в колоде сверх минимума (∞ — колода бесконечная). Решений — разных дорог до выхода (считаем до 500).');
+console.log('Тупики — доля случайных допустимых ходов, после которых уровень уже не решить (выборка 600 ходов).');
+console.log('Рейтинг 1–10 = 1 + тупики (до 4) + мало решений (до 2) + малый запас (до 1,5) + длина пути (до 1,5), формула — ratingOf в src/core/difficulty.ts.');
 console.log('Звёзды: с колодой — по оставшимся плиткам (3 — от макс. − 1, 2 — от половины); без лимита — 0 отмен 3, 1–2 отмены 2, больше 1.');
-console.log('«Отложить»: — слот скрыт, можно — есть, но не обязателен, нужно — без него не решить.');
+if (!Number.isNaN(avg2)) console.log(`Средний рейтинг: 11–20 — ${avg2.toFixed(1)}, 21–30 — ${Number.isNaN(avg3) ? '—' : avg3.toFixed(1)}`);
+if (!Number.isNaN(avg2) && !Number.isNaN(avg3) && !(avg3 > avg2)) {
+  notes.push(`! Сложность не растёт по миру: 11–20 — ${avg2.toFixed(1)}, 21–30 — ${avg3.toFixed(1)}`);
+  warnings++;
+}
 if (notes.length) console.log('\n' + notes.join('\n'));
 if (errors) {
   console.error(`\nОшибок: ${errors}`);

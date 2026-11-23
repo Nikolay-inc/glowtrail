@@ -42,6 +42,9 @@ export const C = {
   star: 0xffd36b,
   starEmpty: 0x3a4278,
   panel: 0x1a2150,
+  /** Светлячок: жёлто-зелёный огонёк — отличается и от жёлтой дороги, и от оранжевых фонарей. */
+  firefly: 0xc8ff7a,
+  fireflyGlow: 0x9dff5c,
 };
 
 export const hex = (c: number) => `#${c.toString(16).padStart(6, '0')}`;

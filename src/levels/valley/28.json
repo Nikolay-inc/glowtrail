@@ -1,0 +1,63 @@
+{
+  "id": "valley-28",
+  "name": "Тихий луг",
+  "grid": [
+    ".....",
+    ".....",
+    "....E",
+    ".....",
+    ".....",
+    "S..LF",
+    "....."
+  ],
+  "startDir": "E",
+  "deck": [
+    "straight",
+    "straight",
+    "left",
+    "left",
+    "straight2",
+    "left",
+    "right",
+    "straight2",
+    "straight"
+  ],
+  "stars": {
+    "two": 2,
+    "three": 3
+  },
+  "easeDecks": [
+    [
+      "right",
+      "straight",
+      "straight",
+      "left",
+      "left",
+      "straight2",
+      "left",
+      "right",
+      "straight2",
+      "straight"
+    ],
+    [
+      "right",
+      "straight",
+      "straight",
+      "left",
+      "left",
+      "right",
+      "straight2",
+      "left",
+      "right",
+      "straight2",
+      "straight"
+    ]
+  ],
+  "metrics": {
+    "rating": 3.5,
+    "roads": 3,
+    "minTiles": 5,
+    "reserve": 4,
+    "trap": 0.315
+  }
+}

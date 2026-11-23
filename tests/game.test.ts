@@ -16,7 +16,7 @@ import { LEVELS } from '../src/levels/index';
 import type { LevelData, TileKind } from '../src/core/types';
 
 function level(grid: string[], deck: TileKind[], extra: Partial<LevelData> = {}) {
-  return parseLevel({ id: 0, name: 't', grid, startDir: 'N', deck, stars: { two: 1, three: 2 }, ...extra });
+  return parseLevel({ id: 'test', name: 't', grid, startDir: 'N', deck, stars: { two: 1, three: 2 }, ...extra });
 }
 
 const place = (s: GameState, slot: number) => applyAction(s, { type: 'place', slot });

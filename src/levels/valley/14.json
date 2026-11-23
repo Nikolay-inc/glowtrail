@@ -1,0 +1,90 @@
+{
+  "id": "valley-14",
+  "name": "Брод",
+  "grid": [
+    ".L...",
+    "...L.",
+    ".F..F",
+    "S.F..",
+    "~~~~~",
+    "....E",
+    "....."
+  ],
+  "startDir": "E",
+  "deck": [
+    "left",
+    "straight",
+    "left",
+    "left",
+    "right",
+    "straight",
+    "right",
+    "right",
+    "right",
+    "left",
+    "straight2",
+    "right",
+    "straight2",
+    "bridge",
+    "left",
+    "bridge",
+    "left",
+    "right"
+  ],
+  "stars": {
+    "two": 3,
+    "three": 5
+  },
+  "easeDecks": [
+    [
+      "left",
+      "straight",
+      "left",
+      "left",
+      "right",
+      "straight",
+      "straight",
+      "right",
+      "right",
+      "right",
+      "left",
+      "straight2",
+      "right",
+      "straight2",
+      "bridge",
+      "left",
+      "bridge",
+      "left",
+      "right"
+    ],
+    [
+      "left",
+      "straight",
+      "left",
+      "left",
+      "right",
+      "straight",
+      "straight",
+      "right",
+      "right",
+      "right",
+      "left",
+      "straight2",
+      "right",
+      "straight2",
+      "bridge",
+      "straight",
+      "left",
+      "bridge",
+      "left",
+      "right"
+    ]
+  ],
+  "metrics": {
+    "rating": 3,
+    "roads": 39,
+    "minTiles": 12,
+    "reserve": 6,
+    "trap": 0.19
+  }
+}

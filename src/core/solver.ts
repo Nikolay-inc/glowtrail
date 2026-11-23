@@ -2,10 +2,10 @@
 // Используется в npm run verify (проверка уровней), в подсказках, в «+3 плитки» и в облегчении уровня.
 
 import { dealExtra, isInfinite, placeTile, tileLeadsToExit, TRAY_SIZE, type Action, type GameState } from './game';
-import { geoCountRoads, geoMinTiles } from './geo';
+import { geoCountRoads, geoMaxFireflies, geoMinTiles } from './geo';
 import { TILE_KINDS, type Dir, type Level, type TileKind } from './types';
 
-interface Node {
+export interface Node {
   head: number;
   dir: Dir;
   mask: bigint; // клетки, занятые дорогой
@@ -17,13 +17,15 @@ interface Node {
 interface Result {
   /** Лучшее число оставшихся плиток при победе; -1 — отсюда не выиграть. */
   best: number;
+  /** Сколько светлячков можно собрать дальше на пути к победе (максимум); -1 — не выиграть. */
+  ff: number;
   /** Разные дороги-решения (последовательности клеток) от этого состояния до выхода. */
   roads: Set<string> | null;
 }
 
-type MoveFrom = 'tray' | 'stash' | 'toStash' | 'swap';
+export type MoveFrom = 'tray' | 'stash' | 'toStash' | 'swap';
 
-interface Move {
+export interface Move {
   kind: TileKind;
   from: MoveFrom;
   next: Node;
@@ -35,12 +37,28 @@ export interface SolveOptions {
   countRoads?: boolean;
   /** Колода вместо колоды уровня (облегчение, проверки). */
   deck?: TileKind[];
+  /** Предел подсчёта решений: дальше решатель не считает (по умолчанию ROAD_LIMIT). */
+  roadLimit?: number;
+  /** Предел состояний: больше — исключение TooManyStates (по умолчанию без предела). */
+  maxStates?: number;
+}
+
+/** Решений больше этого числа не считаем — уровню с сотнями решений точное число не важно. */
+export const ROAD_LIMIT = 500;
+
+/** Решатель перебрал слишком много состояний (генератор отбрасывает такие уровни: подсказки на телефоне были бы медленными). */
+export class TooManyStates extends Error {
+  constructor(readonly limit: number) {
+    super(`больше ${limit} состояний`);
+  }
 }
 
 export interface SolveReport {
   solvable: boolean;
-  /** Сколько разных дорог приводят к победе. Мало — уровень сложный. */
+  /** Сколько разных дорог приводят к победе (не больше предела). Мало — уровень сложный. */
   roads: number;
+  /** Сколько светлячков можно собрать за одну победу (максимум). */
+  maxFireflies: number;
   /** Максимум плиток, которые могут остаться (для звёзд). */
   maxLeftover: number;
   /** Минимум плиток, которыми можно пройти уровень. */
@@ -49,16 +67,20 @@ export interface SolveReport {
   states: number;
 }
 
-class Solver {
+export class Solver {
   private memo = new Map<string, Result>();
   private readonly exitIdx: number;
+  private readonly isFirefly: boolean[];
+  private readonly roadLimit: number;
 
   constructor(
     private level: Level,
-    private deck: TileKind[],
-    private opts: { allowStash: boolean; countRoads: boolean },
+    readonly deck: TileKind[],
+    private opts: { allowStash: boolean; countRoads: boolean; roadLimit?: number; maxStates?: number },
   ) {
     this.exitIdx = level.exit.y * level.width + level.exit.x;
+    this.isFirefly = level.cells.map((c) => c === 'firefly');
+    this.roadLimit = opts.roadLimit ?? ROAD_LIMIT;
   }
 
   get states(): number {
@@ -131,28 +153,62 @@ class Solver {
 
   explore(n: Node): Result {
     if (n.head === this.exitIdx) {
-      return { best: this.leftover(n), roads: this.opts.countRoads ? new Set(['']) : null };
+      return { best: this.leftover(n), ff: 0, roads: this.opts.countRoads ? new Set(['']) : null };
     }
     const k = this.key(n);
     const cached = this.memo.get(k);
     if (cached) return cached;
 
-    const res: Result = { best: -1, roads: this.opts.countRoads ? new Set() : null };
+    const res: Result = { best: -1, ff: -1, roads: this.opts.countRoads ? new Set() : null };
     this.memo.set(k, res); // дорога только растёт, циклов нет
+    if (this.opts.maxStates && this.memo.size > this.opts.maxStates) throw new TooManyStates(this.opts.maxStates);
     for (const m of this.moves(n)) {
       const r = this.explore(m.next);
       if (r.best < 0) continue;
       res.best = Math.max(res.best, r.best);
-      if (res.roads && r.roads) {
+      let ff = r.ff;
+      for (const c of m.cells) if (this.isFirefly[c]) ff++;
+      res.ff = Math.max(res.ff, ff);
+      // Решения считаем до предела: дальше точное число уже не важно (и не тратим память).
+      if (res.roads && r.roads && res.roads.size < this.roadLimit) {
         const prefix = m.cells.map((c) => String.fromCharCode(48 + c)).join('');
-        for (const s of r.roads) res.roads.add(prefix + s);
+        for (const s of r.roads) {
+          res.roads.add(prefix + s);
+          if (res.roads.size >= this.roadLimit) break;
+        }
       }
     }
     return res;
   }
+
+  /** Можно ли отсюда выиграть (с запоминанием — для оценки тупиковых ходов). */
+  winnable(n: Node): boolean {
+    return this.explore(n).best >= 0;
+  }
+
+  /** Одно из лучших решений от состояния: ходы по очереди (больше всего плиток в запасе, при равенстве — больше светлячков). */
+  solution(n: Node): Move[] {
+    const out: Move[] = [];
+    let cur = n;
+    while (cur.head !== this.exitIdx) {
+      let best: { m: Move; score: number } | null = null;
+      for (const m of this.moves(cur)) {
+        const r = this.explore(m.next);
+        if (r.best < 0) continue;
+        let ff = r.ff;
+        for (const c of m.cells) if (this.isFirefly[c]) ff++;
+        const score = r.best * 1000 + ff * 10 + (m.from === 'tray' ? 2 : m.from === 'stash' ? 1 : 0);
+        if (!best || score > best.score) best = { m, score };
+      }
+      if (!best) return [];
+      out.push(best.m);
+      cur = best.m.next;
+    }
+    return out;
+  }
 }
 
-function startNode(level: Level, deck: TileKind[]): Node {
+export function startNode(level: Level, deck: TileKind[]): Node {
   const startIdx = level.start.y * level.width + level.start.x;
   return {
     head: startIdx,
@@ -164,7 +220,7 @@ function startNode(level: Level, deck: TileKind[]): Node {
   };
 }
 
-function nodeOf(state: GameState): Node {
+export function nodeOf(state: GameState): Node {
   let mask = 0n;
   state.onRoad.forEach((v, i) => {
     if (v) mask |= 1n << BigInt(i);
@@ -186,7 +242,8 @@ export function solveLevel(level: Level, options: SolveOptions = {}): SolveRepor
     const min = geoMinTiles(level, level.tileSet, start, level.startDir, 1n << BigInt(start));
     return {
       solvable: min >= 0,
-      roads: options.countRoads === false ? 0 : geoCountRoads(level, level.tileSet),
+      roads: options.countRoads === false ? 0 : geoCountRoads(level, level.tileSet, options.roadLimit ?? ROAD_LIMIT),
+      maxFireflies: level.fireflies.length ? geoMaxFireflies(level, level.tileSet) : 0,
       maxLeftover: 0,
       minTiles: min,
       states: 0,
@@ -196,11 +253,14 @@ export function solveLevel(level: Level, options: SolveOptions = {}): SolveRepor
   const solver = new Solver(level, deck, {
     allowStash: (options.allowStash ?? true) && level.allowStash,
     countRoads: options.countRoads ?? true,
+    roadLimit: options.roadLimit,
+    maxStates: options.maxStates,
   });
   const r = solver.explore(startNode(level, deck));
   return {
     solvable: r.best >= 0,
     roads: r.roads?.size ?? 0,
+    maxFireflies: Math.max(0, r.ff),
     maxLeftover: r.best,
     minTiles: r.best >= 0 ? deck.length - r.best : -1,
     states: solver.states,
@@ -333,24 +393,79 @@ function forgiveness(level: Level, deck: TileKind[]): { winnable: number; left: 
 /**
  * Незаметное облегчение после серии поражений: добавляет в колоду `extra` плиток (по одной, жадно).
  * Вид и место выбираются так, чтобы уровень сильнее всего «прощал» ошибки: больше состояний, из которых
- * ещё можно выиграть. Лишняя плитка помогает сильнее всего в начале колоды — перебираем только первые позиции.
+ * ещё можно выиграть. Лишняя плитка помогает сильнее всего в начале колоды — сначала перебираем первые позиции.
+ * Число решений при этом не уменьшается.
  */
 export function easeDeck(level: Level, extra: number, deck: TileKind[] = level.deck): TileKind[] {
   if (level.tileSet) return [...deck]; // бесконечную колоду облегчать не нужно
   let cur = [...deck];
+  // Облегчение не должно отнимать решения: вставка плитки сдвигает колоду, и это иногда закрывает дороги.
+  const roadsOf = (d: TileKind[]) => solveLevel(level, { deck: d, countRoads: true }).roads;
   for (let k = 0; k < extra; k++) {
+    const minRoads = roadsOf(cur);
     let best: { deck: TileKind[]; winnable: number; left: number } | null = null;
-    for (const kind of usefulKinds(level)) {
-      for (let pos = 0; pos <= Math.min(cur.length, EASE_POSITIONS); pos++) {
-        const cand = [...cur.slice(0, pos), kind, ...cur.slice(pos)];
-        const f = forgiveness(level, cand);
-        if (f.winnable < 0) continue;
-        if (!best || f.winnable > best.winnable || (f.winnable === best.winnable && f.left > best.left)) {
-          best = { deck: cand, ...f };
+    // Сначала — первые позиции (там лишняя плитка помогает сильнее), если ни одна не подходит — вся колода
+    // (плитка в самом конце колоды решений точно не отнимает).
+    for (const maxPos of [Math.min(cur.length, EASE_POSITIONS), cur.length]) {
+      for (const kind of usefulKinds(level)) {
+        for (let pos = 0; pos <= maxPos; pos++) {
+          const cand = [...cur.slice(0, pos), kind, ...cur.slice(pos)];
+          const f = forgiveness(level, cand);
+          if (f.winnable < 0) continue;
+          if (!best || f.winnable > best.winnable || (f.winnable === best.winnable && f.left > best.left)) {
+            if (roadsOf(cand) < minRoads) continue;
+            best = { deck: cand, ...f };
+          }
         }
       }
+      if (best) break;
     }
-    if (best) cur = best.deck;
+    // TS сужает best до never после break во вложенном цикле — подсказываем тип явно.
+    const found = best as { deck: TileKind[] } | null;
+    if (found) cur = found.deck;
   }
   return cur;
+}
+
+/** Шаг решения: какая плитка, откуда взята и какие клетки заняла. */
+export interface SolutionStep {
+  kind: TileKind;
+  from: MoveFrom;
+  cells: number[];
+}
+
+/**
+ * Одно из лучших решений уровня от старта (для редактора «Показать решение»): больше всего плиток в запасе,
+ * при равенстве — больше светлячков. Пустой список — уровень не решается.
+ */
+export function solutionOf(level: Level, deck: TileKind[] = level.deck): SolutionStep[] {
+  if (level.tileSet && deck === level.deck) {
+    // Бесконечная колода: жадно по геометрии — каждая плитка приближает к выходу.
+    const kinds = level.tileSet;
+    const exit = level.exit.y * level.width + level.exit.x;
+    let head = level.start.y * level.width + level.start.x;
+    let dir = level.startDir;
+    let mask = 1n << BigInt(head);
+    const out: SolutionStep[] = [];
+    while (head !== exit) {
+      let best: { step: SolutionStep; rem: number; head: number; dir: Dir; mask: bigint } | null = null;
+      for (const k of kinds) {
+        const p = placeTile(level, (i) => ((mask >> BigInt(i)) & 1n) === 1n, head, dir, k);
+        if (!p.ok) continue;
+        let m = mask;
+        for (const c of p.cells) m |= 1n << BigInt(c.idx);
+        const h = p.cells[p.cells.length - 1].idx;
+        const rem = geoMinTiles(level, kinds, h, p.newDir, m);
+        if (rem >= 0 && (!best || rem < best.rem)) best = { step: { kind: k, from: 'tray', cells: p.cells.map((c) => c.idx) }, rem, head: h, dir: p.newDir, mask: m };
+      }
+      if (!best) return [];
+      out.push(best.step);
+      head = best.head;
+      dir = best.dir;
+      mask = best.mask;
+    }
+    return out;
+  }
+  const solver = new Solver(level, deck, { allowStash: level.allowStash, countRoads: false });
+  return solver.solution(startNode(level, deck)).map((m) => ({ kind: m.kind, from: m.from, cells: m.cells }));
 }

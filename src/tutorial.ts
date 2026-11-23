@@ -22,14 +22,22 @@ export const TIP_TEXT: Record<TipId, StringKey> = {
 };
 
 /** Карточки правил с анимацией: показываются перед уровнем, где элемент появляется впервые. */
-export type RuleId = 'road' | 'lantern' | 'side' | 'rock' | 'water';
-export const ALL_RULES: readonly RuleId[] = ['road', 'lantern', 'side', 'rock', 'water'];
+export type RuleId = 'road' | 'lantern' | 'side' | 'rock' | 'water' | 'firefly';
+export const ALL_RULES: readonly RuleId[] = ['road', 'lantern', 'side', 'rock', 'water', 'firefly'];
+/** Обучающие уровни (по номеру): какие карточки перед ними. */
 export const RULES_BY_LEVEL: Record<number, RuleId[]> = { 1: ['road'], 3: ['lantern'], 4: ['rock', 'side'], 8: ['water'] };
 
+/** Карточки перед уровнем: по номеру (обучение) и по содержимому — светлячки объясняем там, где они встретились впервые. */
+export function rulesFor(level: { num: number; fireflies: readonly number[] }): RuleId[] {
+  const out = [...(RULES_BY_LEVEL[level.num] ?? [])];
+  if (level.fireflies.length > 0) out.push('firefly');
+  return out;
+}
+
 /** Карточки, которые ещё не показывали перед этим уровнем. */
-export function pendingRules(levelId: number): RuleId[] {
+export function pendingRules(level: { num: number; fireflies: readonly number[] }): RuleId[] {
   const seen = SaveService.load().profile.tipsSeen;
-  return (RULES_BY_LEVEL[levelId] ?? []).filter((r) => !seen.includes(`rule:${r}`));
+  return rulesFor(level).filter((r) => !seen.includes(`rule:${r}`));
 }
 
 export function markRulesSeen(ids: readonly RuleId[]) {
@@ -63,7 +71,7 @@ export function markTipSeen(id: TipId) {
   });
 }
 
-export function logTutorialStep(step: string, level?: number) {
+export function logTutorialStep(step: string, level?: string) {
   SaveService.update((d) => void d.log.push({ t: new Date().toISOString(), ev: 'tutorial_step', step, level }));
 }
 
@@ -71,9 +79,9 @@ export function isTutorialDone(): boolean {
   return SaveService.load().profile.tutorialDone;
 }
 
-/** Обучение идёт: вступление и уровни 1–3 при первом запуске (или при «Пройти обучение заново»). */
-export function isTutorialActive(levelId: number): boolean {
-  return !isTutorialDone() && levelId <= TUTORIAL_LAST_LEVEL;
+/** Обучение идёт: вступление и уровни 1–3 (по номеру) при первом запуске (или при «Пройти обучение заново»). */
+export function isTutorialActive(levelNum: number): boolean {
+  return !isTutorialDone() && levelNum >= 1 && levelNum <= TUTORIAL_LAST_LEVEL;
 }
 
 export function completeTutorial() {
@@ -123,8 +131,8 @@ export function modalClosed(now = Date.now()) {
 }
 
 /** Предложить войти после победы: только с уровня 6, только гостю и если сейчас можно показать окно. */
-export function authPromptDue(levelId: number, opts: { promptAllowed: boolean; now?: number }): boolean {
-  return levelId >= AUTH_PROMPT_AFTER_LEVEL && opts.promptAllowed && canShowModal(opts.now);
+export function authPromptDue(levelNum: number, opts: { promptAllowed: boolean; now?: number }): boolean {
+  return levelNum >= AUTH_PROMPT_AFTER_LEVEL && opts.promptAllowed && canShowModal(opts.now);
 }
 
 /** Для тестов. */

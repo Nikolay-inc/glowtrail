@@ -66,6 +66,17 @@ export const RULE_CARDS: Record<RuleId, RuleCard> = {
       },
     ],
   },
+  firefly: {
+    id: 'firefly',
+    title: 'rule_firefly_title',
+    text: 'rule_firefly_text',
+    phases: [
+      // Дверь открыта и без светлячка: собирать его не обязательно…
+      { grid: ['.E.', 'F..', '.S.'], startDir: 'N', steps: [{ place: 'straight' }, { place: 'straight' }] },
+      // …но можно сделать крюк и забрать его с собой.
+      { grid: ['.E.', 'F..', '.S.'], startDir: 'N', steps: [{ place: 'left' }, { place: 'right' }, { place: 'right' }, { place: 'straight' }] },
+    ],
+  },
   water: {
     id: 'water',
     title: 'rule_water_title',
@@ -76,7 +87,7 @@ export const RULE_CARDS: Record<RuleId, RuleCard> = {
 
 export function demoLevel(phase: DemoPhase): Level {
   // Колода не важна: плитки демонстрации подкладываются в лоток перед каждым шагом.
-  return parseLevel({ id: 0, name: 'demo', grid: phase.grid, startDir: phase.startDir, deck: ['straight'], stars: { two: 0, three: 0 }, allowStash: false });
+  return parseLevel({ id: 'demo', name: 'demo', grid: phase.grid, startDir: phase.startDir, deck: ['straight'], stars: { two: 0, three: 0 }, allowStash: false });
 }
 
 /** Поставить плитку kind на конец дороги (подкладываем её в лоток и ходим настоящим ходом). */

@@ -1,0 +1,74 @@
+{
+  "id": "valley-07",
+  "name": "Два огонька",
+  "grid": [
+    "..E..",
+    ".L...",
+    ".....",
+    "...L.",
+    ".....",
+    "..S.."
+  ],
+  "startDir": "N",
+  "deck": [
+    "right",
+    "left",
+    "straight2",
+    "left",
+    "right",
+    "straight",
+    "left",
+    "right",
+    "right",
+    "right",
+    "straight",
+    "right",
+    "straight2"
+  ],
+  "stars": {
+    "two": 2,
+    "three": 4
+  },
+  "easeDecks": [
+    [
+      "straight",
+      "right",
+      "left",
+      "straight2",
+      "left",
+      "right",
+      "straight",
+      "left",
+      "right",
+      "right",
+      "right",
+      "straight",
+      "right",
+      "straight2"
+    ],
+    [
+      "straight",
+      "right",
+      "left",
+      "straight2",
+      "left",
+      "right",
+      "left",
+      "straight",
+      "left",
+      "right",
+      "right",
+      "right",
+      "straight",
+      "right",
+      "straight2"
+    ]
+  ],
+  "metrics": {
+    "rating": 4.3,
+    "roads": 18,
+    "minTiles": 8,
+    "reserve": 5,
+    "trap": 0.392
+  }
+}

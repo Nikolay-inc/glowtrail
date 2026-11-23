@@ -1,5 +1,5 @@
 {
-  "id": 1,
+  "id": "valley-01",
   "name": "Первые шаги",
   "grid": [
     ".E.",
@@ -17,5 +17,12 @@
     "straight"
   ],
   "allowStash": false,
-  "tutorial": "place"
+  "tutorial": "place",
+  "metrics": {
+    "rating": 1,
+    "roads": 1,
+    "minTiles": 3,
+    "reserve": -1,
+    "trap": 0
+  }
 }

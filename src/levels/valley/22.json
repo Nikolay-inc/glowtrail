@@ -1,0 +1,81 @@
+{
+  "id": "valley-22",
+  "name": "Заводь",
+  "grid": [
+    "......",
+    "..E...",
+    "~~~~~~",
+    "......",
+    "....F.",
+    "...L..",
+    "..L..S"
+  ],
+  "startDir": "N",
+  "deck": [
+    "straight",
+    "left",
+    "straight",
+    "left",
+    "right",
+    "left",
+    "right",
+    "straight",
+    "right",
+    "straight",
+    "straight2",
+    "bridge",
+    "bridge",
+    "straight",
+    "bridge"
+  ],
+  "stars": {
+    "two": 2,
+    "three": 4
+  },
+  "easeDecks": [
+    [
+      "right",
+      "straight",
+      "left",
+      "straight",
+      "left",
+      "right",
+      "left",
+      "right",
+      "straight",
+      "right",
+      "straight",
+      "straight2",
+      "bridge",
+      "bridge",
+      "straight",
+      "bridge"
+    ],
+    [
+      "right",
+      "straight",
+      "left",
+      "straight",
+      "left",
+      "right",
+      "left",
+      "left",
+      "right",
+      "straight",
+      "right",
+      "straight",
+      "straight2",
+      "bridge",
+      "bridge",
+      "straight",
+      "bridge"
+    ]
+  ],
+  "metrics": {
+    "rating": 3,
+    "roads": 23,
+    "minTiles": 10,
+    "reserve": 5,
+    "trap": 0.187
+  }
+}

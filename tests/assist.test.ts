@@ -16,7 +16,7 @@ import { LEVELS } from '../src/levels/index';
 import type { LevelData, TileKind } from '../src/core/types';
 
 function level(grid: string[], deck: TileKind[], extra: Partial<LevelData> = {}) {
-  return parseLevel({ id: 0, name: 't', grid, startDir: 'N', deck, stars: { two: 1, three: 2 }, ...extra });
+  return parseLevel({ id: 'test', name: 't', grid, startDir: 'N', deck, stars: { two: 1, three: 2 }, ...extra });
 }
 const place = (s: GameState, slot: number) => applyAction(s, { type: 'place', slot });
 
@@ -156,24 +156,28 @@ describe('хранилище: серии поражений и пропуски'
 
   it('серия поражений растёт и сбрасывается победой', async () => {
     const st = await import('../src/storage');
-    expect(st.recordLoss(3)).toBe(1);
-    expect(st.recordLoss(3)).toBe(2);
-    expect(st.lossStreak(3)).toBe(2);
-    st.recordWin(3, 2, 10);
-    expect(st.lossStreak(3)).toBe(0);
-    expect(st.loadProgress()).toMatchObject({ unlocked: 4, stars: { 3: 2 } });
+    expect(st.recordLoss('valley-03')).toBe(1);
+    expect(st.recordLoss('valley-03')).toBe(2);
+    expect(st.lossStreak('valley-03')).toBe(2);
+    st.recordWin('valley-03', 2, 'valley-04', 1);
+    expect(st.lossStreak('valley-03')).toBe(0);
+    const p = st.loadProgress();
+    expect(p).toMatchObject({ stars: { 'valley-03': 2 }, fireflies: { 'valley-03': 1 } });
+    expect(p.unlocked).toContain('valley-04');
   });
 
   it('пропуск открывает следующий уровень и попадает в сводку', async () => {
     const st = await import('../src/storage');
-    st.recordSkip(4, 10);
-    st.logEvent({ ev: 'level_skipped', level: 4 });
-    st.logEvent({ ev: 'hint_used', level: 4 });
+    st.recordSkip('valley-04', 'valley-05');
+    st.logEvent({ ev: 'level_skipped', level: 'valley-04' });
+    st.logEvent({ ev: 'hint_used', level: 'valley-04' });
     const p = st.loadProgress();
-    expect(p.skipped[4]).toBe(true);
-    expect(p.unlocked).toBe(5);
-    const row = st.summarize(st.loadLog(), 10)[3];
-    expect(row).toMatchObject({ skipped: true, hints: 1 });
-    expect(st.statsText(10)).toContain('пропущен');
+    expect(p.skipped['valley-04']).toBe(true);
+    expect(p.unlocked).toContain('valley-05');
+    expect(st.isUnlocked(p, 'valley-05', 'valley-04')).toBe(true);
+    expect(st.isUnlocked(p, 'valley-07', 'valley-06')).toBe(false);
+    const row = st.summarize(st.loadLog(), LEVELS)[3];
+    expect(row).toMatchObject({ level: 'valley-04', num: 4, skipped: true, hints: 1 });
+    expect(st.statsText(LEVELS)).toContain('пропущен');
   });
 });

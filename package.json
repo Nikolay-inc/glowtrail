@@ -10,6 +10,8 @@
     "test": "vitest run",
     "verify": "vite-node scripts/verify.ts",
     "ease": "vite-node scripts/ease.ts",
+    "gen": "vite-node scripts/gen.ts --",
+    "pick": "vite-node scripts/pick.ts --",
     "build:app": "tsc --noEmit && vite build --mode app",
     "cap:sync": "npm run build:app && cap sync",
     "cap:ios": "npm run cap:sync && cap open ios",

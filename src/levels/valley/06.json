@@ -1,0 +1,67 @@
+{
+  "id": "valley-06",
+  "name": "Отложи на потом",
+  "grid": [
+    ".E...",
+    ".....",
+    ".....",
+    ".....",
+    "##.##",
+    "##S##"
+  ],
+  "startDir": "N",
+  "deck": [
+    "right",
+    "right",
+    "left",
+    "straight2",
+    "straight",
+    "left",
+    "right",
+    "straight",
+    "straight2",
+    "left"
+  ],
+  "stars": {
+    "two": 2,
+    "three": 4
+  },
+  "tutorial": "stash",
+  "easeDecks": [
+    [
+      "straight",
+      "right",
+      "right",
+      "left",
+      "straight2",
+      "straight",
+      "left",
+      "right",
+      "straight",
+      "straight2",
+      "left"
+    ],
+    [
+      "straight",
+      "right",
+      "right",
+      "left",
+      "straight2",
+      "straight",
+      "left",
+      "left",
+      "right",
+      "straight",
+      "straight2",
+      "left"
+    ]
+  ],
+  "tip": "stash",
+  "metrics": {
+    "rating": 3.9,
+    "roads": 25,
+    "minTiles": 5,
+    "reserve": 5,
+    "trap": 0.433
+  }
+}

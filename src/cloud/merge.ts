@@ -1,7 +1,7 @@
 // Облачное сохранение и слияние с локальным. Без сети и Supabase — чистые функции, покрыты тестами.
 // В облако уходят профиль и прогресс; лог событий остаётся на устройстве (это аналитика плейтеста).
 
-import { SAVE_VERSION, type Profile, type Progress, type SaveData } from '../save/SaveService';
+import { normalizeProgress, SAVE_VERSION, type Profile, type Progress, type SaveData } from '../save/SaveService';
 
 export interface CloudPayload {
   version: number;
@@ -13,9 +13,9 @@ export function toCloudPayload(save: SaveData): CloudPayload {
   return { version: SAVE_VERSION, profile: { ...save.profile }, progress: { ...save.progress } };
 }
 
-function maxRecord(a: Record<number, number>, b: Record<number, number>): Record<number, number> {
-  const out: Record<number, number> = { ...a };
-  for (const [k, v] of Object.entries(b)) out[Number(k)] = Math.max(out[Number(k)] ?? 0, v ?? 0);
+function maxRecord(a: Record<string, number>, b: Record<string, number>): Record<string, number> {
+  const out: Record<string, number> = { ...a };
+  for (const [k, v] of Object.entries(b)) out[k] = Math.max(out[k] ?? 0, v ?? 0);
   return out;
 }
 
@@ -26,15 +26,17 @@ function maxRecord(a: Record<number, number>, b: Record<number, number>): Record
  */
 export function mergeSaves(local: SaveData, cloud: CloudPayload | null): SaveData {
   if (!cloud) return local;
-  const lp = local.progress;
-  const cp = cloud.progress;
-  const skipped: Record<number, boolean> = { ...cp.skipped, ...lp.skipped };
+  const lp = normalizeProgress(local.progress);
+  // В облаке может лежать сохранение старой версии (уровни по номерам) — приводим к текущему формату.
+  const cp = normalizeProgress(cloud.progress);
+  const skipped: Record<string, boolean> = { ...cp.skipped, ...lp.skipped };
   const stars = maxRecord(lp.stars, cp.stars);
   // Пройденный уровень больше не «пропущен».
-  for (const id of Object.keys(skipped)) if (stars[Number(id)]) delete skipped[Number(id)];
+  for (const id of Object.keys(skipped)) if (stars[id]) delete skipped[id];
   const progress: Progress = {
-    unlocked: Math.max(lp.unlocked, cp.unlocked),
+    unlocked: [...new Set([...lp.unlocked, ...cp.unlocked])],
     stars,
+    fireflies: maxRecord(lp.fireflies, cp.fireflies),
     attempts: maxRecord(lp.attempts, cp.attempts),
     lossStreak: { ...lp.lossStreak }, // серия поражений — про текущую игру на этом устройстве
     skipped,

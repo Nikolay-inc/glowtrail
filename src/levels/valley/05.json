@@ -1,5 +1,5 @@
 {
-  "id": 5,
+  "id": "valley-05",
   "name": "Счёт плиток",
   "grid": [
     "..E.",
@@ -55,5 +55,12 @@
       "left",
       "right"
     ]
-  ]
+  ],
+  "metrics": {
+    "rating": 3.1,
+    "roads": 11,
+    "minTiles": 5,
+    "reserve": 5,
+    "trap": 0.322
+  }
 }

@@ -173,6 +173,11 @@ export function lanternsOnRoad(state: GameState): number {
   return state.level.lanterns.filter((l) => state.onRoad[l]).length;
 }
 
+/** Сколько светлячков собрала дорога (собирать не обязательно). */
+export function firefliesOnRoad(state: GameState): number {
+  return state.level.fireflies.filter((f) => state.onRoad[f]).length;
+}
+
 export function isExitOpen(state: GameState): boolean {
   return lanternsOnRoad(state) === state.level.lanterns.length;
 }

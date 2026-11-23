@@ -1,0 +1,67 @@
+{
+  "id": "valley-19",
+  "name": "Петля",
+  "grid": [
+    "......",
+    "......",
+    ".....#",
+    "..#.E.",
+    "......",
+    "L.##..",
+    "~.~~~~",
+    "S....."
+  ],
+  "startDir": "N",
+  "deck": [
+    "right",
+    "straight2",
+    "bridge",
+    "straight",
+    "straight2",
+    "right",
+    "right",
+    "straight",
+    "straight2",
+    "right"
+  ],
+  "stars": {
+    "two": 1,
+    "three": 1
+  },
+  "easeDecks": [
+    [
+      "left",
+      "right",
+      "straight2",
+      "bridge",
+      "straight",
+      "straight2",
+      "right",
+      "right",
+      "straight",
+      "straight2",
+      "right"
+    ],
+    [
+      "left",
+      "right",
+      "straight2",
+      "bridge",
+      "straight",
+      "straight2",
+      "left",
+      "right",
+      "right",
+      "straight",
+      "straight2",
+      "right"
+    ]
+  ],
+  "metrics": {
+    "rating": 4.5,
+    "roads": 2,
+    "minTiles": 8,
+    "reserve": 2,
+    "trap": 0.2
+  }
+}

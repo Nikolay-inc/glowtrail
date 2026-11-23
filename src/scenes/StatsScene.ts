@@ -24,20 +24,24 @@ export class StatsScene extends Phaser.Scene {
     text(this, W / 2, 105, 'Статистика', 70);
 
     const log = loadLog();
-    const rows = summarize(log, LEVELS.length);
-    const passed = rows.filter((r) => r.wins > 0).length;
-    const totalMs = rows.reduce((s, r) => s + r.timeMs, 0);
-    const attempts = rows.reduce((s, r) => s + r.attempts, 0);
+    const all = summarize(log, LEVELS);
+    // В таблице — только уровни, которые уже начинали (последние 14); полный список — в «Скопировать».
+    const played = all.filter((r) => r.attempts > 0 || r.skipped);
+    const rows = played.slice(-14);
+    const passedAll = all.filter((r) => r.wins > 0).length;
+    const totalMs = all.reduce((s, r) => s + r.timeMs, 0);
+    const attempts = all.reduce((s, r) => s + r.attempts, 0);
 
-    text(this, W / 2, 260, `Пройдено: ${passed} из ${LEVELS.length}`, 56);
+    text(this, W / 2, 260, `Пройдено: ${passedAll} из ${LEVELS.length}`, 56);
     text(this, W / 2, 335, `Попыток: ${attempts}   Время: ${fmtTime(totalMs)}`, 40, C.textDim, false);
 
     const header = 'Ур Попыт Побед Звёзды  Время Помощь';
     const lines = rows.map((r) => {
       const stars = r.wins ? '★'.repeat(r.bestStars) + '·'.repeat(3 - r.bestStars) : r.skipped ? 'проп.' : '···';
       const help = r.hints + r.extras + r.eased;
-      return `${String(r.level).padStart(2)} ${String(r.attempts).padStart(5)} ${String(r.wins).padStart(5)} ${stars.padStart(6)} ${fmtTime(r.timeMs).padStart(6)} ${String(help || '·').padStart(6)}`;
+      return `${String(r.num).padStart(2)} ${String(r.attempts).padStart(5)} ${String(r.wins).padStart(5)} ${stars.padStart(6)} ${fmtTime(r.timeMs).padStart(6)} ${String(help || '·').padStart(6)}`;
     });
+    if (played.length > rows.length) lines.unshift(`   … ещё ${played.length - rows.length} выше`);
     this.add.text(W / 2, 430, [header, ...lines].join('\n'), {
       fontFamily: MONO,
       fontSize: '40px',
@@ -53,9 +57,9 @@ export class StatsScene extends Phaser.Scene {
       label: 'Скопировать',
       primary: true,
       onClick: async () => {
-        const ok = await copyText(statsText(LEVELS.length));
+        const ok = await copyText(statsText(LEVELS));
         status.setText(ok ? 'Скопировано — отправь в чат плейтеста' : 'Не получилось — выдели текст и скопируй вручную');
-        if (!ok) showTextFallback(statsText(LEVELS.length));
+        if (!ok) showTextFallback(statsText(LEVELS));
         sfx.tap();
       },
     });

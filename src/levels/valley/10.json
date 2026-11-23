@@ -1,5 +1,5 @@
 {
-  "id": 10,
+  "id": "valley-10",
   "name": "Ночной лабиринт",
   "grid": [
     "...E..",
@@ -65,5 +65,12 @@
       "left",
       "left"
     ]
-  ]
+  ],
+  "metrics": {
+    "rating": 3.8,
+    "roads": 10,
+    "minTiles": 9,
+    "reserve": 4,
+    "trap": 0.225
+  }
 }

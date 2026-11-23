@@ -6,7 +6,7 @@ import { LEVELS } from '../src/levels/index';
 import type { LevelData, TileKind } from '../src/core/types';
 
 function inf(grid: string[], tileSet: TileKind[], extra: Partial<LevelData> = {}) {
-  return parseLevel({ id: 0, name: 't', grid, startDir: 'N', deck: [], tileSet, stars: { two: 0, three: 0 }, allowStash: false, ...extra });
+  return parseLevel({ id: 'test', name: 't', grid, startDir: 'N', deck: [], tileSet, stars: { two: 0, three: 0 }, allowStash: false, ...extra });
 }
 const board = (s: GameState) => ({ level: s.level, onRoad: s.onRoad, head: s.head, dir: s.dir });
 

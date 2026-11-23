@@ -1,67 +1,75 @@
 {
-  "id": 7,
-  "name": "Два огонька",
+  "id": "valley-09",
+  "name": "Тихая заводь",
   "grid": [
     "..E..",
-    ".L...",
-    ".....",
+    ".#...",
+    "~~.~~",
     "...L.",
-    ".....",
+    ".L...",
+    "...#.",
     "..S.."
   ],
   "startDir": "N",
   "deck": [
-    "right",
     "left",
+    "right",
+    "straight",
     "straight2",
     "left",
     "right",
     "straight",
     "left",
     "right",
-    "right",
-    "right",
+    "left",
     "straight",
-    "right",
+    "bridge",
     "straight2"
   ],
   "stars": {
     "two": 2,
-    "three": 4
+    "three": 3
   },
   "easeDecks": [
     [
-      "straight",
-      "right",
       "left",
+      "right",
+      "straight",
       "straight2",
       "left",
       "right",
+      "bridge",
       "straight",
       "left",
       "right",
-      "right",
-      "right",
+      "left",
       "straight",
-      "right",
+      "bridge",
       "straight2"
     ],
     [
-      "straight",
-      "right",
       "left",
+      "right",
+      "straight",
       "straight2",
       "left",
       "right",
-      "left",
+      "right",
+      "bridge",
       "straight",
       "left",
       "right",
-      "right",
-      "right",
+      "left",
       "straight",
-      "right",
+      "bridge",
       "straight2"
     ]
-  ]
+  ],
+  "metrics": {
+    "rating": 6,
+    "roads": 6,
+    "minTiles": 9,
+    "reserve": 4,
+    "trap": 0.467
+  }
 }

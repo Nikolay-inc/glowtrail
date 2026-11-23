@@ -2,23 +2,26 @@
 // Сейчас данные лежат в localStorage; чтобы перейти на облако, достаточно подменить бэкенд
 // (setBackend) на реализацию с тем же интерфейсом — остальной код игры не меняется.
 
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 export const SAVE_KEY = 'glowtrail.save';
 /** Старый формат (до SaveService): прогресс и лог лежали в двух ключах. */
 export const LEGACY_KEYS = { progress: 'glowtrail.progress.v1', log: 'glowtrail.log.v1' } as const;
 export const MAX_LOG = 2000;
 
+/** Все записи прогресса — по постоянному id уровня («valley-07»), а не по номеру. */
 export interface Progress {
-  /** Номер максимального открытого уровня. */
-  unlocked: number;
+  /** Открытые уровни (id). Первый уровень открыт всегда. */
+  unlocked: string[];
   /** Лучшие звёзды по уровням. */
-  stars: Record<number, number>;
+  stars: Record<string, number>;
   /** Сколько раз начинали каждый уровень. */
-  attempts: Record<number, number>;
+  attempts: Record<string, number>;
   /** Поражений подряд на уровне (сбрасывается победой). */
-  lossStreak: Record<number, number>;
+  lossStreak: Record<string, number>;
   /** Пропущенные уровни. */
-  skipped: Record<number, boolean>;
+  skipped: Record<string, boolean>;
+  /** Лучший сбор светлячков на уровне. */
+  fireflies: Record<string, number>;
   muted: boolean;
   /** Вибрация (настройка устройства, в облако не уходит). */
   vibration: boolean;
@@ -52,13 +55,14 @@ export interface Profile {
   bestDayStreak: number;
 }
 
-export type EventType = 'session' | 'start' | 'win' | 'lose' | 'abandon' | 'hint_used' | 'extra_tiles' | 'auto_ease' | 'level_skipped' | 'signup' | 'login' | 'logout' | 'auth_prompt' | 'tutorial_step' | 'tip_shown' | 'drag_place' | 'tap_place' | 'door_locked_attempt';
+export type EventType = 'session' | 'start' | 'win' | 'lose' | 'abandon' | 'hint_used' | 'extra_tiles' | 'auto_ease' | 'level_skipped' | 'signup' | 'login' | 'logout' | 'auth_prompt' | 'tutorial_step' | 'tip_shown' | 'drag_place' | 'tap_place' | 'door_locked_attempt' | 'fireflies_collected';
 
 export interface LogEvent {
   /** Время события, ISO. */
   t: string;
   ev: EventType;
-  level?: number;
+  /** id уровня («valley-07»); в старых записях был номер — миграция переводит его в id. */
+  level?: string;
   attempt?: number;
   /** Длительность попытки, мс. */
   ms?: number;
@@ -79,6 +83,13 @@ export interface LogEvent {
   added?: number;
   /** На сколько ходов откатились (hint_used, extra_tiles). */
   rollback?: number;
+  /** Светлячков собрано и всего на уровне (fireflies_collected). */
+  fireflies?: number;
+  firefliesTotal?: number;
+  /** Метрики уровня на старте попытки: рейтинг сложности 1–10, доля тупиковых ходов, решений. */
+  rating?: number;
+  trap?: number;
+  roads?: number;
 }
 
 export interface SaveData {
@@ -133,7 +144,38 @@ export function memoryBackend(initial: Record<string, string> = {}): SaveBackend
   };
 }
 
-export const defaultProgress = (): Progress => ({ unlocked: 1, stars: {}, attempts: {}, lossStreak: {}, skipped: {}, muted: false, vibration: true });
+/** Первый уровень игры — открыт всегда. */
+export const FIRST_LEVEL_ID = 'valley-01';
+
+export const defaultProgress = (): Progress => ({ unlocked: [FIRST_LEVEL_ID], stars: {}, attempts: {}, lossStreak: {}, skipped: {}, fireflies: {}, muted: false, vibration: true });
+
+/**
+ * До версии 4 уровни хранились по номеру 1, 2, 3… Это уровни первого мира «Долина» — они остались на своих местах,
+ * поэтому номер N превращается в id «valley-NN».
+ */
+export function legacyLevelId(n: number): string {
+  return `valley-${String(n).padStart(2, '0')}`;
+}
+
+/** Ключ уровня из записи любого формата: номер (старый) → id, строка-id остаётся как есть. */
+function levelKey(k: string | number): string | null {
+  const s = String(k);
+  if (/^\d+$/.test(s)) return Number(s) >= 1 ? legacyLevelId(Number(s)) : null;
+  return /^[a-z]+-\d+$/.test(s) ? s : null;
+}
+
+function remapRecord<T>(raw: Record<string, unknown>, ok: (v: unknown) => v is T, combine: (a: T, b: T) => T): Record<string, T> {
+  const out: Record<string, T> = {};
+  for (const [k, v] of Object.entries(raw)) {
+    const key = levelKey(k);
+    if (!key || !ok(v)) continue;
+    out[key] = key in out ? combine(out[key], v) : v;
+  }
+  return out;
+}
+
+const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+const isBool = (v: unknown): v is boolean => typeof v === 'boolean';
 
 /** Случайный UUID v4 (crypto.randomUUID, если есть). */
 export function newPlayerId(): string {
@@ -175,13 +217,26 @@ function parse(raw: string | null): unknown {
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 
 /** Приводит прогресс любого известного формата к текущему (лишние поля, например подсказки v1, отбрасываются). */
-function normalizeProgress(raw: unknown): Progress {
+export function normalizeProgress(raw: unknown): Progress {
   const p = defaultProgress();
   if (!isObj(raw)) return p;
-  if (typeof raw.unlocked === 'number' && raw.unlocked >= 1) p.unlocked = Math.floor(raw.unlocked);
-  for (const key of ['stars', 'attempts', 'lossStreak', 'skipped'] as const) {
-    if (isObj(raw[key])) (p as unknown as Record<string, unknown>)[key] = { ...(raw[key] as object) };
+  // Открытые уровни: старый формат — номер последнего открытого, новый — список id.
+  const unlocked = new Set<string>([FIRST_LEVEL_ID]);
+  if (typeof raw.unlocked === 'number' && raw.unlocked >= 1) {
+    for (let n = 1; n <= Math.floor(raw.unlocked); n++) unlocked.add(legacyLevelId(n));
+  } else if (Array.isArray(raw.unlocked)) {
+    for (const v of raw.unlocked) {
+      const key = typeof v === 'string' || typeof v === 'number' ? levelKey(v) : null;
+      if (key) unlocked.add(key);
+    }
   }
+  p.unlocked = [...unlocked];
+  // Записи по уровням: ключи-номера (старый формат, в том числе из облака старой версии) переводим в id.
+  if (isObj(raw.stars)) p.stars = remapRecord(raw.stars, isNum, Math.max);
+  if (isObj(raw.attempts)) p.attempts = remapRecord(raw.attempts, isNum, Math.max);
+  if (isObj(raw.lossStreak)) p.lossStreak = remapRecord(raw.lossStreak, isNum, Math.max);
+  if (isObj(raw.skipped)) p.skipped = remapRecord(raw.skipped, isBool, (a, b) => a || b);
+  if (isObj(raw.fireflies)) p.fireflies = remapRecord(raw.fireflies, isNum, Math.max);
   if (typeof raw.muted === 'boolean') p.muted = raw.muted;
   if (typeof raw.vibration === 'boolean') p.vibration = raw.vibration;
   return p;
@@ -206,7 +261,17 @@ function normalizeProfile(raw: unknown): Profile {
 }
 
 function normalizeLog(raw: unknown): LogEvent[] {
-  return Array.isArray(raw) ? raw.filter((e): e is LogEvent => isObj(e) && typeof e.ev === 'string').slice(-MAX_LOG) : [];
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((e): e is LogEvent => isObj(e) && typeof e.ev === 'string')
+    .slice(-MAX_LOG)
+    .map((e) => {
+      // Старые записи: номер уровня → id.
+      if (e.level === undefined || typeof e.level === 'string') return e;
+      const key = levelKey(e.level as unknown as number);
+      const { level: _old, ...rest } = e;
+      return key ? { ...rest, level: key } : rest;
+    });
 }
 
 /**
@@ -214,7 +279,8 @@ function normalizeLog(raw: unknown): LogEvent[] {
  * v1 — два ключа localStorage (glowtrail.progress.v1 и glowtrail.log.v1), без поля version.
  * v2 — один объект { version: 2, progress, log }.
  * v3 — добавлен раздел profile (playerId, имя, аватарка, серия дней, подсказки).
- * Шаги идут цепочкой: v1 → v2 → v3, поэтому любое старое сохранение доходит до текущей версии.
+ * v4 — прогресс и лог по id уровня («valley-07») вместо номера; открытые уровни — список id; светлячки.
+ * Шаги идут цепочкой: v1 → v2 → v3 → v4, поэтому любое старое сохранение доходит до текущей версии.
  */
 export function migrate(raw: unknown, legacy?: { progress: unknown; log: unknown }): SaveData {
   let data: Record<string, unknown> | null = null;
@@ -228,6 +294,10 @@ export function migrate(raw: unknown, legacy?: { progress: unknown; log: unknown
     // v2 → v3: появляется профиль. Число использованных подсказок восстанавливаем по логу.
     const log = normalizeLog(data.log);
     data = { ...data, version: 3, profile: { ...defaultProfile(), hintsUsed: log.filter((e) => e.ev === 'hint_used').length } };
+  }
+  if ((data.version as number) < 4) {
+    // v3 → v4: номера уровней 1…10 → id первого мира «valley-01»…«valley-10» (уровни остались на местах).
+    data = { ...data, version: 4, progress: normalizeProgress(data.progress), log: normalizeLog(data.log) };
   }
   return {
     version: SAVE_VERSION,

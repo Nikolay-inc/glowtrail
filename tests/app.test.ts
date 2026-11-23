@@ -102,19 +102,20 @@ describe('Preferences — хранилище сохранения в прило�
     const save = JSON.stringify({ version: 3, profile: {}, progress: { unlocked: 7, stars: { 1: 3 } }, log: [] });
     const { api } = fakePrefs({ [SAVE_KEY]: save });
     SaveService.setBackend(await createPreferencesBackend(api));
-    expect(SaveService.load().progress.unlocked).toBe(7);
+    expect(SaveService.load().progress.unlocked).toHaveLength(7); // v3 → v4: уровни 1–7 по id
+    expect(SaveService.load().progress.stars).toEqual({ 'valley-01': 3 });
   });
 
   it('несколько изменений подряд — одна запись; flush пишет сразу', async () => {
     const { api, disk, calls } = fakePrefs();
     const backend = await createPreferencesBackend(api, { delayMs: 10_000 });
     SaveService.setBackend(backend);
-    SaveService.update((d) => void (d.progress.unlocked = 2));
-    SaveService.update((d) => void (d.progress.unlocked = 3));
+    SaveService.update((d) => void (d.progress.attempts['valley-01'] = 2));
+    SaveService.update((d) => void (d.progress.attempts['valley-01'] = 3));
     expect(calls).toEqual([]); // ещё не записано
     await SaveService.flush();
     expect(calls).toEqual([`set:${SAVE_KEY}`]);
-    expect(JSON.parse(disk[SAVE_KEY]).progress.unlocked).toBe(3);
+    expect(JSON.parse(disk[SAVE_KEY]).progress.attempts['valley-01']).toBe(3);
   });
 
   it('записывает сама через задержку', async () => {
@@ -122,9 +123,9 @@ describe('Preferences — хранилище сохранения в прило�
     try {
       const { api, disk } = fakePrefs();
       SaveService.setBackend(await createPreferencesBackend(api, { delayMs: 400 }));
-      SaveService.update((d) => void (d.progress.unlocked = 4));
+      SaveService.update((d) => void (d.progress.attempts['valley-01'] = 4));
       await vi.advanceTimersByTimeAsync(450);
-      expect(JSON.parse(disk[SAVE_KEY]).progress.unlocked).toBe(4);
+      expect(JSON.parse(disk[SAVE_KEY]).progress.attempts['valley-01']).toBe(4);
     } finally {
       vi.useRealTimers();
     }
@@ -135,7 +136,7 @@ describe('Preferences — хранилище сохранения в прило�
     const { api, disk } = fakePrefs();
     const legacy = { getItem: (k: string) => (k === SAVE_KEY ? save : null) };
     SaveService.setBackend(await createPreferencesBackend(api, { legacyLocalStorage: legacy }));
-    expect(SaveService.load().progress.unlocked).toBe(9);
+    expect(SaveService.load().progress.unlocked).toHaveLength(9);
     expect(disk[SAVE_KEY]).toBe(save);
   });
 
@@ -144,7 +145,7 @@ describe('Preferences — хранилище сохранения в прило�
     const old = JSON.stringify({ version: 3, profile: {}, progress: { unlocked: 9, stars: {} }, log: [] });
     const { api } = fakePrefs({ [SAVE_KEY]: mine });
     SaveService.setBackend(await createPreferencesBackend(api, { legacyLocalStorage: { getItem: () => old } }));
-    expect(SaveService.load().progress.unlocked).toBe(2);
+    expect(SaveService.load().progress.unlocked).toHaveLength(2);
   });
 });
 

@@ -5,6 +5,8 @@ const ru = {
   // Цель уровня
   goal_door: 'Доведи Lumo до двери',
   goal_lanterns: 'Зажги все фонари: {n}',
+  goal_fireflies: 'Светлячки — по желанию: {n}',
+  fireflies_count: 'Светлячки: {n} из {total}',
 
   // Подсказки Lumo (3–7 слов)
   tip_undo: 'Ошибся? Верни ход назад',
@@ -35,6 +37,8 @@ const ru = {
   rule_rock_text: 'Через камни дорога не проходит — обходи их.',
   rule_water_title: 'Река',
   rule_water_text: 'Реку можно перейти только по мосту.',
+  rule_firefly_title: 'Светлячки',
+  rule_firefly_text: 'Собирай светлячков — это по желанию. Дорога через светлячка забирает его с собой.',
   rule_ok: 'Понятно',
   rule_next: 'Дальше',
   rule_replay_tutorial: 'Пройти обучение с начала',

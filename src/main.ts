@@ -10,6 +10,7 @@ import { recordPlayDay } from './profile';
 import { Account } from './cloud/account';
 import { openAuthDialog } from './ui/AuthDialog';
 import { loadProgress, logEvent } from './storage';
+import { LEVELS } from './levels/index';
 import { createTextures } from './ui/draw';
 import { C, H, W } from './ui/theme';
 import { Preferences } from '@capacitor/preferences';
@@ -34,12 +35,18 @@ class BootScene extends Phaser.Scene {
     // Обучение: первый запуск — вступление, потом уровни 1–3; прерванное обучение продолжаем с того же места.
     markTutorialDoneForReturningPlayer();
     const firstTime = Object.keys(p.stars).length === 0 && Object.keys(p.attempts).length === 0;
-    const tutorialLevel = [1, 2, 3].find((id) => !p.stars[id]) ?? 1;
+    const tutorialIndex = Math.max(0, [0, 1, 2].find((i) => !p.stars[LEVELS[i].id]) ?? 0);
+    const params = new URLSearchParams(location.search);
+    // ?editor=1 — редактор уровней (только при разработке, в сборку не попадает).
+    if (import.meta.env.DEV && params.has('editor')) {
+      void import('./editor/editor').then((m) => m.startEditor(this.game));
+      return;
+    }
     // ?level=N — открыть уровень сразу (удобно для проверки и видео).
-    const fromUrl = Number(new URLSearchParams(location.search).get('level'));
+    const fromUrl = Number(params.get('level'));
     if (fromUrl >= 1) this.scene.start('Game', { levelIndex: fromUrl - 1 });
     else if (firstTime && !isTutorialDone()) this.scene.start('Intro');
-    else if (!isTutorialDone()) this.scene.start('Game', { levelIndex: tutorialLevel - 1 });
+    else if (!isTutorialDone()) this.scene.start('Game', { levelIndex: tutorialIndex });
     else this.scene.start('Menu');
   }
 }

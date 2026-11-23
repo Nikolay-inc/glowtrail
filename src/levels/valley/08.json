@@ -1,5 +1,5 @@
 {
-  "id": 8,
+  "id": "valley-08",
   "name": "Река",
   "grid": [
     ".E...",
@@ -68,5 +68,12 @@
       "straight2"
     ]
   ],
-  "tip": "water"
+  "tip": "water",
+  "metrics": {
+    "rating": 3,
+    "roads": 20,
+    "minTiles": 9,
+    "reserve": 5,
+    "trap": 0.198
+  }
 }

@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { memoryBackend, SaveService } from '../src/save/SaveService';
 import { RULE_CARDS, runPhase } from '../src/rules';
-import { ALL_RULES, markRulesSeen, pendingRules, restartTutorial, RULES_BY_LEVEL } from '../src/tutorial';
+import { ALL_RULES, markRulesSeen, pendingRules, restartTutorial, RULES_BY_LEVEL, rulesFor } from '../src/tutorial';
+import { FIREFLY_FROM } from '../src/levels/curve';
+
+const lv = (num: number) => ({ num, fireflies: [] as number[] });
 import { previewTile } from '../src/core/game';
 import { allKeys } from '../src/strings';
 import { LEVELS } from '../src/levels/index';
@@ -46,25 +49,35 @@ describe('когда показывать карточки', () => {
   beforeEach(() => SaveService.setBackend(memoryBackend()));
 
   it('перед уровнем, где элемент появляется впервые, и только один раз', () => {
-    expect(pendingRules(1)).toEqual(['road']);
-    expect(pendingRules(2)).toEqual([]);
-    expect(pendingRules(4)).toEqual(['rock', 'side']);
+    expect(pendingRules(lv(1))).toEqual(['road']);
+    expect(pendingRules(lv(2))).toEqual([]);
+    expect(pendingRules(lv(4))).toEqual(['rock', 'side']);
     markRulesSeen(['rock', 'side']);
-    expect(pendingRules(4)).toEqual([]);
+    expect(pendingRules(lv(4))).toEqual([]);
     expect(SaveService.load().log.filter((e) => e.ev === 'tutorial_step').map((e) => e.step)).toEqual(['rule_rock', 'rule_side']);
   });
 
   it('«Пройти обучение заново» покажет карточки снова', () => {
     markRulesSeen(['road']);
     restartTutorial();
-    expect(pendingRules(1)).toEqual(['road']);
+    expect(pendingRules(lv(1))).toEqual(['road']);
+  });
+
+  it('карточка «Светлячки» — перед первым уровнем со светлячками, один раз', () => {
+    expect(pendingRules({ num: 15, fireflies: [3] })).toEqual(['firefly']);
+    markRulesSeen(['firefly']);
+    expect(pendingRules({ num: 16, fireflies: [3] })).toEqual([]);
   });
 
   it('элементы появляются на тех уровнях, где их объясняют карточки', () => {
-    const firstWith = (pred: (l: (typeof LEVELS)[number]) => boolean) => LEVELS.find(pred)!.id;
+    const firstWith = (pred: (l: (typeof LEVELS)[number]) => boolean) => LEVELS.find(pred)!.num;
     expect(RULES_BY_LEVEL[firstWith((l) => l.lanterns.length > 0)]).toContain('lantern');
     expect(RULES_BY_LEVEL[firstWith((l) => l.cells.includes('rock'))]).toContain('rock');
     expect(RULES_BY_LEVEL[firstWith((l) => l.cells.includes('water'))]).toContain('water');
-    expect(Object.values(RULES_BY_LEVEL).flat().sort()).toEqual([...ALL_RULES].sort());
+    // Светлячков объясняем по содержимому уровня — там, где они встретились впервые (по плану — уровень 12).
+    expect(Object.values(RULES_BY_LEVEL).flat().sort()).toEqual(ALL_RULES.filter((r) => r !== 'firefly').sort());
+    const ff = LEVELS.find((l) => l.fireflies.length > 0);
+    expect(ff?.num).toBe(FIREFLY_FROM);
+    expect(rulesFor(ff!)).toContain('firefly');
   });
 });

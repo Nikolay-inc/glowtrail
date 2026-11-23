@@ -1,5 +1,5 @@
 {
-  "id": 2,
+  "id": "valley-02",
   "name": "Поворот",
   "grid": [
     "..E",
@@ -20,5 +20,12 @@
     "right"
   ],
   "allowStash": false,
-  "tutorial": "place"
+  "tutorial": "place",
+  "metrics": {
+    "rating": 2.7,
+    "roads": 33,
+    "minTiles": 5,
+    "reserve": -1,
+    "trap": 0.297
+  }
 }

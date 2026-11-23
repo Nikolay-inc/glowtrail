@@ -6,3 +6,6 @@ dist
 # Локальные ключи (не коммитим)
 .env.local
 .env.*.local
+
+# Кандидаты генератора уровней (npm run gen) — воспроизводятся по seed
+generated/

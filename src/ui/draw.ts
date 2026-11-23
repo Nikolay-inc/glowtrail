@@ -460,6 +460,27 @@ export function drawPortalIcon(g: G, x: number, y: number, r: number, open: bool
   if (!open) drawPadlock(g, x, y + r * 0.05, r * 0.85);
 }
 
+/** Светлячок: прозрачные крылышки и светящееся брюшко. on — горит (собран / есть на поле), иначе тусклый. */
+export function drawFireflyIcon(g: G, x: number, y: number, r: number, on: boolean) {
+  if (on) {
+    g.fillStyle(C.fireflyGlow, 0.22);
+    g.fillCircle(x, y + r * 0.2, r * 1.25);
+  }
+  // Крылья
+  g.fillStyle(0xdfe8ff, on ? 0.55 : 0.25);
+  g.fillEllipse(x - r * 0.45, y - r * 0.45, r * 0.8, r * 0.5);
+  g.fillEllipse(x + r * 0.45, y - r * 0.45, r * 0.8, r * 0.5);
+  // Голова и брюшко-огонёк
+  g.fillStyle(0x3a3350, 1);
+  g.fillCircle(x, y - r * 0.45, r * 0.26);
+  g.fillStyle(on ? C.firefly : 0x56604a, 1);
+  g.fillEllipse(x, y + r * 0.15, r * 0.62, r * 0.9);
+  if (on) {
+    g.fillStyle(0xffffff, 0.7);
+    g.fillEllipse(x - r * 0.08, y + r * 0.02, r * 0.2, r * 0.32);
+  }
+}
+
 /** Замок (без цифры): корпус и дужка. */
 export function drawPadlock(g: G, x: number, y: number, s: number, shackleLift = 0) {
   g.lineStyle(s * 0.14, 0xe7c66b, 1);

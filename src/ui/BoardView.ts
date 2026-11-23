@@ -5,7 +5,7 @@ import Phaser from 'phaser';
 import type { GameState, Placement } from '../core/game';
 import { DX, DY, type Dir, type Level } from '../core/types';
 import { C } from './theme';
-import { createLumo, drawPadlock } from './draw';
+import { createLumo, drawFireflyIcon, drawPadlock } from './draw';
 import { headSide, lanternsLeft, portalSides } from '../core/portal';
 import { FONT } from './theme';
 import { raysBurst } from './fx';
@@ -13,6 +13,14 @@ import { raysBurst } from './fx';
 /** Оранжевая рамка и свечение горящего фонаря — отдельный цвет от жёлтой дороги. */
 const LAMP_FRAME = 0xff8a2a;
 const LAMP_GLOW = 0xffa04a;
+
+interface FireflyView {
+  idx: number;
+  /** Светлячок и его свечение двигаются вместе (контейнер). */
+  view: Phaser.GameObjects.Container;
+  glow: Phaser.GameObjects.Image;
+  collected: boolean;
+}
 
 interface LanternView {
   idx: number;
@@ -30,6 +38,7 @@ export class BoardView {
   private headG: Phaser.GameObjects.Graphics;
   private hintG: Phaser.GameObjects.Graphics;
   private lanterns: LanternView[] = [];
+  private fireflies: FireflyView[] = [];
   private exitGlow!: Phaser.GameObjects.Image;
   private exitOpen = false;
   // Арка-портал: кольцо, вращающийся свет внутри, 4 огонька-входа и замок с числом фонарей
@@ -82,6 +91,7 @@ export class BoardView {
     this.coneErase = scene.make.image({ x: 0, y: 0, key: 'cone' }, false).setOrigin(0, 0.5);
     scene.tweens.add({ targets: this.headG, alpha: 0.35, duration: 650, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
     this.drawLanternsAndExit();
+    this.drawFireflies();
 
     const start = this.center(level.start.y * level.width + level.start.x);
     this.lumo = createLumo(scene, this.cell * 0.9, opts.avatar ?? 0).setPosition(start.x, start.y - this.cell * 0.05).setDepth(7);
@@ -139,6 +149,11 @@ export class BoardView {
       if (l.state === 'off') continue;
       const c = this.center(l.idx);
       this.light(c.x, c.y - cell * 0.2, cell * (l.state === 'lit' ? 4.6 : 4) * flicker, 0.95);
+    }
+    // Светлячки сами светятся в темноте (пока их не собрали).
+    for (const f of this.fireflies) {
+      if (f.collected || !f.view.visible) continue;
+      this.light(f.view.x, f.view.y, cell * 1.3 * flicker, 0.55);
     }
     if (this.exitOpen) {
       const e = this.center(this.level.exit.y * this.level.width + this.level.exit.x);
@@ -284,6 +299,51 @@ export class BoardView {
       this.lock.setVisible(false);
       this.drawPortal(true);
       this.exitGlow.setTint(C.exitOpen);
+    }
+  }
+
+  /** Светлячки: парят над клеткой и мигают; дорога через клетку собирает светлячка. */
+  private drawFireflies() {
+    const { level, cell, scene } = this;
+    level.fireflies.forEach((idx, i) => {
+      const c = this.center(idx);
+      const glow = scene.add.image(0, 0, 'glow').setTint(C.fireflyGlow).setBlendMode(Phaser.BlendModes.ADD).setScale((cell * 0.9) / 128).setAlpha(0.55);
+      const g = scene.add.graphics();
+      drawFireflyIcon(g, 0, 0, cell * 0.16, true);
+      const view = scene.add.container(c.x, c.y, [glow, g]).setDepth(6.85);
+      // Парит по кругу и мигает брюшком — у каждого свой ритм.
+      scene.tweens.add({ targets: view, y: c.y - cell * 0.08, x: c.x + cell * 0.05, duration: 1300 + i * 170, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+      scene.tweens.add({ targets: glow, alpha: 0.2, duration: 700 + i * 90, yoyo: true, repeat: -1, ease: 'Sine.inOut', delay: i * 230 });
+      this.fireflies.push({ idx, view, glow, collected: false });
+    });
+  }
+
+  /** Дорога прошла через светлячка — он вспыхивает и улетает вверх; отменили ход — возвращается на место. */
+  updateFireflies(state: GameState) {
+    for (const f of this.fireflies) {
+      const on = state.onRoad[f.idx];
+      if (on && !f.collected) {
+        f.collected = true;
+        const c = this.center(f.idx);
+        this.burst.explode(8, c.x, c.y);
+        raysBurst(this.scene, c.x, c.y, C.fireflyGlow, this.cell * 1.1);
+        this.flash(c.x, c.y, this.cell * 2.2, 600);
+        this.scene.tweens.add({
+          targets: f.view,
+          y: c.y - this.cell * 0.9,
+          scale: 0.4,
+          alpha: 0,
+          duration: 650,
+          ease: 'Quad.in',
+          onComplete: () => f.view.setVisible(false),
+        });
+      } else if (!on && f.collected) {
+        f.collected = false;
+        const c = this.center(f.idx);
+        this.scene.tweens.killTweensOf(f.view);
+        f.view.setVisible(true).setPosition(c.x, c.y).setScale(1).setAlpha(1);
+        this.scene.tweens.add({ targets: f.view, y: c.y - this.cell * 0.08, x: c.x + this.cell * 0.05, duration: 1400, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+      }
     }
   }
 

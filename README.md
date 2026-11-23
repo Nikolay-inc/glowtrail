@@ -17,7 +17,11 @@ npm run dev
 Откроется http://localhost:5173 (`?level=N` открывает уровень сразу).
 
 - `npm test` — тесты (Vitest)
-- `npm run verify` — решатель проверяет все уровни и кривую сложности
+- `npm run verify` — таблица метрик и проверка всех уровней и кривой сложности
+- `npm run ease` — пересчитать колоды облегчения и метрики уровней (после изменения уровня)
+- `npm run gen -- --count 300 --size 5x6 --features lantern,rock,water --seed 1` — сгенерировать кандидатов в уровни (`generated/`)
+- `npm run pick` — подобрать из кандидатов уровни 11–30 под план мира (`src/levels/curve.ts`)
+- Редактор уровней: `npm run dev` и открыть http://localhost:5173/?editor=1 (только при разработке)
 - `npm run build` — сборка для GitHub Pages в `dist/`
 - Деплой: пуш в `main` → GitHub Actions → GitHub Pages
 

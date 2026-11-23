@@ -137,7 +137,7 @@ describe('арка-портал', () => {
   });
 
   it('с какой стороны арки конец дороги', () => {
-    const l = parseLevel({ id: 0, name: 't', grid: ['.E.', '...', '.S.'], startDir: 'N', deck: ['straight', 'straight'], stars: { two: 0, three: 0 } });
+    const l = parseLevel({ id: 'test', name: 't', grid: ['.E.', '...', '.S.'], startDir: 'N', deck: ['straight', 'straight'], stars: { two: 0, three: 0 } });
     const g = createGame(l);
     expect(headSide(g)).toBeNull();
     const s = applyAction(g, { type: 'place', slot: 0 });
@@ -145,7 +145,7 @@ describe('арка-портал', () => {
   });
 
   it('число на замке — незажжённые фонари', () => {
-    const l = parseLevel({ id: 0, name: 't', grid: ['E..', 'L..', 'S..'], startDir: 'N', deck: ['straight', 'straight'], stars: { two: 0, three: 0 } });
+    const l = parseLevel({ id: 'test', name: 't', grid: ['E..', 'L..', 'S..'], startDir: 'N', deck: ['straight', 'straight'], stars: { two: 0, three: 0 } });
     const g = createGame(l);
     expect(lanternsLeft(g)).toBe(1);
     expect(lanternsLeft(applyAction(g, { type: 'place', slot: 0 }))).toBe(0);

@@ -1,0 +1,90 @@
+{
+  "id": "valley-16",
+  "name": "Ночные огоньки",
+  "grid": [
+    "...#..",
+    ".....S",
+    "......",
+    ".##L..",
+    "...#..",
+    ".E...F",
+    ".L..#."
+  ],
+  "startDir": "W",
+  "deck": [
+    "straight",
+    "straight",
+    "left",
+    "straight",
+    "left",
+    "right",
+    "left",
+    "right",
+    "left",
+    "straight",
+    "right",
+    "straight",
+    "right",
+    "straight",
+    "left",
+    "right",
+    "right",
+    "right"
+  ],
+  "stars": {
+    "two": 3,
+    "three": 5
+  },
+  "easeDecks": [
+    [
+      "straight2",
+      "straight",
+      "straight",
+      "left",
+      "straight",
+      "left",
+      "right",
+      "left",
+      "right",
+      "left",
+      "straight",
+      "right",
+      "straight",
+      "right",
+      "straight",
+      "left",
+      "right",
+      "right",
+      "right"
+    ],
+    [
+      "right",
+      "straight2",
+      "straight",
+      "straight",
+      "left",
+      "straight",
+      "left",
+      "right",
+      "left",
+      "right",
+      "left",
+      "straight",
+      "right",
+      "straight",
+      "right",
+      "straight",
+      "left",
+      "right",
+      "right",
+      "right"
+    ]
+  ],
+  "metrics": {
+    "rating": 3.5,
+    "roads": 45,
+    "minTiles": 12,
+    "reserve": 6,
+    "trap": 0.255
+  }
+}

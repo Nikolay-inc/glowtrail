@@ -1,5 +1,5 @@
 {
-  "id": 4,
+  "id": "valley-04",
   "name": "Камни",
   "grid": [
     ".E..",
@@ -21,5 +21,12 @@
     "right"
   ],
   "allowStash": false,
-  "tip": "side_entry"
+  "tip": "side_entry",
+  "metrics": {
+    "rating": 3,
+    "roads": 14,
+    "minTiles": 4,
+    "reserve": -1,
+    "trap": 0.332
+  }
 }

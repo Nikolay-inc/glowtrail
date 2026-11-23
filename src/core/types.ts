@@ -16,7 +16,7 @@ export type TileKind = 'straight' | 'straight2' | 'left' | 'right' | 'bridge';
 
 export const TILE_KINDS: readonly TileKind[] = ['straight', 'straight2', 'left', 'right', 'bridge'];
 
-export type CellType = 'empty' | 'rock' | 'water' | 'lantern' | 'exit' | 'start';
+export type CellType = 'empty' | 'rock' | 'water' | 'lantern' | 'exit' | 'start' | 'firefly';
 
 export const CELL_BY_CHAR: Record<string, CellType> = {
   '.': 'empty',
@@ -25,13 +25,18 @@ export const CELL_BY_CHAR: Record<string, CellType> = {
   L: 'lantern',
   E: 'exit',
   S: 'start',
+  F: 'firefly',
 };
+
+/** Обратная таблица: тип клетки → символ (редактор, генератор). */
+export const CHAR_BY_CELL: Record<CellType, string> = { empty: '.', rock: '#', water: '~', lantern: 'L', exit: 'E', start: 'S', firefly: 'F' };
 
 /** Уровень в том виде, как он лежит в JSON. */
 export interface LevelData {
-  id: number;
+  /** Постоянный id уровня (по нему хранится прогресс): «valley-07». */
+  id: string;
   name: string;
-  /** Строки поля сверху вниз: . пусто, # камень, ~ вода, L фонарь, E выход, S старт. */
+  /** Строки поля сверху вниз: . пусто, # камень, ~ вода, L фонарь, E выход, S старт, F светлячок. */
   grid: string[];
   /** Куда смотрит фонарщик на старте: N, E, S, W. */
   startDir: 'N' | 'E' | 'S' | 'W';
@@ -51,6 +56,21 @@ export interface LevelData {
   tutorial?: 'place' | 'stash';
   /** Колоды с 1 и 2 лишними плитками для незаметного облегчения (считает npm run ease). */
   easeDecks?: TileKind[][];
+  /** Метрики сложности (считает npm run ease, сверяет npm run verify). */
+  metrics?: LevelMetrics;
+}
+
+/** Метрики сложности уровня — по ним строится кривая мира. */
+export interface LevelMetrics {
+  /** Итоговый рейтинг 1–10. */
+  rating: number;
+  /** Разных решений (дорог до выхода), не больше предела решателя. */
+  roads: number;
+  minTiles: number;
+  /** Плиток в колоде сверх минимума (-1 — колода бесконечная). */
+  reserve: number;
+  /** Доля тупиковых ходов: в скольких процентах случаев случайный допустимый ход делает уровень нерешаемым. */
+  trap: number;
 }
 
 export interface Point {
@@ -60,7 +80,9 @@ export interface Point {
 
 /** Разобранный уровень, удобный для логики. */
 export interface Level {
-  id: number;
+  id: string;
+  /** Номер уровня по порядку во всех мирах (1, 2, …) — для показа и обучения. 0 — уровень вне миров. */
+  num: number;
   name: string;
   width: number;
   height: number;
@@ -69,6 +91,7 @@ export interface Level {
   startDir: Dir;
   exit: Point;
   lanterns: number[]; // индексы клеток с фонарями
+  fireflies: number[]; // индексы клеток со светлячками (собирать по желанию)
   deck: TileKind[];
   /** Набор бесконечной колоды или null, если колода конечная. */
   tileSet: TileKind[] | null;
@@ -78,4 +101,5 @@ export interface Level {
   stars: { two: number; three: number };
   tutorial?: 'place' | 'stash';
   easeDecks?: TileKind[][];
+  metrics?: LevelMetrics;
 }

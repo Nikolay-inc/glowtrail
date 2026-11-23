@@ -1,0 +1,84 @@
+{
+  "id": "valley-27",
+  "name": "Туманная лощина",
+  "grid": [
+    "#E..FF",
+    ".#....",
+    "......",
+    "....L.",
+    "...#..",
+    "#.L...",
+    "....S."
+  ],
+  "startDir": "N",
+  "deck": [
+    "left",
+    "left",
+    "straight",
+    "right",
+    "straight",
+    "straight",
+    "left",
+    "right",
+    "straight2",
+    "straight2",
+    "right",
+    "left",
+    "straight2",
+    "left",
+    "straight2",
+    "straight2"
+  ],
+  "stars": {
+    "two": 2,
+    "three": 4
+  },
+  "easeDecks": [
+    [
+      "left",
+      "left",
+      "straight",
+      "right",
+      "straight",
+      "right",
+      "straight",
+      "left",
+      "right",
+      "straight2",
+      "straight2",
+      "right",
+      "left",
+      "straight2",
+      "left",
+      "straight2",
+      "straight2"
+    ],
+    [
+      "left",
+      "left",
+      "straight",
+      "right",
+      "straight",
+      "straight",
+      "right",
+      "straight",
+      "left",
+      "right",
+      "straight2",
+      "straight2",
+      "right",
+      "left",
+      "straight2",
+      "left",
+      "straight2",
+      "straight2"
+    ]
+  ],
+  "metrics": {
+    "rating": 5,
+    "roads": 8,
+    "minTiles": 11,
+    "reserve": 5,
+    "trap": 0.365
+  }
+}

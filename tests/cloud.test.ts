@@ -38,33 +38,45 @@ function save(patch: (d: SaveData) => void): SaveData {
 
 describe('слияние облачного и локального сохранения', () => {
   it('без облака — локальное как есть', () => {
-    const local = save((d) => (d.progress.stars = { 1: 3 }));
+    const local = save((d) => (d.progress.stars = { 'valley-01': 3 }));
     expect(mergeSaves(local, null)).toBe(local);
   });
 
   it('прогресс не теряется: звёзды и открытые уровни — максимум', () => {
     const local = save((d) => {
-      d.progress.stars = { 1: 3, 2: 1 };
-      d.progress.unlocked = 3;
-      d.progress.attempts = { 1: 5 };
+      d.progress.stars = { 'valley-01': 3, 'valley-02': 1 };
+      d.progress.unlocked = ['valley-01', 'valley-02', 'valley-03'];
+      d.progress.attempts = { 'valley-01': 5 };
+      d.progress.fireflies = { 'valley-12': 1 };
     });
     const cloud = toCloudPayload(
       save((d) => {
-        d.progress.stars = { 2: 3, 3: 2 };
-        d.progress.unlocked = 4;
-        d.progress.attempts = { 1: 2, 3: 7 };
+        d.progress.stars = { 'valley-02': 3, 'valley-03': 2 };
+        d.progress.unlocked = ['valley-01', 'valley-04'];
+        d.progress.attempts = { 'valley-01': 2, 'valley-03': 7 };
+        d.progress.fireflies = { 'valley-12': 3 };
       }),
     );
     const m = mergeSaves(local, cloud);
-    expect(m.progress.stars).toEqual({ 1: 3, 2: 3, 3: 2 });
-    expect(m.progress.unlocked).toBe(4);
-    expect(m.progress.attempts).toEqual({ 1: 5, 3: 7 });
+    expect(m.progress.stars).toEqual({ 'valley-01': 3, 'valley-02': 3, 'valley-03': 2 });
+    expect([...m.progress.unlocked].sort()).toEqual(['valley-01', 'valley-02', 'valley-03', 'valley-04']);
+    expect(m.progress.attempts).toEqual({ 'valley-01': 5, 'valley-03': 7 });
+    expect(m.progress.fireflies).toEqual({ 'valley-12': 3 });
+  });
+
+  it('в облаке сохранение старой версии (уровни по номерам) — переводим в id и сливаем', () => {
+    const local = save((d) => (d.progress.stars = { 'valley-02': 1 }));
+    const old = { version: 3, profile: local.profile, progress: { unlocked: 5, stars: { 1: 3, 2: 2 }, attempts: { 4: 1 }, lossStreak: {}, skipped: { 4: true }, muted: false } };
+    const m = mergeSaves(local, old as unknown as CloudPayload);
+    expect(m.progress.stars).toEqual({ 'valley-01': 3, 'valley-02': 2 });
+    expect(m.progress.skipped).toEqual({ 'valley-04': true });
+    expect(m.progress.unlocked).toContain('valley-05');
   });
 
   it('пройденный уровень больше не «пропущен»', () => {
     const local = save((d) => (d.progress.skipped = { 4: true, 5: true }));
     const cloud = toCloudPayload(save((d) => (d.progress.stars = { 4: 2 })));
-    expect(mergeSaves(local, cloud).progress.skipped).toEqual({ 5: true });
+    expect(mergeSaves(local, cloud).progress.skipped).toEqual({ 'valley-05': true });
   });
 
   it('личность аккаунта — из облака, лог и звук — с устройства', () => {
@@ -146,8 +158,8 @@ describe('синхронизация с облаком', () => {
     const { store, saved } = fakeStore(toCloudPayload(save((d) => (d.progress.stars = { 2: 2 }))));
     const sync = new CloudSync(store, 1000);
     await sync.start('user-1');
-    expect(SaveService.load().progress.stars).toEqual({ 1: 3, 2: 2 });
-    expect(saved.at(-1)!.progress.stars).toEqual({ 1: 3, 2: 2 });
+    expect(SaveService.load().progress.stars).toEqual({ 'valley-01': 3, 'valley-02': 2 });
+    expect(saved.at(-1)!.progress.stars).toEqual({ 'valley-01': 3, 'valley-02': 2 });
     expect(sync.status).toBe('synced');
   });
 
@@ -197,8 +209,8 @@ describe('синхронизация с облаком', () => {
     const { store, saved } = fakeStore();
     const sync = new CloudSync(store, 5000);
     await sync.start('user-1');
-    SaveService.update((d) => (d.progress.unlocked = 6));
+    SaveService.update((d) => (d.progress.stars['valley-06'] = 2));
     await sync.flush();
-    expect(saved.at(-1)!.progress.unlocked).toBe(6);
+    expect(saved.at(-1)!.progress.stars['valley-06']).toBe(2);
   });
 });

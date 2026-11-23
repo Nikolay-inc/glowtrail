@@ -27,7 +27,7 @@ describe('сохранение v3: профиль', () => {
     const backend = memoryBackend();
     SaveService.setBackend(backend);
     const p = getProfile();
-    expect(SAVE_VERSION).toBe(3);
+    expect(SAVE_VERSION).toBe(4);
     expect(p.playerId).toMatch(UUID);
     expect(p).toMatchObject({ name: null, avatar: 0, nameAsked: false, hintsUsed: 0, dayStreak: 0 });
     // Сразу сохранён: после перезагрузки тот же playerId.
@@ -45,8 +45,8 @@ describe('сохранение v3: профиль', () => {
     });
     SaveService.setBackend(backend);
     const d = SaveService.load();
-    expect(d.version).toBe(3);
-    expect(d.progress.stars).toEqual({ 1: 3, 2: 2, 3: 1 });
+    expect(d.version).toBe(4);
+    expect(d.progress.stars).toEqual({ 'valley-01': 3, 'valley-02': 2, 'valley-03': 1 });
     expect(d.profile.playerId).toMatch(UUID);
     expect(d.profile.hintsUsed).toBe(2);
     expect(d.log).toHaveLength(3);
@@ -54,7 +54,7 @@ describe('сохранение v3: профиль', () => {
     expect(JSON.parse(backend.dump()[SAVE_KEY]).profile.playerId).toBe(d.profile.playerId);
   });
 
-  it('миграция v1 → v3 цепочкой', () => {
+  it('миграция v1 → v4 цепочкой', () => {
     SaveService.setBackend(
       memoryBackend({
         [LEGACY_KEYS.progress]: JSON.stringify({ unlocked: 3, stars: { 1: 2 }, hints: 5 }),
@@ -62,8 +62,8 @@ describe('сохранение v3: профиль', () => {
       }),
     );
     const d = SaveService.load();
-    expect(d.version).toBe(3);
-    expect(d.progress.unlocked).toBe(3);
+    expect(d.version).toBe(4);
+    expect(d.progress.unlocked).toEqual(['valley-01', 'valley-02', 'valley-03']);
     expect(d.profile.hintsUsed).toBe(1);
   });
 

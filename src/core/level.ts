@@ -1,7 +1,7 @@
 import { CELL_BY_CHAR, DIR_BY_LETTER, TILE_KINDS, type CellType, type Level, type LevelData, type Point } from './types';
 
 /** Превращает JSON уровня в структуру для логики и проверяет, что он корректен. */
-export function parseLevel(data: LevelData): Level {
+export function parseLevel(data: LevelData, num = 0): Level {
   const height = data.grid.length;
   if (height === 0) throw new Error(`Уровень ${data.id}: пустое поле`);
   const width = data.grid[0].length;
@@ -9,6 +9,7 @@ export function parseLevel(data: LevelData): Level {
   let start: Point | null = null;
   let exit: Point | null = null;
   const lanterns: number[] = [];
+  const fireflies: number[] = [];
 
   data.grid.forEach((row, y) => {
     if (row.length !== width) throw new Error(`Уровень ${data.id}: строка ${y} другой длины`);
@@ -24,6 +25,7 @@ export function parseLevel(data: LevelData): Level {
         exit = { x, y };
       }
       if (type === 'lantern') lanterns.push(y * width + x);
+      if (type === 'firefly') fireflies.push(y * width + x);
       cells.push(type);
     });
   });
@@ -39,7 +41,8 @@ export function parseLevel(data: LevelData): Level {
   }
 
   return {
-    id: data.id,
+    id: String(data.id),
+    num,
     name: data.name,
     width,
     height,
@@ -48,6 +51,7 @@ export function parseLevel(data: LevelData): Level {
     startDir,
     exit,
     lanterns,
+    fireflies,
     deck: [...(data.deck ?? [])],
     tileSet: data.tileSet ? [...data.tileSet] : null,
     allowStash: data.allowStash ?? true,
@@ -56,5 +60,6 @@ export function parseLevel(data: LevelData): Level {
     stars: { ...data.stars },
     tutorial: data.tutorial,
     easeDecks: data.easeDecks?.map((d) => [...d]),
+    metrics: data.metrics ? { ...data.metrics } : undefined,
   };
 }

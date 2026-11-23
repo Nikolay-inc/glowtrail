@@ -10,6 +10,7 @@ import {
   createGame,
   deckLeft,
   distanceToExit,
+  firefliesOnRoad,
   isInfinite,
   lanternsOnRoad,
   leftmostTile,
@@ -22,15 +23,15 @@ import {
   type GameState,
 } from '../core/game';
 import { easeDeck, findExtraTiles, findHint, nearestSolvable } from '../core/solver';
-import type { TileKind } from '../core/types';
-import { LEVELS } from '../levels/index';
+import type { Level, TileKind } from '../core/types';
+import { LEVELS, nextLevelOf, numberInWorld } from '../levels/index';
 import { sfx } from '../audio';
-import { logEvent, lossStreak, recordLoss, recordSkip, recordWin, startAttempt } from '../storage';
+import { logEvent, lossStreak, recordLoss, recordSkip, recordWin, startAttempt, type LogEvent } from '../storage';
 import { countHint, getProfile, markAuthPrompted, recordPlayDay, shouldPromptAuth } from '../profile';
 import { Account } from '../cloud/account';
 import { openAuthDialog } from '../ui/AuthDialog';
 import { BoardView } from '../ui/BoardView';
-import { addBackground, Button, createAvatarBadge, drawPortalIcon, drawStar, text } from '../ui/draw';
+import { addBackground, Button, createAvatarBadge, drawFireflyIcon, drawPortalIcon, drawStar, text } from '../ui/draw';
 import { lanternsLeft } from '../core/portal';
 import { DX, DY } from '../core/types';
 import { t } from '../strings';
@@ -81,6 +82,15 @@ interface Press {
   timer?: Phaser.Time.TimerEvent;
 }
 
+/** Событие на game.events: свой уровень из редактора закончен — вернуться в редактор. */
+export const EDITOR_RETURN = 'editor-return';
+
+/** Данные сцены: уровень из списка (по индексу) или свой уровень из редактора. */
+export interface GameSceneData {
+  levelIndex?: number;
+  custom?: Level;
+}
+
 /** Облегчённые колоды считаются один раз за сессию. */
 const easedDecks = new Map<string, TileKind[]>();
 
@@ -94,6 +104,8 @@ function plural(n: number, one: string, few: string, many: string) {
 
 export class GameScene extends Phaser.Scene {
   private levelIndex = 0;
+  /** Свой уровень из редактора: прогресс и лог не пишем, выход — обратно в редактор. */
+  private custom: Level | null = null;
   private state!: GameState;
   private board!: BoardView;
   private cards: TileCard[] = [];
@@ -106,6 +118,7 @@ export class GameScene extends Phaser.Scene {
   private hintBtn!: Button;
   private badgesG!: Phaser.GameObjects.Graphics;
   private goalText!: Phaser.GameObjects.Text;
+  private ffText!: Phaser.GameObjects.Text;
   private tips!: TipManager;
   private idleTimer?: Phaser.Time.TimerEvent;
   private goalCard?: Phaser.GameObjects.Container;
@@ -140,7 +153,8 @@ export class GameScene extends Phaser.Scene {
     super('Game');
   }
 
-  init(data: { levelIndex?: number }) {
+  init(data: GameSceneData) {
+    this.custom = data.custom ?? null;
     this.levelIndex = Phaser.Math.Clamp(data.levelIndex ?? 0, 0, LEVELS.length - 1);
     this.cards = [];
     this.previews = [];
@@ -153,8 +167,22 @@ export class GameScene extends Phaser.Scene {
     this.extraUsed = false;
   }
 
+  private get level(): Level {
+    return this.custom ?? LEVELS[this.levelIndex];
+  }
+
+  /** Данные, чтобы начать этот же уровень заново. */
+  private again(): GameSceneData {
+    return this.custom ? { custom: this.custom } : { levelIndex: this.levelIndex };
+  }
+
+  /** Лог событий (для своего уровня из редактора — не пишем). */
+  private log(e: Omit<LogEvent, 't'>) {
+    if (!this.custom) logEvent(e);
+  }
+
   create() {
-    const level = LEVELS[this.levelIndex];
+    const level = this.level;
     this.L = trayLayout(level.allowStash);
     // Высокий экран: верхняя панель — к верху безопасной зоны, лоток и подсказка — к низу, поле крупнее.
     const bounds = stretchLayout(this);
@@ -165,13 +193,14 @@ export class GameScene extends Phaser.Scene {
     this.previewY = PREVIEW_Y + down;
     this.bottomY = BOTTOM_Y + down;
     addBackground(this);
-    this.streak = lossStreak(level.id);
+    this.streak = this.custom ? 0 : lossStreak(level.id);
 
     // Верхняя панель: уровень и строка цели (арка + фонари «зажжено/всего»)
     new Button(this, 90, this.topY, { w: 130, h: 130, icon: 'menu', onClick: () => this.leave('Menu') });
-    text(this, W / 2, this.topY - 22, `Уровень ${level.id}`, 50);
+    text(this, W / 2, this.topY - 22, this.custom ? 'Свой уровень' : `Уровень ${numberInWorld(level)}`, 50);
     this.badgesG = this.add.graphics().setDepth(1);
     this.goalText = text(this, 0, this.topY + 58, '', 40).setOrigin(0, 0.5).setDepth(2);
+    this.ffText = text(this, 0, this.topY + 58, '', 40).setOrigin(0, 0.5).setDepth(2);
     this.undoBtn = new Button(this, 840, this.topY, { w: 130, h: 130, icon: 'undo', onClick: () => this.onUndo() });
     this.restartBtn = new Button(this, 990, this.topY, { w: 130, h: 130, icon: 'restart', onClick: () => this.restart() });
 
@@ -215,7 +244,7 @@ export class GameScene extends Phaser.Scene {
     // Игрок закрыл вкладку посреди уровня — всё равно запишем время попытки.
     const onHide = () => {
       if (this.ended) return;
-      logEvent({ ev: 'abandon', level: this.state.level.id, attempt: this.attempt, ms: this.elapsed(), moves: this.state.moves });
+      this.log({ ev: 'abandon', level: this.state.level.id, attempt: this.attempt, ms: this.elapsed(), moves: this.state.moves });
       this.ended = true;
     };
     window.addEventListener('pagehide', onHide);
@@ -252,17 +281,18 @@ export class GameScene extends Phaser.Scene {
 
     // Для бесконечной колоды — своё случайное зерно на каждую попытку.
     this.state = createGame(level, deck, Math.floor(Math.random() * 2 ** 31));
-    this.attempt = startAttempt(level.id);
-    if (extra > 0) logEvent({ ev: 'auto_ease', level: level.id, attempt: this.attempt, added: extra, streak: this.streak });
+    const m = level.metrics;
+    this.attempt = this.custom ? 1 : startAttempt(level.id, m ? { rating: m.rating, trap: m.trap, roads: m.roads } : {});
+    if (extra > 0) this.log({ ev: 'auto_ease', level: level.id, attempt: this.attempt, added: extra, streak: this.streak });
     this.t0 = Date.now();
     this.board.setRoad(this.state);
     this.refresh(false);
     // Уровень появляется из темноты — свет расходится от фонаря Lumo.
     irisIn(this, this.board.lumo.x, this.board.lumo.y);
     if (this.streak >= STUCK.pulseHint) this.pulse(this.hintBtn);
-    if (isTutorialActive(level.id)) logTutorialStep(`level_${level.id}_start`, level.id);
+    if (isTutorialActive(level.num)) logTutorialStep(`level_${level.num}_start`, level.id);
     // Новый элемент на уровне — сначала карточка правила с живой анимацией; потом карточка цели и подсказки.
-    const rules = pendingRules(level.id);
+    const rules = this.custom ? [] : pendingRules(level);
     if (rules.length) {
       this.time.delayedCall(650, () => {
         this.game.events.once(RULES_CLOSED, () => {
@@ -289,8 +319,10 @@ export class GameScene extends Phaser.Scene {
   private showGoalCard() {
     if (this.state.status !== 'playing') return;
     const n = this.state.level.lanterns.length;
-    const rows: { icon: 'portal' | 'lantern'; label: string }[] = [{ icon: 'portal', label: t('goal_door') }];
+    const rows: { icon: 'portal' | 'lantern' | 'firefly'; label: string }[] = [{ icon: 'portal', label: t('goal_door') }];
     if (n > 0) rows.push({ icon: 'lantern', label: t('goal_lanterns', { n }) });
+    const ff = this.state.level.fireflies.length;
+    if (ff > 0) rows.push({ icon: 'firefly', label: t('goal_fireflies', { n: ff }) });
     const h = 90 + rows.length * 110;
     const c = this.add.container(W / 2, 780).setDepth(35);
     const g = this.add.graphics();
@@ -305,6 +337,7 @@ export class GameScene extends Phaser.Scene {
       const y = -h / 2 + 100 + i * 110;
       const ig = this.add.graphics();
       if (r.icon === 'portal') drawPortalIcon(ig, -300, y, 32, false);
+      else if (r.icon === 'firefly') drawFireflyIcon(ig, -300, y, 30, true);
       else this.drawLanternIcon(ig, -300, y + 4, true, 1.5);
       c.add(ig);
       c.add(text(this, -230, y, r.label, 52).setOrigin(0, 0.5));
@@ -382,29 +415,39 @@ export class GameScene extends Phaser.Scene {
     this.drawBadges();
     this.board.setHead(s);
     this.board.updateLanterns(s);
+    this.board.updateFireflies(s);
     this.updateHints();
   }
 
-  /** Строка цели под заголовком: арка (с замком, пока не все фонари) и фонари «зажжено/всего». */
+  /** Строка цели под заголовком: арка (с замком, пока не все фонари), фонари и светлячки «собрано/всего». */
   private drawBadges() {
     const g = this.badgesG;
     g.clear();
     const level = this.state.level;
     const n = level.lanterns.length;
+    const ffTotal = level.fireflies.length;
     const y = this.topY + 58;
     const open = lanternsLeft(this.state) === 0;
-    if (n === 0) {
-      drawPortalIcon(g, W / 2, y, 22, true);
-      this.goalText.setText('');
-      return;
-    }
     const lit = n - lanternsLeft(this.state);
-    this.goalText.setText(`${lit}/${n}`);
-    const total = 60 + 30 + 50 + this.goalText.width;
-    const x0 = W / 2 - total / 2;
-    drawPortalIcon(g, x0 + 22, y, 22, open);
-    this.drawLanternIcon(g, x0 + 110, y + 4, lit === n);
-    this.goalText.setX(x0 + 140).setColor(lit === n ? '#ffd36b' : C.text);
+    const ff = firefliesOnRoad(this.state);
+    this.goalText.setText(n > 0 ? `${lit}/${n}` : '');
+    this.ffText.setText(ffTotal > 0 ? `${ff}/${ffTotal}` : '');
+    // Ширина строки: арка, [фонарь + текст], [светлячок + текст].
+    const lanternW = n > 0 ? 30 + 50 + this.goalText.width : 0;
+    const ffW = ffTotal > 0 ? 40 + 50 + this.ffText.width : 0;
+    const total = 44 + lanternW + ffW;
+    let x = W / 2 - total / 2;
+    drawPortalIcon(g, x + 22, y, 22, open);
+    x += 44;
+    if (n > 0) {
+      this.drawLanternIcon(g, x + 66, y + 4, lit === n);
+      this.goalText.setX(x + 96).setColor(lit === n ? '#ffd36b' : C.text);
+      x += lanternW;
+    }
+    if (ffTotal > 0) {
+      drawFireflyIcon(g, x + 76, y, 20, ff > 0);
+      this.ffText.setX(x + 106).setColor(ff === ffTotal ? '#c8ff7a' : C.text);
+    }
   }
 
   private drawLanternIcon(g: Phaser.GameObjects.Graphics, x: number, y: number, on: boolean, k = 1) {
@@ -567,7 +610,7 @@ export class GameScene extends Phaser.Scene {
 
   /** Подсказки бесплатные и без ограничений — просто записываем в лог. */
   private spendHint(rollback: number) {
-    logEvent({ ev: 'hint_used', level: this.state.level.id, attempt: this.attempt, rollback: rollback || undefined });
+    this.log({ ev: 'hint_used', level: this.state.level.id, attempt: this.attempt, rollback: rollback || undefined });
     countHint();
     this.stopPulse(this.hintBtn);
     sfx.tap();
@@ -729,7 +772,7 @@ export class GameScene extends Phaser.Scene {
       this.invalid(slot);
       return;
     }
-    logEvent({ ev: source === 'drag' ? 'drag_place' : 'tap_place', level: this.state.level.id, attempt: this.attempt });
+    this.log({ ev: source === 'drag' ? 'drag_place' : 'tap_place', level: this.state.level.id, attempt: this.attempt });
     this.doAction(slot === 'stash' ? { type: 'placeStash' } : { type: 'place', slot });
   }
 
@@ -757,7 +800,7 @@ export class GameScene extends Phaser.Scene {
     if (p.reason === 'exitClosed') {
       const e = this.board.exitCenter();
       this.board.shakeLock();
-      logEvent({ ev: 'door_locked_attempt', level: this.state.level.id, attempt: this.attempt });
+      this.log({ ev: 'door_locked_attempt', level: this.state.level.id, attempt: this.attempt });
       this.tips.show({ text: t('tip_door_locked'), target: { x: e.x, y: e.y - s * 0.4 }, side: 'above', autoCloseMs: 2600 });
     } else if (p.reason === 'rock' && at) {
       this.tip('rock', at, 'above');
@@ -788,7 +831,7 @@ export class GameScene extends Phaser.Scene {
       this.time.delayedCall(450, () => this.explainTurn());
     }
     // После первой плитки на первом уровне — подсказка, что плитку можно и перетащить.
-    if (action.type === 'place' && next.level.id === 1 && next.moves === 1) {
+    if (action.type === 'place' && next.level.num === 1 && next.moves === 1) {
       this.time.delayedCall(700, () => this.tip('drag', { x: this.L.slotX[1], y: this.trayY - CARD / 2 }, 'above'));
     }
 
@@ -917,29 +960,39 @@ export class GameScene extends Phaser.Scene {
 
   private logAbandon() {
     if (this.ended) return;
-    logEvent({ ev: 'abandon', level: this.state.level.id, attempt: this.attempt, ms: this.elapsed(), moves: this.state.moves });
+    this.log({ ev: 'abandon', level: this.state.level.id, attempt: this.attempt, ms: this.elapsed(), moves: this.state.moves });
     this.ended = true;
   }
 
-  private leave(scene: 'Menu' | 'Game', data: object = {}) {
+  private leave(scene: 'Menu' | 'Game', data: GameSceneData = {}) {
     this.logAbandon();
     sfx.tap();
     this.cameras.main.fadeOut(180, 11, 15, 39);
-    this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start(scene, data));
+    this.cameras.main.once('camerafadeoutcomplete', () => this.go(scene, data));
+  }
+
+  /** Перейти на сцену; свой уровень из редактора вместо меню возвращается в редактор. */
+  private go(scene: 'Menu' | 'Game', data: GameSceneData = {}) {
+    if (this.custom && scene === 'Menu') {
+      this.scene.stop();
+      this.game.events.emit(EDITOR_RETURN);
+      return;
+    }
+    this.scene.start(scene, data);
   }
 
   private restart() {
     if (this.state.status === 'won') return;
-    this.leave('Game', { levelIndex: this.levelIndex });
+    this.leave('Game', this.again());
   }
 
   private skipLevel() {
     const id = this.state.level.id;
+    const next = nextLevelOf(this.level);
     this.logAbandon();
-    recordSkip(id, LEVELS.length);
-    logEvent({ ev: 'level_skipped', level: id, attempt: this.attempt, streak: this.streak });
-    const isLast = this.levelIndex >= LEVELS.length - 1;
-    this.leave(isLast ? 'Menu' : 'Game', { levelIndex: this.levelIndex + 1 });
+    if (!this.custom) recordSkip(id, next?.id ?? null);
+    this.log({ ev: 'level_skipped', level: id, attempt: this.attempt, streak: this.streak });
+    this.leave(next && !this.custom ? 'Game' : 'Menu', { levelIndex: this.levelIndex + 1 });
   }
 
   private onWin() {
@@ -947,7 +1000,8 @@ export class GameScene extends Phaser.Scene {
     this.ended = true;
     const s = this.state;
     const stars = starsFor(s);
-    logEvent({
+    const ff = firefliesOnRoad(s);
+    this.log({
       ev: 'win',
       level: s.level.id,
       attempt: this.attempt,
@@ -957,7 +1011,10 @@ export class GameScene extends Phaser.Scene {
       tilesLeft: isInfinite(s.level) ? undefined : tilesLeft(s),
       undos: s.undosUsed,
     });
-    recordWin(s.level.id, stars, LEVELS.length);
+    if (s.level.fireflies.length > 0) {
+      this.log({ ev: 'fireflies_collected', level: s.level.id, attempt: this.attempt, fireflies: ff, firefliesTotal: s.level.fireflies.length });
+    }
+    if (!this.custom) recordWin(s.level.id, stars, nextLevelOf(s.level)?.id ?? null, ff);
     this.hideHints();
     this.stopPulse(this.hintBtn);
     this.tweens.add({ targets: [...this.cards, this.stashCard, ...this.previews], alpha: 0.25, duration: 300 });
@@ -976,8 +1033,8 @@ export class GameScene extends Phaser.Scene {
   private onLose() {
     this.ended = true;
     const s = this.state;
-    this.streak = recordLoss(s.level.id);
-    logEvent({ ev: 'lose', level: s.level.id, attempt: this.attempt, ms: this.elapsed(), moves: s.moves, streak: this.streak });
+    this.streak = this.custom ? this.streak + 1 : recordLoss(s.level.id);
+    this.log({ ev: 'lose', level: s.level.id, attempt: this.attempt, ms: this.elapsed(), moves: s.moves, streak: this.streak });
     if (this.streak >= STUCK.pulseHint) this.pulse(this.hintBtn);
     this.time.delayedCall(450, () => {
       if (this.state !== s) return;
@@ -1016,11 +1073,15 @@ export class GameScene extends Phaser.Scene {
   }
 
   private showWinPanel(stars: number) {
-    const isLast = this.levelIndex >= LEVELS.length - 1;
-    const { o, top } = this.makeOverlay('win', 860);
+    const isLast = !this.custom && !nextLevelOf(this.level);
+    const ffTotal = this.state.level.fireflies.length;
+    const ffRow = ffTotal > 0 ? 90 : 0;
+    const { o, top: top0 } = this.makeOverlay('win', 860 + ffRow);
+    // Строка светлячков встаёт под звёздами — кнопки ниже на её высоту.
+    const top = top0;
     // Аватарка игрока — значком на верхнем краю окна.
     o.add(createAvatarBadge(this, W / 2, top, 86, getProfile().avatar, { selected: true, animate: true }).setData('avatarBadge', true));
-    o.add(text(this, W / 2, top + 130, isLast ? 'Все фонари зажжены!' : `Уровень ${this.state.level.id}`, isLast ? 56 : 46, C.textDim));
+    o.add(text(this, W / 2, top + 130, isLast ? 'Все фонари зажжены!' : this.custom ? 'Свой уровень' : `Уровень ${numberInWorld(this.level)}`, isLast ? 56 : 46, C.textDim));
     o.add(text(this, W / 2, top + 205, 'Пройден!', 84));
     const starG = this.add.graphics();
     o.add(starG);
@@ -1033,19 +1094,28 @@ export class GameScene extends Phaser.Scene {
       o.add(sg);
       this.tweens.add({ targets: sg, scale: 1, duration: 380, delay: 300 + i * 260, ease: 'Back.out', onStart: () => sfx.star(i) });
     }
+    if (ffTotal > 0) {
+      const ff = firefliesOnRoad(this.state);
+      const label = text(this, W / 2 + 30, top + 520, t('fireflies_count', { n: ff, total: ffTotal }), 46, ff === ffTotal ? '#c8ff7a' : C.text);
+      const fg = this.add.graphics();
+      drawFireflyIcon(fg, label.x - label.width / 2 - 45, top + 520, 26, ff > 0);
+      o.add([fg, label]);
+    }
     // Последний обучающий уровень: обучение закончено — дальше экран уровней.
-    const tutorialEnd = isTutorialActive(this.state.level.id) && this.state.level.id === TUTORIAL_LAST_LEVEL;
-    if (isTutorialActive(this.state.level.id)) logTutorialStep(`level_${this.state.level.id}_done`, this.state.level.id);
+    const num = this.state.level.num;
+    const tutorialEnd = !this.custom && isTutorialActive(num) && num === TUTORIAL_LAST_LEVEL;
+    if (!this.custom && isTutorialActive(num)) logTutorialStep(`level_${num}_done`, this.state.level.id);
     if (tutorialEnd) completeTutorial();
-    const next = () =>
-      isLast || tutorialEnd ? this.scene.start('Menu') : this.scene.start('Game', { levelIndex: this.levelIndex + 1 });
-    o.add(new Button(this, W / 2, top + 610, { w: 520, h: 140, icon: 'play', label: isLast ? 'Меню' : 'Дальше', primary: true, onClick: next }));
-    o.add(new Button(this, W / 2 - 160, top + 750, { w: 120, h: 100, icon: 'restart', onClick: () => this.scene.start('Game', { levelIndex: this.levelIndex }) }));
-    o.add(new Button(this, W / 2 + 160, top + 750, { w: 120, h: 100, icon: 'menu', onClick: () => this.scene.start('Menu') }));
+    const toMenu = isLast || tutorialEnd || !!this.custom;
+    const next = () => (toMenu ? this.go('Menu') : this.go('Game', { levelIndex: this.levelIndex + 1 }));
+    const by = top + 610 + ffRow;
+    o.add(new Button(this, W / 2, by, { w: 520, h: 140, icon: 'play', label: this.custom ? 'В редактор' : isLast ? 'Меню' : 'Дальше', primary: true, onClick: next }));
+    o.add(new Button(this, W / 2 - 160, by + 140, { w: 120, h: 100, icon: 'restart', onClick: () => this.go('Game', this.again()) }));
+    o.add(new Button(this, W / 2 + 160, by + 140, { w: 120, h: 100, icon: 'menu', onClick: () => this.go('Menu') }));
     o.on('primary', next);
     // После уровня 6 гостю один раз предлагаем войти или зарегистрироваться (можно «Позже»).
     // Не одновременно с другими окнами и не сразу после другого окна.
-    if (authPromptDue(this.state.level.id, { promptAllowed: shouldPromptAuth({ configured: Account.configured, signedIn: !!Account.user }) })) {
+    if (!this.custom && authPromptDue(num, { promptAllowed: shouldPromptAuth({ configured: Account.configured, signedIn: !!Account.user }) })) {
       this.time.delayedCall(1500, () => {
         if (this.overlay !== o || !canShowModal()) return;
         markAuthPrompted();
@@ -1093,7 +1163,7 @@ export class GameScene extends Phaser.Scene {
     if (facingExit) {
       o.add(text(this, W / 2, y, t('tip_door_locked'), 46, '#ffd36b'));
       this.board.shakeLock();
-      logEvent({ ev: 'door_locked_attempt', level: s.level.id, attempt: this.attempt });
+      this.log({ ev: 'door_locked_attempt', level: s.level.id, attempt: this.attempt });
     } else {
       o.add(text(this, W / 2, y, `До выхода: ${dist} ${plural(dist, 'клетка', 'клетки', 'клеток')}`, 44, C.textDim, false));
     }
@@ -1105,7 +1175,7 @@ export class GameScene extends Phaser.Scene {
       this.ended = false;
       this.state = extra.state;
       this.activeHint = null;
-      logEvent({ ev: 'extra_tiles', level: s.level.id, attempt: this.attempt, added: extra.kinds.length, rollback: extra.rollback || undefined });
+      this.log({ ev: 'extra_tiles', level: s.level.id, attempt: this.attempt, added: extra.kinds.length, rollback: extra.rollback || undefined });
       this.closeOverlay();
       sfx.stash();
       this.board.setRoad(this.state);
