@@ -4,6 +4,7 @@ import { MenuScene } from './scenes/MenuScene';
 import { StatsScene } from './scenes/StatsScene';
 import { ProfileScene } from './scenes/ProfileScene';
 import { IntroScene } from './scenes/IntroScene';
+import { RulesScene } from './scenes/RulesScene';
 import { isTutorialDone, markTutorialDoneForReturningPlayer } from './tutorial';
 import { recordPlayDay } from './profile';
 import { Account } from './cloud/account';
@@ -50,7 +51,7 @@ const game = new Phaser.Game({
   // DOM-элементы поверх холста — для поля ввода имени (масштабируются вместе с игрой).
   dom: { createContainer: true },
   render: { antialias: true },
-  scene: [BootScene, MenuScene, GameScene, StatsScene, ProfileScene, IntroScene],
+  scene: [BootScene, MenuScene, GameScene, StatsScene, ProfileScene, IntroScene, RulesScene],
 });
 
 // Аккаунт и облачное сохранение (если заданы ключи Supabase).

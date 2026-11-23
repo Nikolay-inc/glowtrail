@@ -21,6 +21,29 @@ export const TIP_TEXT: Record<TipId, StringKey> = {
   drag: 'tip_drag',
 };
 
+/** Карточки правил с анимацией: показываются перед уровнем, где элемент появляется впервые. */
+export type RuleId = 'road' | 'lantern' | 'side' | 'rock' | 'water';
+export const ALL_RULES: readonly RuleId[] = ['road', 'lantern', 'side', 'rock', 'water'];
+export const RULES_BY_LEVEL: Record<number, RuleId[]> = { 1: ['road'], 3: ['lantern'], 4: ['rock', 'side'], 8: ['water'] };
+
+/** Карточки, которые ещё не показывали перед этим уровнем. */
+export function pendingRules(levelId: number): RuleId[] {
+  const seen = SaveService.load().profile.tipsSeen;
+  return (RULES_BY_LEVEL[levelId] ?? []).filter((r) => !seen.includes(`rule:${r}`));
+}
+
+export function markRulesSeen(ids: readonly RuleId[]) {
+  const seen = SaveService.load().profile.tipsSeen;
+  const fresh = ids.filter((r) => !seen.includes(`rule:${r}`));
+  if (!fresh.length) return;
+  SaveService.update((d) => {
+    for (const r of fresh) {
+      d.profile.tipsSeen.push(`rule:${r}`);
+      d.log.push({ t: new Date().toISOString(), ev: 'tutorial_step', step: `rule_${r}` });
+    }
+  });
+}
+
 /** Последний обучающий уровень: после него — экран уровней и окно «Как тебя зовут?». */
 export const TUTORIAL_LAST_LEVEL = 3;
 /** После какого уровня предлагаем войти в аккаунт. */

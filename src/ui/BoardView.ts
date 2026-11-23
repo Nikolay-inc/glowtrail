@@ -10,6 +10,10 @@ import { headSide, lanternsLeft, portalSides } from '../core/portal';
 import { FONT } from './theme';
 import { raysBurst } from './fx';
 
+/** Оранжевая рамка и свечение горящего фонаря — отдельный цвет от жёлтой дороги. */
+const LAMP_FRAME = 0xff8a2a;
+const LAMP_GLOW = 0xffa04a;
+
 interface LanternView {
   idx: number;
   glow: Phaser.GameObjects.Image;
@@ -57,7 +61,7 @@ export class BoardView {
     private scene: Phaser.Scene,
     private level: Level,
     area: { x: number; y: number; w: number; h: number },
-    opts: { avatar?: number } = {},
+    opts: { avatar?: number; dark?: boolean } = {},
   ) {
     this.cell = Math.floor(Math.min(area.w / level.width, area.h / level.height, 200));
     this.ox = area.x + (area.w - this.cell * level.width) / 2;
@@ -66,8 +70,9 @@ export class BoardView {
     this.drawCells();
     this.roadG = scene.add.graphics().setDepth(2);
     // Предпросмотр и стрелка — поверх темноты, чтобы всегда было видно, куда ляжет плитка.
-    this.hintG = scene.add.graphics().setDepth(6.6);
-    this.ghostG = scene.add.graphics().setDepth(6.6);
+    // Над аркой и замком (6.72–6.9): крестик «дверь заперта» должен быть виден поверх неё.
+    this.hintG = scene.add.graphics().setDepth(6.95);
+    this.ghostG = scene.add.graphics().setDepth(6.96);
     this.headG = scene.add.graphics().setDepth(6.7);
     this.dropG = scene.add.graphics().setDepth(6.65);
     scene.tweens.add({ targets: this.dropG, alpha: 0.45, duration: 420, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
@@ -92,7 +97,7 @@ export class BoardView {
         emitting: false,
       })
       .setDepth(8);
-    this.initDarkness();
+    if (opts.dark !== false) this.initDarkness();
   }
 
   // -------------------------------------------------------------------------
@@ -390,20 +395,32 @@ export class BoardView {
     });
   }
 
+  /**
+   * Фонарь стоит на тёмном круглом постаменте, а горит белым в оранжевой рамке — чтобы не сливаться
+   * с жёлтой дорогой, которая проходит через его клетку.
+   */
   private drawLamp(g: Phaser.GameObjects.Graphics, on: boolean) {
     const s = this.cell;
     g.clear();
-    g.fillStyle(0x000000, 0.3);
-    g.fillEllipse(0, s * 0.33, s * 0.3, s * 0.08);
+    // Постамент: тёмный диск поверх дороги, при зажжённом фонаре — с оранжевым ободком.
+    g.fillStyle(0x15112b, 0.92);
+    g.fillCircle(0, s * 0.02, s * 0.36);
+    g.lineStyle(s * 0.035, on ? LAMP_FRAME : 0x4a4466, on ? 1 : 0.8);
+    g.strokeCircle(0, s * 0.02, s * 0.36);
+    g.fillStyle(0x000000, 0.35);
+    g.fillEllipse(0, s * 0.3, s * 0.3, s * 0.08);
     g.fillStyle(C.post, 1);
-    g.fillRect(-s * 0.03, -s * 0.12, s * 0.06, s * 0.45);
-    g.fillRoundedRect(-s * 0.1, s * 0.27, s * 0.2, s * 0.06, s * 0.02);
-    g.fillStyle(on ? C.lanternOn : C.lanternOff, 1);
-    g.fillRoundedRect(-s * 0.12, -s * 0.34, s * 0.24, s * 0.24, s * 0.06);
+    g.fillRect(-s * 0.03, -s * 0.12, s * 0.06, s * 0.42);
+    g.fillRoundedRect(-s * 0.1, s * 0.24, s * 0.2, s * 0.06, s * 0.02);
+    // Голова фонаря: горящий — светлое стекло в оранжевой рамке, погасший — тёмное.
+    g.fillStyle(on ? LAMP_FRAME : 0x3a3350, 1);
+    g.fillRoundedRect(-s * 0.15, -s * 0.37, s * 0.3, s * 0.3, s * 0.07);
+    g.fillStyle(on ? 0xfff6e0 : C.lanternOff, 1);
+    g.fillRoundedRect(-s * 0.11, -s * 0.33, s * 0.22, s * 0.22, s * 0.05);
     g.fillStyle(C.post, 1);
-    g.fillTriangle(-s * 0.15, -s * 0.33, s * 0.15, -s * 0.33, 0, -s * 0.44);
-    g.fillStyle(on ? 0xffffff : 0x8a7d66, on ? 0.95 : 1);
-    g.fillCircle(0, -s * 0.22, s * 0.05);
+    g.fillTriangle(-s * 0.17, -s * 0.36, s * 0.17, -s * 0.36, 0, -s * 0.47);
+    g.fillStyle(on ? 0xffffff : 0x8a7d66, 1);
+    g.fillCircle(0, -s * 0.22, s * (on ? 0.06 : 0.045));
   }
 
   // -------------------------------------------------------------------------
@@ -618,16 +635,17 @@ export class BoardView {
         l.state = 'road';
         this.drawLamp(l.lamp, true);
         this.scene.tweens.killTweensOf(l.glow);
-        l.glow.setAlpha(1);
+        l.glow.setTint(LAMP_GLOW).setAlpha(1);
         this.scene.tweens.add({ targets: l.glow, alpha: { from: 0.95, to: 0.6 }, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
         this.scene.tweens.add({ targets: l.lamp, scale: { from: 1.35, to: 1 }, duration: 400, ease: 'Back.out' });
         const c = this.center(l.idx);
         this.burst.explode(10, c.x, c.y - this.cell * 0.22);
         this.flash(c.x, c.y - this.cell * 0.2, this.cell * 4, 900);
-        raysBurst(this.scene, c.x, c.y - this.cell * 0.22, C.lanternOn, this.cell * 1.6);
+        raysBurst(this.scene, c.x, c.y - this.cell * 0.22, LAMP_GLOW, this.cell * 1.6);
       } else if (!onRoad && l.state !== 'off') {
         l.state = 'off';
         this.drawLamp(l.lamp, false);
+        l.glow.setTint(C.lanternOn);
         this.ember(l.glow);
       }
     }
@@ -709,7 +727,7 @@ export class BoardView {
     const stepDur = Phaser.Math.Clamp(1700 / cells.length, 110, 200);
     this.won = true;
     // Свет возвращается: пока Lumo идёт и зажигает фонари, темнота над полем рассеивается.
-    this.scene.tweens.add({ targets: this.dark, alpha: 0.12, duration: stepDur * cells.length + 600, ease: 'Sine.in' });
+    if (this.dark) this.scene.tweens.add({ targets: this.dark, alpha: 0.12, duration: stepDur * cells.length + 600, ease: 'Sine.in' });
     const chain = cells.map((r, i) => {
       const c = this.center(r.idx);
       return {
@@ -728,12 +746,12 @@ export class BoardView {
             l.state = 'lit';
             this.drawLamp(l.lamp, true);
             this.scene.tweens.killTweensOf(l.glow);
-            l.glow.setAlpha(1);
+            l.glow.setTint(LAMP_GLOW).setAlpha(1);
             this.scene.tweens.add({ targets: l.glow, alpha: 0.75, scale: l.glow.scale * 1.1, duration: 800, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
             this.scene.tweens.add({ targets: l.lamp, scale: { from: 1.35, to: 1 }, duration: 400, ease: 'Back.out' });
             const lc = this.center(l.idx);
             this.burst.explode(24, lc.x, lc.y - this.cell * 0.22);
-            raysBurst(this.scene, lc.x, lc.y - this.cell * 0.22, C.lanternOn, this.cell * 2.4);
+            raysBurst(this.scene, lc.x, lc.y - this.cell * 0.22, LAMP_GLOW, this.cell * 2.4);
             this.flash(lc.x, lc.y - this.cell * 0.2, this.cell * 5, 1100);
             onLantern(litCount++);
           }

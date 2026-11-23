@@ -46,8 +46,10 @@ import {
   modalOpened,
   TIP_TEXT,
   TUTORIAL_LAST_LEVEL,
+  pendingRules,
   type TipId,
 } from '../tutorial';
+import { RULES_CLOSED } from './RulesScene';
 import { C, H, W } from '../ui/theme';
 import { CARD, MiniCard, TileCard } from '../ui/TileCard';
 import { trayLayout, type TrayLayout } from '../ui/layout';
@@ -228,9 +230,21 @@ export class GameScene extends Phaser.Scene {
     irisIn(this, this.board.lumo.x, this.board.lumo.y);
     if (this.streak >= STUCK.pulseHint) this.pulse(this.hintBtn);
     if (isTutorialActive(level.id)) logTutorialStep(`level_${level.id}_start`, level.id);
-    // Сначала карточка цели, потом подсказки этого уровня.
-    this.time.delayedCall(650, () => this.showGoalCard());
-    this.time.delayedCall(2600, () => this.startTips());
+    // Новый элемент на уровне — сначала карточка правила с живой анимацией; потом карточка цели и подсказки.
+    const rules = pendingRules(level.id);
+    if (rules.length) {
+      this.time.delayedCall(650, () => {
+        this.game.events.once(RULES_CLOSED, () => {
+          this.showGoalCard();
+          this.time.delayedCall(1950, () => this.startTips());
+        });
+        this.scene.launch('Rules', { cards: rules, from: 'Game' });
+        this.scene.pause();
+      });
+    } else {
+      this.time.delayedCall(650, () => this.showGoalCard());
+      this.time.delayedCall(2600, () => this.startTips());
+    }
     this.resetIdle();
     this.input.on('pointerdown', this.resetIdle, this);
     this.events.once('shutdown', () => this.input.off('pointerdown', this.resetIdle, this));
@@ -281,14 +295,9 @@ export class GameScene extends Phaser.Scene {
     if (this.state.status !== 'playing' || this.overlay) return;
     const level = this.state.level;
     const tip = level.tip as TipId | undefined;
-    if (tip === 'lantern' && level.lanterns.length) {
-      const c = this.board.center(level.lanterns[0]);
-      this.tip('lantern', { x: c.x, y: c.y - this.board.cell * 0.4 }, 'above');
-    } else if (tip === 'side_entry') {
-      // Облачко над аркой — чтобы не закрывать камень под ней (он и объясняет, почему вход сбоку).
-      const e = this.board.exitCenter();
-      this.tip('side_entry', { x: e.x, y: e.y - this.board.cell * 0.45 }, 'above');
-    } else if (tip === 'stash' && level.allowStash) {
+    // Фонари, вход сбоку и вода объясняются карточками правил перед уровнем; здесь — только то, что
+    // удобнее показать прямо на игровом экране.
+    if (tip === 'stash' && level.allowStash) {
       this.tip('stash', { x: this.stashX, y: TRAY_Y - CARD / 2 }, 'above');
     } else if (tip === 'water') {
       // Первая вода: подсвечиваем мост в лотке.
@@ -297,10 +306,6 @@ export class GameScene extends Phaser.Scene {
         const card = this.cards[slot];
         this.ring(card.homeX, card.homeY);
         this.tip('water', { x: card.homeX, y: TRAY_Y - CARD / 2 }, 'above');
-      } else {
-        const wi = level.cells.indexOf('water');
-        const c = this.board.center(wi);
-        this.tip('water', { x: c.x, y: c.y - this.board.cell * 0.4 }, 'above');
       }
     }
     // Две неудачи подряд — показываем, где подсказка.

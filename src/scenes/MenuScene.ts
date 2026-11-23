@@ -6,7 +6,7 @@ import { isMuted, setMuted, sfx } from '../audio';
 import { loadProgress } from '../storage';
 import { displayName, getProfile } from '../profile';
 import { showNameDialog } from '../ui/NameDialog';
-import { canShowModal, isTutorialDone, modalClosed, modalOpened, restartTutorial } from '../tutorial';
+import { ALL_RULES, canShowModal, isTutorialDone, modalClosed, modalOpened } from '../tutorial';
 import { t } from '../strings';
 import { Account } from '../cloud/account';
 import { openAuthDialog } from '../ui/AuthDialog';
@@ -154,14 +154,15 @@ export class MenuScene extends Phaser.Scene {
     new Button(this, W / 2, 1450, { w: 560, h: 160, icon: 'play', label: 'Играть', primary: true, fontSize: 64, onClick: () => this.play(next) });
 
     new Button(this, W / 2 - 220, 1700, { w: 160, h: 140, icon: 'stats', onClick: () => this.go('Stats') });
-    // «Пройти обучение заново»: вступление и подсказки Lumo покажутся снова, прогресс остаётся.
+    // «Как играть»: все карточки правил с живой анимацией; в конце — «Пройти обучение с начала».
     new Button(this, W / 2 + 220, 1700, {
       w: 160,
       h: 140,
       icon: 'help',
       onClick: () => {
-        restartTutorial();
-        this.go('Intro');
+        sfx.tap();
+        this.scene.launch('Rules', { cards: [...ALL_RULES], from: 'Menu', menuMode: true });
+        this.scene.pause();
       },
     });
     text(this, W / 2 + 220, 1800, t('tutorial_replay'), 30, C.textDim, false);

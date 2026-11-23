@@ -24,8 +24,23 @@ const ru = {
   intro_line2: 'Проложи путь к арке',
   intro_skip: 'Пропустить ›',
 
+  // Карточки правил (живая анимация на мини-поле)
+  rule_road_title: 'Дорога к двери',
+  rule_road_text: 'Нажми на плитку — дорога вырастет. Доведи её до двери.',
+  rule_lantern_title: 'Фонари',
+  rule_lantern_text: 'Дорога должна пройти через все фонари. Пока они не горят, дверь заперта.',
+  rule_side_title: 'Вход с любой стороны',
+  rule_side_text: 'В дверь можно войти слева, справа, сверху или снизу.',
+  rule_rock_title: 'Камни',
+  rule_rock_text: 'Через камни дорога не проходит — обходи их.',
+  rule_water_title: 'Река',
+  rule_water_text: 'Реку можно перейти только по мосту.',
+  rule_ok: 'Понятно',
+  rule_next: 'Дальше',
+  rule_replay_tutorial: 'Пройти обучение с начала',
+
   // Меню
-  tutorial_replay: 'Обучение',
+  tutorial_replay: 'Как играть',
 } as const;
 
 export type StringKey = keyof typeof ru;
