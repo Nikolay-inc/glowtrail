@@ -251,11 +251,18 @@ export class MenuScene extends Phaser.Scene {
     // Небо карты: снизу светлее (долина), к верху — ночь.
     const sky = this.add.graphics();
     sky.fillGradientStyle(theme.skyTop, theme.skyTop, theme.skyBottom, theme.skyBottom, 0.0, 0.0, 0.9, 0.9);
-    sky.fillRect(XL, 0, XR - XL, height);
+    sky.fillRect(XL, -600, XR - XL, height + 1200);
     this.map.add(sky);
 
-    // Тропинка — плавная кривая через все кружки (снизу — от дома Lumo, сверху — уходит в туман).
-    const pts = [new Phaser.Math.Vector2(W / 2 - 120, height - 80), ...pos.map((p) => new Phaser.Math.Vector2(p.x, p.y)), new Phaser.Math.Vector2(W / 2, 60)];
+    // Тропинка — плавная кривая через все кружки. Снизу она приходит из-за края экрана (под нижней панелью),
+    // сверху уходит за верхний край — обрезанных концов не видно.
+    const pts = [
+      new Phaser.Math.Vector2(W / 2 - 140, height + 520),
+      new Phaser.Math.Vector2(W / 2 - 60, height + 120),
+      ...pos.map((p) => new Phaser.Math.Vector2(p.x, p.y)),
+      new Phaser.Math.Vector2(W / 2 - 40, 40),
+      new Phaser.Math.Vector2(W / 2 - 120, -420),
+    ];
     const curve = new Phaser.Curves.Spline(pts);
     const samples = curve.getSpacedPoints(levels.length * 40);
     const near = (x: number, y: number, d: number) => samples.some((s) => Math.abs(s.x - x) < d && Math.abs(s.y - y) < d);
@@ -326,7 +333,10 @@ export class MenuScene extends Phaser.Scene {
       pathG.fillCircle(samples[k].x + rnd.between(-8, 8), samples[k].y + rnd.between(-8, 8), 5);
     }
     // Пройденная часть тропинки светится — до текущего уровня.
-    const litTo = Math.round(((next + 1) / (levels.length + 1)) * samples.length);
+    let litTo = 0;
+    samples.forEach((q, k) => {
+      if (Math.hypot(q.x - pos[next].x, q.y - pos[next].y) < Math.hypot(samples[litTo].x - pos[next].x, samples[litTo].y - pos[next].y)) litTo = k;
+    });
     const lit = samples.slice(0, Math.max(2, litTo));
     stroke(pathG, lit, 40, C.roadGlow, 0.18);
     stroke(pathG, lit, 18, C.road, 0.85);
@@ -378,7 +388,7 @@ export class MenuScene extends Phaser.Scene {
       houses.strokeRect(hx - 50 * s, hy - 78 * s, 34 * s, 30 * s);
       houses.strokeRect(hx + 16 * s, hy - 78 * s, 34 * s, 30 * s);
     };
-    house(W / 2 + 120, height - 50, 1.2);
+    house(W / 2 + 250, height - 40, 1.2); // дом Lumo — у начала тропинки
     pos.forEach((p, i) => {
       if ((i + 1) % 5 !== 0) return;
       // Дом — с другой стороны тропинки, чем встаёт Lumo (Lumo — в сторону середины карты).

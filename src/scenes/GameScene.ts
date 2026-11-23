@@ -1076,7 +1076,7 @@ export class GameScene extends Phaser.Scene {
     const isLast = !this.custom && !nextLevelOf(this.level);
     const ffTotal = this.state.level.fireflies.length;
     const ffRow = ffTotal > 0 ? 90 : 0;
-    const { o, top: top0 } = this.makeOverlay('win', 860 + ffRow);
+    const { o, top: top0 } = this.makeOverlay('win', 910 + ffRow);
     // Строка светлячков встаёт под звёздами — кнопки ниже на её высоту.
     const top = top0;
     // Аватарка игрока — значком на верхнем краю окна.
@@ -1110,8 +1110,9 @@ export class GameScene extends Phaser.Scene {
     const next = () => (toMenu ? this.go('Menu') : this.go('Game', { levelIndex: this.levelIndex + 1 }));
     const by = top + 610 + ffRow;
     o.add(new Button(this, W / 2, by, { w: 520, h: 140, icon: 'play', label: this.custom ? 'В редактор' : isLast ? 'Меню' : 'Дальше', primary: true, onClick: next }));
-    o.add(new Button(this, W / 2 - 160, by + 140, { w: 120, h: 100, icon: 'restart', onClick: () => this.go('Game', this.again()) }));
-    o.add(new Button(this, W / 2 + 160, by + 140, { w: 120, h: 100, icon: 'menu', onClick: () => this.go('Menu') }));
+    // Маленькие кнопки — заметно ниже главной, чтобы не слипались.
+    o.add(new Button(this, W / 2 - 160, by + 185, { w: 120, h: 100, icon: 'restart', onClick: () => this.go('Game', this.again()) }));
+    o.add(new Button(this, W / 2 + 160, by + 185, { w: 120, h: 100, icon: 'menu', onClick: () => this.go('Menu') }));
     o.on('primary', next);
     // После уровня 6 гостю один раз предлагаем войти или зарегистрироваться (можно «Позже»).
     // Не одновременно с другими окнами и не сразу после другого окна.
@@ -1142,8 +1143,8 @@ export class GameScene extends Phaser.Scene {
     const infoRel = total > 0 ? 350 : 210;
     const btnRel = infoRel + 150;
     const twoBig = !!extra || canUndo(s);
-    const rowRel = btnRel + (twoBig ? 290 : 170);
-    const panelH = (showSkip ? rowRel + 130 : rowRel) + 110;
+    const rowRel = btnRel + (twoBig ? 345 : 190);
+    const panelH = (showSkip ? rowRel + 140 : rowRel) + 110;
     const { o, top } = this.makeOverlay('lose', panelH);
     o.add(text(this, W / 2, top + 100, 'Почти!', 84));
     let y = top + 210;
@@ -1196,17 +1197,17 @@ export class GameScene extends Phaser.Scene {
 
     const btnY = top + btnRel;
     const undoable = canUndo(s);
-    this.loseRestartPos = { x: W / 2, y: undoable || extra ? btnY + 160 : btnY };
+    this.loseRestartPos = { x: W / 2, y: undoable || extra ? btnY + 175 : btnY };
     const undoPrimary = !extra && undoable;
     if (undoPrimary) {
       // Отмена без ограничений — самый короткий путь назад, она и главная кнопка.
       const back = () => this.onUndo();
       o.add(new Button(this, W / 2, btnY, { w: 560, h: 140, icon: 'undo', label: 'Отменить ход', primary: true, onClick: back }));
-      o.add(new Button(this, W / 2, btnY + 160, { w: 420, h: 110, icon: 'restart', label: 'Заново', fontSize: 42, onClick: again }));
+      o.add(new Button(this, W / 2, btnY + 175, { w: 420, h: 110, icon: 'restart', label: 'Заново', fontSize: 42, onClick: again }));
       o.on('primary', back);
     } else if (extra) {
       o.add(new Button(this, W / 2, btnY, { w: 560, h: 140, icon: 'plus', label: '+3 плитки', primary: true, onClick: plus3 }));
-      o.add(new Button(this, W / 2, btnY + 160, { w: 420, h: 110, icon: 'restart', label: 'Заново', fontSize: 42, onClick: again }));
+      o.add(new Button(this, W / 2, btnY + 175, { w: 420, h: 110, icon: 'restart', label: 'Заново', fontSize: 42, onClick: again }));
       o.on('primary', plus3);
     } else {
       o.add(new Button(this, W / 2, btnY, { w: 560, h: 140, icon: 'restart', label: 'Заново', primary: true, onClick: again }));
@@ -1216,7 +1217,7 @@ export class GameScene extends Phaser.Scene {
     if (undoable && !undoPrimary) o.add(new Button(this, W / 2 - 160, rowY, { w: 120, h: 100, icon: 'undo', onClick: () => this.onUndo() }));
     o.add(new Button(this, undoable && !undoPrimary ? W / 2 + 160 : W / 2, rowY, { w: 120, h: 100, icon: 'menu', onClick: () => this.leave('Menu') }));
     if (showSkip) {
-      o.add(new Button(this, W / 2, rowY + 130, { w: 520, h: 100, icon: 'skip', label: 'Пропустить уровень', fontSize: 36, onClick: () => this.skipLevel() }));
+      o.add(new Button(this, W / 2, rowY + 140, { w: 520, h: 100, icon: 'skip', label: 'Пропустить уровень', fontSize: 36, onClick: () => this.skipLevel() }));
     }
   }
 }

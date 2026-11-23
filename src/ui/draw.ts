@@ -329,7 +329,7 @@ export class Button extends Phaser.GameObjects.Container {
   }
 
   private redraw() {
-    const { w, h, primary, icon, label } = this.opts;
+    const { w, h, primary, icon } = this.opts;
     const g = this.bg;
     g.clear();
     if (primary) {
@@ -350,13 +350,20 @@ export class Button extends Phaser.GameObjects.Container {
     this.iconG.clear();
     if (icon) {
       const s = h * 0.62;
-      this.iconG.setPosition(label ? -w / 2 + h * 0.55 : 0, 0);
+      this.iconG.setPosition(0, 0);
       drawIcon(this.iconG, icon, s, primary ? 0x2a1a05 : C.icon);
     }
     if (this.labelT && icon) {
-      // Подпись — по центру места справа от иконки.
-      const iconRight = -w / 2 + h * 0.55 + h * 0.36;
-      this.labelT.setX((iconRight + w / 2 - h * 0.12) / 2);
+      // Иконка и подпись — одной группой по центру кнопки.
+      const iconW = h * 0.5;
+      const gap = h * 0.16;
+      const labelW = this.labelT.width;
+      const group = iconW + gap + labelW;
+      const left = -Math.min(group, w - h * 0.3) / 2;
+      this.iconG.setX(left + iconW / 2);
+      this.labelT.setX(left + iconW + gap + labelW / 2);
+    } else if (this.labelT) {
+      this.labelT.setX(0);
     }
   }
 }
