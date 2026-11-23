@@ -6,6 +6,8 @@ import { LEVELS } from '../src/levels/index';
 import { solveLevel } from '../src/core/solver';
 import { starThresholds } from '../src/core/game';
 import type { Level } from '../src/core/types';
+import { portalSides } from '../src/core/portal';
+import { TIP_TEXT } from '../src/tutorial';
 
 /** Целевая кривая обучающих уровней 1–10. */
 interface Target {
@@ -22,6 +24,8 @@ interface Target {
   allows: { turns: boolean; lanterns: number; rocks: boolean; water: boolean };
   /** Этот уровень учит «отложить» и должен его требовать. */
   teachesStash?: boolean;
+  /** В арку можно войти только сбоку (сверху и снизу — край поля или камень). */
+  sideEntry?: boolean;
   note: string;
 }
 
@@ -31,7 +35,7 @@ const CURVE: Target[] = [
   { size: '3x4', infinite: true, maxTiles: lin(0), allows: A(false, 0, false, false), note: 'только «прямо»' },
   { size: '3x5', infinite: true, maxTiles: lin(1), allows: A(true, 0, false, false), note: 'повороты' },
   { size: '4x5', infinite: true, minRoads: 10, maxTiles: lin(2), allows: A(true, 1, false, false), note: 'фонарь' },
-  { size: '4x5', infinite: true, minRoads: 10, maxTiles: lin(3), allows: A(true, 1, true, false), note: 'камни' },
+  { size: '4x5', infinite: true, minRoads: 10, maxTiles: lin(3), allows: A(true, 1, true, false), sideEntry: true, note: 'камни, вход в арку сбоку' },
   { size: '4x6', infinite: false, reserve: [5, 6], minRoads: 10, maxTiles: lin(4), allows: A(true, 1, true, false), note: 'первая колода' },
   { size: '5x6', infinite: false, reserve: [5, 6], minRoads: 10, maxTiles: lin(5), allows: A(true, 1, true, false), teachesStash: true, note: 'учим «отложить»' },
   { size: '5x6', infinite: false, reserve: [5, 6], minRoads: 10, maxTiles: lin(6), allows: A(true, 2, true, false), note: 'два фонаря' },
@@ -77,6 +81,7 @@ for (const [i, level] of LEVELS.entries()) {
   const warn: string[] = [];
 
   if (!r.solvable) err.push('НЕ РЕШАЕТСЯ');
+  if (level.tip && !(level.tip in TIP_TEXT)) err.push(`неизвестная подсказка tip: "${level.tip}"`);
   if (!infinite && r.solvable) {
     const want = starThresholds(r.maxLeftover);
     if (level.stars.two !== want.two || level.stars.three !== want.three) {
@@ -110,6 +115,12 @@ for (const [i, level] of LEVELS.entries()) {
     if (t.teachesStash && !needsStash) warn.push('учит «отложить», но решается без него');
     if (!t.teachesStash && needsStash) warn.push('требует «отложить» — это можно только на обучающем уровне');
     if (t.teachesStash && level.tutorial !== 'stash') warn.push('нет подсказки-обучения «отложить» (tutorial: "stash")');
+    if (t.sideEntry) {
+      const sides = portalSides(level);
+      const vertical = sides[0].open || sides[2].open;
+      const horizontal = sides[1].open || sides[3].open;
+      if (vertical || !horizontal) warn.push('в арку должно быть можно войти только сбоку');
+    }
   } else {
     warn.push('уровня нет в целевой кривой');
   }

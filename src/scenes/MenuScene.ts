@@ -5,6 +5,9 @@ import { LEVELS } from '../levels/index';
 import { isMuted, setMuted, sfx } from '../audio';
 import { loadProgress } from '../storage';
 import { displayName, getProfile } from '../profile';
+import { showNameDialog } from '../ui/NameDialog';
+import { canShowModal, isTutorialDone, modalClosed, modalOpened, restartTutorial } from '../tutorial';
+import { t } from '../strings';
 import { Account } from '../cloud/account';
 import { openAuthDialog } from '../ui/AuthDialog';
 import { addBackground, Button, createAvatarBadge, createLumo, drawIcon, drawStar, text } from '../ui/draw';
@@ -150,8 +153,19 @@ export class MenuScene extends Phaser.Scene {
 
     new Button(this, W / 2, 1450, { w: 560, h: 160, icon: 'play', label: 'Играть', primary: true, fontSize: 64, onClick: () => this.play(next) });
 
-    new Button(this, W / 2 - 110, 1700, { w: 160, h: 140, icon: 'stats', onClick: () => this.go('Stats') });
-    const sound = new Button(this, W / 2 + 110, 1700, {
+    new Button(this, W / 2 - 220, 1700, { w: 160, h: 140, icon: 'stats', onClick: () => this.go('Stats') });
+    // «Пройти обучение заново»: вступление и подсказки Lumo покажутся снова, прогресс остаётся.
+    new Button(this, W / 2 + 220, 1700, {
+      w: 160,
+      h: 140,
+      icon: 'help',
+      onClick: () => {
+        restartTutorial();
+        this.go('Intro');
+      },
+    });
+    text(this, W / 2 + 220, 1800, t('tutorial_replay'), 30, C.textDim, false);
+    const sound = new Button(this, W / 2, 1700, {
       w: 160,
       h: 140,
       icon: isMuted() ? 'mute' : 'sound',
@@ -166,6 +180,22 @@ export class MenuScene extends Phaser.Scene {
     this.input.keyboard?.once('keydown-ENTER', () => this.play(next));
     // Меню появляется из темноты — свет расходится от фонаря Lumo.
     irisIn(this, W / 2 + 60, 540, 750);
+    // Обучение пройдено — мягко знакомимся: имя и аватарка (не вместе с другими окнами).
+    if (isTutorialDone() && !profile.nameAsked && canShowModal()) {
+      this.time.delayedCall(1100, () => {
+        if (!canShowModal() || !this.scene.isActive()) return;
+        modalOpened();
+        showNameDialog(this, {
+          title: 'Как тебя зовут?',
+          withAvatars: true,
+          secondary: 'skip',
+          onClose: () => {
+            modalClosed();
+            if (this.scene.isActive()) this.scene.restart();
+          },
+        });
+      });
+    }
   }
 
   /** Первый открытый непройденный и непропущенный уровень, иначе последний открытый. */

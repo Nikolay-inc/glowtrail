@@ -5,7 +5,9 @@ import Phaser from 'phaser';
 import type { GameState, Placement } from '../core/game';
 import { DX, DY, type Dir, type Level } from '../core/types';
 import { C } from './theme';
-import { createLumo } from './draw';
+import { createLumo, drawPadlock } from './draw';
+import { headSide, lanternsLeft, portalSides } from '../core/portal';
+import { FONT } from './theme';
 import { raysBurst } from './fx';
 
 interface LanternView {
@@ -25,8 +27,19 @@ export class BoardView {
   private hintG: Phaser.GameObjects.Graphics;
   private lanterns: LanternView[] = [];
   private exitGlow!: Phaser.GameObjects.Image;
-  private exitDoor!: Phaser.GameObjects.Graphics;
   private exitOpen = false;
+  // Арка-портал: кольцо, вращающийся свет внутри, 4 огонька-входа и замок с числом фонарей
+  private portalRing!: Phaser.GameObjects.Graphics;
+  private portalSwirl!: Phaser.GameObjects.Graphics;
+  private portalOrbs: { dir: Dir; open: boolean; glow: Phaser.GameObjects.Image; dot: Phaser.GameObjects.Graphics }[] = [];
+  private lock!: Phaser.GameObjects.Container;
+  private lockG!: Phaser.GameObjects.Graphics;
+  private lockText!: Phaser.GameObjects.Text;
+  private litSide: Dir | null = null;
+  // Конус света фонаря на конце дороги и зона, куда можно бросить плитку
+  private cone!: Phaser.GameObjects.Image;
+  private coneErase!: Phaser.GameObjects.Image;
+  private dropG!: Phaser.GameObjects.Graphics;
   readonly lumo: Phaser.GameObjects.Container;
   private burst: Phaser.GameObjects.Particles.ParticleEmitter;
   private roadAnim?: Phaser.Tweens.Tween;
@@ -56,6 +69,12 @@ export class BoardView {
     this.hintG = scene.add.graphics().setDepth(6.6);
     this.ghostG = scene.add.graphics().setDepth(6.6);
     this.headG = scene.add.graphics().setDepth(6.7);
+    this.dropG = scene.add.graphics().setDepth(6.65);
+    scene.tweens.add({ targets: this.dropG, alpha: 0.45, duration: 420, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+    // Конус света: тёплый луч фонаря Lumo в сторону, куда идёт дорога.
+    this.cone = scene.add.image(0, 0, 'cone').setOrigin(0, 0.5).setTint(C.lanternOn).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.28).setDepth(6.62);
+    this.cone.setScale((this.cell * 1.9) / 256);
+    this.coneErase = scene.make.image({ x: 0, y: 0, key: 'cone' }, false).setOrigin(0, 0.5);
     scene.tweens.add({ targets: this.headG, alpha: 0.35, duration: 650, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
     this.drawLanternsAndExit();
 
@@ -114,13 +133,18 @@ export class BoardView {
     for (const l of this.lanterns) {
       if (l.state === 'off') continue;
       const c = this.center(l.idx);
-      this.light(c.x, c.y - cell * 0.2, cell * (l.state === 'lit' ? 4.6 : 3.2) * flicker, 0.95);
+      this.light(c.x, c.y - cell * 0.2, cell * (l.state === 'lit' ? 4.6 : 4) * flicker, 0.95);
     }
     if (this.exitOpen) {
       const e = this.center(this.level.exit.y * this.level.width + this.level.exit.x);
       this.light(e.x, e.y, cell * (this.won ? 4 : 2.8) * flicker, 0.8);
     }
     if (this.lumo.alpha > 0.05) this.light(this.lumo.x + cell * 0.2, this.lumo.y - cell * 0.1, cell * 3 * flicker, 1);
+    // Конус света на конце дороги тоже разгоняет темноту.
+    if (this.cone.visible && this.cone.alpha > 0.02) {
+      this.coneErase.setRotation(this.cone.rotation).setScale(this.cone.scaleX * flicker, this.cone.scaleY).setAlpha(0.85);
+      this.dark.erase(this.coneErase, this.cone.x - this.darkX, this.cone.y - this.darkY);
+    }
     this.flashes = this.flashes.filter((f) => time - f.t0 < f.dur);
     for (const f of this.flashes) {
       const k = 1 - (time - f.t0) / f.dur;
@@ -245,11 +269,110 @@ export class BoardView {
       .setScale((cell * 1.7) / 128)
       .setAlpha(0)
       .setDepth(6.8);
-    this.exitDoor = scene.add.graphics().setDepth(6).setPosition(e.x, e.y);
-    this.drawExit(false);
+    this.createPortal(e.x, e.y);
     // Закрытый выход тлеет таинственным фиолетовым — его ещё нужно открыть.
     this.exitGlow.setTint(0x9b7bff);
     this.ember(this.exitGlow, 0.32);
+    if (level.lanterns.length === 0) {
+      // Фонарей нет — арка открыта с самого начала.
+      this.exitOpen = true;
+      this.lock.setVisible(false);
+      this.drawPortal(true);
+      this.exitGlow.setTint(C.exitOpen);
+    }
+  }
+
+  /** Арка-портал, симметричная со всех сторон: войти можно с любой открытой стороны. */
+  private createPortal(x: number, y: number) {
+    const { cell, scene, level } = this;
+    this.portalRing = scene.add.graphics().setDepth(6.72).setPosition(x, y);
+    this.portalSwirl = scene.add.graphics().setDepth(6.74).setPosition(x, y);
+    scene.tweens.add({ targets: this.portalSwirl, angle: 360, duration: 9000, repeat: -1 });
+    for (const side of portalSides(level)) {
+      const ox = x + DX[side.dir] * cell * 0.45;
+      const oy = y + DY[side.dir] * cell * 0.45;
+      const glow = scene.add
+        .image(ox, oy, 'glow')
+        .setTint(0xd8ccff)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setScale((cell * 0.5) / 128)
+        .setAlpha(side.open ? 0.35 : 0.06)
+        .setDepth(6.8);
+      const dot = scene.add.graphics().setDepth(6.81).setPosition(ox, oy);
+      dot.fillStyle(0xd8ccff, 1);
+      dot.fillCircle(0, 0, cell * 0.055);
+      dot.setAlpha(side.open ? 0.75 : 0.15);
+      if (side.open) {
+        scene.tweens.add({ targets: glow, alpha: 0.18, duration: 1300, yoyo: true, repeat: -1, ease: 'Sine.inOut', delay: side.dir * 200 });
+      }
+      this.portalOrbs.push({ dir: side.dir, open: side.open, glow, dot });
+    }
+    // Замок с числом незажжённых фонарей — поверх темноты, чтобы его всегда было видно.
+    this.lockG = scene.add.graphics();
+    this.lockText = scene.add
+      .text(0, cell * 0.135, '0', { fontFamily: FONT, fontSize: `${Math.round(cell * 0.2)}px`, color: '#3a2a05', fontStyle: 'bold' })
+      .setOrigin(0.5);
+    this.lock = scene.add.container(x, y, [this.lockG, this.lockText]).setDepth(6.9);
+    drawPadlock(this.lockG, 0, 0, cell * 0.42);
+    this.drawPortal(false);
+  }
+
+  private drawPortal(open: boolean) {
+    const s = this.cell;
+    const g = this.portalRing;
+    g.clear();
+    g.fillStyle(0x000000, 0.3);
+    g.fillEllipse(0, s * 0.4, s * 0.7, s * 0.12);
+    g.fillStyle(open ? 0x14524e : 0x221c45, 1);
+    g.fillCircle(0, 0, s * 0.34);
+    g.lineStyle(s * 0.09, 0x6c6aa0, 1);
+    g.strokeCircle(0, 0, s * 0.34);
+    g.lineStyle(s * 0.025, open ? C.exitOpen : 0x9b7bff, 0.9);
+    g.strokeCircle(0, 0, s * 0.385);
+    const w = this.portalSwirl;
+    w.clear();
+    const col = open ? 0xbffff0 : 0x9b7bff;
+    for (let i = 0; i < 3; i++) {
+      w.lineStyle(s * 0.035, col, open ? 0.85 : 0.5);
+      w.beginPath();
+      w.arc(0, 0, s * (0.12 + i * 0.07), (i * Math.PI * 2) / 3, (i * Math.PI * 2) / 3 + Math.PI * 0.9, false);
+      w.strokePath();
+    }
+    w.fillStyle(col, open ? 0.9 : 0.4);
+    w.fillCircle(0, 0, s * 0.06);
+  }
+
+  /** Конец дороги рядом с аркой — огонёк с этой стороны ярко загорается. */
+  private highlightSide(side: Dir | null) {
+    if (side === this.litSide) return;
+    this.litSide = side;
+    for (const o of this.portalOrbs) {
+      const on = o.dir === side;
+      this.scene.tweens.killTweensOf([o.glow, o.dot]);
+      if (on) {
+        o.glow.setTint(this.exitOpen ? C.exitOpen : 0xd8ccff);
+        this.scene.tweens.add({ targets: o.glow, alpha: 1, scale: (this.cell * 0.95) / 128, duration: 250, ease: 'Back.out' });
+        this.scene.tweens.add({ targets: o.dot, alpha: 1, scale: 1.6, duration: 250, ease: 'Back.out' });
+      } else {
+        o.glow.setScale((this.cell * 0.5) / 128).setAlpha(o.open ? 0.35 : 0.06);
+        o.dot.setScale(1).setAlpha(o.open ? 0.75 : 0.15);
+        if (o.open) this.scene.tweens.add({ targets: o.glow, alpha: 0.18, duration: 1300, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+      }
+    }
+  }
+
+  /** Попытка войти в закрытую арку: замок вздрагивает. */
+  shakeLock() {
+    if (!this.lock.visible) return;
+    this.scene.tweens.killTweensOf(this.lock);
+    this.lock.setAngle(0).setScale(1);
+    this.scene.tweens.add({ targets: this.lock, angle: { from: -14, to: 14 }, duration: 70, yoyo: true, repeat: 3, onComplete: () => this.lock.setAngle(0) });
+    this.scene.tweens.add({ targets: this.lock, scale: 1.25, duration: 140, yoyo: true });
+  }
+
+  /** Центр арки — чтобы направить на неё подсказку. */
+  exitCenter() {
+    return this.center(this.level.exit.y * this.level.width + this.level.exit.x);
   }
 
   /** Слабое тление в темноте: незажжённый фонарь или закрытый выход зовут к себе. */
@@ -281,28 +404,6 @@ export class BoardView {
     g.fillTriangle(-s * 0.15, -s * 0.33, s * 0.15, -s * 0.33, 0, -s * 0.44);
     g.fillStyle(on ? 0xffffff : 0x8a7d66, on ? 0.95 : 1);
     g.fillCircle(0, -s * 0.22, s * 0.05);
-  }
-
-  private drawExit(open: boolean) {
-    const s = this.cell;
-    const g = this.exitDoor;
-    g.clear();
-    g.fillStyle(0x000000, 0.3);
-    g.fillEllipse(0, s * 0.36, s * 0.66, s * 0.12);
-    // Каменная арка
-    g.fillStyle(0x6c6aa0, 1);
-    g.fillRoundedRect(-s * 0.32, -s * 0.36, s * 0.64, s * 0.72, { tl: s * 0.32, tr: s * 0.32, bl: s * 0.04, br: s * 0.04 });
-    // Проём
-    g.fillStyle(open ? C.exitOpen : C.exitClosed, 1);
-    g.fillRoundedRect(-s * 0.21, -s * 0.24, s * 0.42, s * 0.6, { tl: s * 0.21, tr: s * 0.21, bl: 0, br: 0 });
-    if (open) {
-      g.fillStyle(0xffffff, 0.6);
-      g.fillRoundedRect(-s * 0.12, -s * 0.15, s * 0.24, s * 0.5, { tl: s * 0.12, tr: s * 0.12, bl: 0, br: 0 });
-    } else {
-      g.lineStyle(s * 0.03, 0x24204a, 1);
-      g.lineBetween(-s * 0.07, -s * 0.2, -s * 0.07, s * 0.36);
-      g.lineBetween(s * 0.07, -s * 0.2, s * 0.07, s * 0.36);
-    }
   }
 
   // -------------------------------------------------------------------------
@@ -397,9 +498,53 @@ export class BoardView {
   setHead(state: GameState) {
     const g = this.headG;
     g.clear();
-    if (state.status === 'won') return;
+    if (state.status === 'won') {
+      this.highlightSide(null);
+      this.scene.tweens.add({ targets: this.cone, alpha: 0, duration: 300 });
+      return;
+    }
     const c = this.center(state.head);
     this.chevron(g, c.x, c.y, state.dir, C.roadCore, 0.9);
+    this.highlightSide(headSide(state));
+    this.moveCone(c.x, c.y, state.dir);
+  }
+
+  /** Конус света плавно переезжает на новый конец дороги и поворачивается по направлению. */
+  private moveCone(x: number, y: number, dir: Dir) {
+    const target = ((dir - 1) * Math.PI) / 2; // 0 — вверх, луч текстуры смотрит вправо
+    const first = !this.cone.getData('placed');
+    this.scene.tweens.killTweensOf(this.cone);
+    if (first) {
+      this.cone.setPosition(x, y).setRotation(target).setData('placed', true);
+      return;
+    }
+    const delta = Phaser.Math.Angle.Wrap(target - this.cone.rotation);
+    this.scene.tweens.add({ targets: this.cone, x, y, rotation: this.cone.rotation + delta, alpha: 0.28, duration: 380, ease: 'Sine.inOut' });
+  }
+
+  /** Подсветка конца дороги как зоны, куда можно бросить плитку (при перетаскивании). */
+  showDropZone(state: GameState | null, active = false) {
+    const g = this.dropG;
+    g.clear();
+    if (!state) return;
+    const s = this.cell;
+    const h = this.center(state.head);
+    const nx = h.x + DX[state.dir] * s;
+    const ny = h.y + DY[state.dir] * s;
+    g.lineStyle(s * (active ? 0.09 : 0.06), C.lanternOn, 1);
+    g.strokeCircle(h.x, h.y, s * 0.42);
+    g.fillStyle(C.lanternOn, active ? 0.35 : 0.16);
+    g.fillCircle(nx, ny, s * 0.4);
+    g.strokeCircle(nx, ny, s * 0.4);
+  }
+
+  /** Точка (x, y) над зоной сброса: конец дороги или клетка перед ним. */
+  isOverDropZone(state: GameState, x: number, y: number): boolean {
+    const s = this.cell;
+    const h = this.center(state.head);
+    const nx = h.x + DX[state.dir] * s;
+    const ny = h.y + DY[state.dir] * s;
+    return Math.hypot(x - h.x, y - h.y) < s * 0.75 || Math.hypot(x - nx, y - ny) < s * 0.85;
   }
 
   private chevron(g: Phaser.GameObjects.Graphics, cx: number, cy: number, dir: Dir, color: number, alpha: number) {
@@ -429,7 +574,14 @@ export class BoardView {
     const pts = [head, ...p.cells.map((c) => this.center(c.idx))];
     const color = p.ok ? C.ghost : C.bad;
     const alpha = target === 'hint' ? 0.28 : p.ok ? 0.5 : 0.55;
-    this.polyline(g, pts, pts.length - 1, s * 0.3, color, alpha);
+    // Настоящая форма дороги: после последней клетки — выход в новом направлении, поворот виден изгибом.
+    const shape = [...pts];
+    if (p.ok) {
+      const last = pts[pts.length - 1];
+      shape.push({ x: last.x + DX[p.newDir] * s * 0.42, y: last.y + DY[p.newDir] * s * 0.42 });
+      if (target === 'ghost') this.polyline(g, shape, shape.length - 1, s * 0.52, C.roadGlow, 0.22); // подсветка целиком
+    }
+    this.polyline(g, p.ok ? shape : pts, (p.ok ? shape : pts).length - 1, s * 0.3, color, alpha);
     for (const c of p.cells) {
       const cc = this.center(c.idx);
       g.lineStyle(s * 0.04, color, alpha);
@@ -437,7 +589,7 @@ export class BoardView {
     }
     if (p.ok) {
       const last = pts[pts.length - 1];
-      this.chevron(g, last.x, last.y, p.newDir, color, alpha + 0.2);
+      this.chevron(g, last.x, last.y, p.newDir, C.roadCore, 0.95);
     } else if (p.blocked) {
       const inside = p.blocked.x >= 0 && p.blocked.y >= 0 && p.blocked.x < this.level.width && p.blocked.y < this.level.height;
       const from = pts[pts.length - 1];
@@ -462,9 +614,13 @@ export class BoardView {
     for (const l of this.lanterns) {
       const onRoad = state.onRoad[l.idx];
       if (onRoad && l.state === 'off') {
+        // Дорога прошла через фонарь — он зажигается сразу.
         l.state = 'road';
+        this.drawLamp(l.lamp, true);
         this.scene.tweens.killTweensOf(l.glow);
-        this.scene.tweens.add({ targets: l.glow, alpha: { from: 0.55, to: 0.25 }, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+        l.glow.setAlpha(1);
+        this.scene.tweens.add({ targets: l.glow, alpha: { from: 0.95, to: 0.6 }, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+        this.scene.tweens.add({ targets: l.lamp, scale: { from: 1.35, to: 1 }, duration: 400, ease: 'Back.out' });
         const c = this.center(l.idx);
         this.burst.explode(10, c.x, c.y - this.cell * 0.22);
         this.flash(c.x, c.y - this.cell * 0.2, this.cell * 4, 900);
@@ -475,23 +631,69 @@ export class BoardView {
         this.ember(l.glow);
       }
     }
+    // Число на замке — сколько фонарей ещё не зажжено.
+    const left = lanternsLeft(state);
+    if (this.lockText.text !== String(left)) {
+      this.lockText.setText(String(left));
+      if (this.lock.visible && left > 0) this.scene.tweens.add({ targets: this.lock, scale: { from: 1.3, to: 1 }, duration: 300, ease: 'Back.out' });
+    }
     const open = this.level.lanterns.every((i) => state.onRoad[i]);
     if (open !== this.exitOpen) {
       this.exitOpen = open;
-      this.drawExit(open);
+      this.drawPortal(open);
       this.scene.tweens.killTweensOf(this.exitGlow);
       if (open) {
-        const e = this.center(this.level.exit.y * this.level.width + this.level.exit.x);
+        const e = this.exitCenter();
         this.exitGlow.setTint(C.exitOpen);
-        this.scene.tweens.add({ targets: this.exitDoor, scale: { from: 1.25, to: 1 }, duration: 350, ease: 'Back.out' });
+        this.unlock();
+        this.scene.tweens.add({ targets: this.portalRing, scale: { from: 1.25, to: 1 }, duration: 350, ease: 'Back.out' });
         this.scene.tweens.add({ targets: this.exitGlow, alpha: { from: 0.9, to: 0.4 }, duration: 1000, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
         raysBurst(this.scene, e.x, e.y, C.exitOpen, this.cell * 1.8);
         this.flash(e.x, e.y, this.cell * 3.5, 1000);
       } else {
+        // Отменили ход — замок возвращается.
         this.exitGlow.setTint(0x9b7bff);
         this.ember(this.exitGlow, 0.32);
+        this.scene.tweens.killTweensOf(this.lock);
+        const e = this.exitCenter();
+        this.lockG.clear();
+        drawPadlock(this.lockG, 0, 0, this.cell * 0.42);
+        this.lockText.setVisible(true);
+        this.lock.setVisible(true).setAlpha(1).setScale(1).setAngle(0).setPosition(e.x, e.y);
       }
+      this.litSide = null;
+      this.highlightSide(headSide(state));
     }
+  }
+
+  /** Замок открывается: дужка поднимается, замок улетает вверх и гаснет. */
+  private unlock() {
+    const s = this.cell * 0.42;
+    const lift = { v: 0 };
+    this.scene.tweens.killTweensOf(this.lock);
+    this.lockText.setVisible(false);
+    this.scene.tweens.add({
+      targets: lift,
+      v: s * 0.28,
+      duration: 260,
+      ease: 'Back.out',
+      onUpdate: () => {
+        this.lockG.clear();
+        drawPadlock(this.lockG, 0, 0, s, lift.v);
+      },
+      onComplete: () => {
+        this.scene.tweens.add({
+          targets: this.lock,
+          y: this.lock.y - this.cell * 0.5,
+          alpha: 0,
+          angle: 20,
+          duration: 420,
+          delay: 120,
+          ease: 'Quad.in',
+          onComplete: () => this.lock.setVisible(false),
+        });
+      },
+    });
   }
 
   /** Фонарщик идёт по дороге и зажигает фонари. */
@@ -499,6 +701,9 @@ export class BoardView {
     this.headG.clear();
     this.ghostG.clear();
     this.hintG.clear();
+    this.dropG.clear();
+    this.highlightSide(null);
+    this.scene.tweens.add({ targets: this.cone, alpha: 0, duration: 300 });
     const cells = state.road.slice(1);
     let litCount = 0;
     const stepDur = Phaser.Math.Clamp(1700 / cells.length, 110, 200);
@@ -544,6 +749,7 @@ export class BoardView {
         raysBurst(this.scene, e.x, e.y, C.exitOpen, this.cell * 3);
         this.flash(e.x, e.y, this.cell * 6, 1200);
         this.scene.tweens.add({ targets: this.exitGlow, alpha: 1, scale: this.exitGlow.scale * 1.6, duration: 500 });
+        this.scene.tweens.add({ targets: [this.portalRing, this.portalSwirl], scale: 1.2, duration: 400, yoyo: true });
         this.scene.tweens.add({ targets: this.lumo, alpha: 0, scale: 0.4, y: e.y - this.cell * 0.2, duration: 450, ease: 'Quad.in', onComplete: onDone });
       },
     });

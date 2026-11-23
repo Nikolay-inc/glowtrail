@@ -37,6 +37,10 @@ export interface Profile {
   nameAsked: boolean;
   /** Предложение войти или зарегистрироваться уже показывали (после первой победы). */
   authPrompted: boolean;
+  /** Обучение (вступление и уровни 1–3) пройдено. */
+  tutorialDone: boolean;
+  /** Какие подсказки Lumo уже показывали (каждая — один раз). */
+  tipsSeen: string[];
   /** Сколько раз игрок пользовался подсказкой. */
   hintsUsed: number;
   /** Последний день игры (YYYY-MM-DD по местному времени). */
@@ -46,7 +50,7 @@ export interface Profile {
   bestDayStreak: number;
 }
 
-export type EventType = 'session' | 'start' | 'win' | 'lose' | 'abandon' | 'hint_used' | 'extra_tiles' | 'auto_ease' | 'level_skipped' | 'signup' | 'login' | 'logout' | 'auth_prompt';
+export type EventType = 'session' | 'start' | 'win' | 'lose' | 'abandon' | 'hint_used' | 'extra_tiles' | 'auto_ease' | 'level_skipped' | 'signup' | 'login' | 'logout' | 'auth_prompt' | 'tutorial_step' | 'tip_shown' | 'drag_place' | 'tap_place' | 'door_locked_attempt';
 
 export interface LogEvent {
   /** Время события, ISO. */
@@ -63,6 +67,10 @@ export interface LogEvent {
   undos?: number;
   /** Устаревшее поле старого формата: была ли отмена. */
   undo?: boolean;
+  /** Шаг обучения (tutorial_step). */
+  step?: string;
+  /** Какая подсказка показана (tip_shown). */
+  tip?: string;
   /** Серия поражений подряд на момент события. */
   streak?: number;
   /** Сколько плиток добавлено (extra_tiles, auto_ease). */
@@ -141,6 +149,8 @@ export const defaultProfile = (): Profile => ({
   createdAt: new Date().toISOString(),
   nameAsked: false,
   authPrompted: false,
+  tutorialDone: false,
+  tipsSeen: [],
   hintsUsed: 0,
   lastPlayDay: null,
   dayStreak: 0,
@@ -181,6 +191,8 @@ function normalizeProfile(raw: unknown): Profile {
   if (typeof raw.createdAt === 'string') p.createdAt = raw.createdAt;
   if (typeof raw.nameAsked === 'boolean') p.nameAsked = raw.nameAsked;
   if (typeof raw.authPrompted === 'boolean') p.authPrompted = raw.authPrompted;
+  if (typeof raw.tutorialDone === 'boolean') p.tutorialDone = raw.tutorialDone;
+  if (Array.isArray(raw.tipsSeen)) p.tipsSeen = [...new Set(raw.tipsSeen.filter((x): x is string => typeof x === 'string'))];
   for (const key of ['hintsUsed', 'dayStreak', 'bestDayStreak'] as const) {
     if (typeof raw[key] === 'number' && raw[key] >= 0) p[key] = Math.floor(raw[key] as number);
   }

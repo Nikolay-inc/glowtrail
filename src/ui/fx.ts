@@ -29,6 +29,26 @@ export function createFxTextures(scene: Phaser.Scene) {
     ctx.fillRect(0, 0, w, h);
     tex.refresh();
   }
+  if (!scene.textures.exists('cone')) {
+    // Конус света фонаря: вершина слева посередине, луч уходит вправо (поворачивается по направлению дороги).
+    const w = 256;
+    const h = 256;
+    const tex = scene.textures.createCanvas('cone', w, h)!;
+    const ctx = tex.getContext();
+    const grd = ctx.createRadialGradient(0, h / 2, 0, 0, h / 2, w);
+    grd.addColorStop(0, 'rgba(255,255,255,0.95)');
+    grd.addColorStop(0.5, 'rgba(255,255,255,0.4)');
+    grd.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = grd;
+    ctx.beginPath();
+    ctx.moveTo(0, h / 2);
+    const spread = Math.tan((28 * Math.PI) / 180);
+    ctx.lineTo(w, h / 2 - w * spread);
+    ctx.quadraticCurveTo(w * 1.08, h / 2, w, h / 2 + w * spread);
+    ctx.closePath();
+    ctx.fill();
+    tex.refresh();
+  }
   if (!scene.textures.exists('ray')) {
     // Луч света: узкий клин, яркий у основания.
     const w = 64;

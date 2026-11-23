@@ -25,12 +25,29 @@ import type { TileKind } from '../core/types';
 import { LEVELS } from '../levels/index';
 import { sfx } from '../audio';
 import { logEvent, lossStreak, recordLoss, recordSkip, recordWin, startAttempt } from '../storage';
-import { countHint, getProfile, markAuthPrompted, recordPlayDay, shouldAskName, shouldPromptAuth } from '../profile';
+import { countHint, getProfile, markAuthPrompted, recordPlayDay, shouldPromptAuth } from '../profile';
 import { Account } from '../cloud/account';
 import { openAuthDialog } from '../ui/AuthDialog';
-import { showNameDialog } from '../ui/NameDialog';
 import { BoardView } from '../ui/BoardView';
-import { addBackground, Button, createAvatarBadge, drawStar, text } from '../ui/draw';
+import { addBackground, Button, createAvatarBadge, drawPortalIcon, drawStar, text } from '../ui/draw';
+import { lanternsLeft } from '../core/portal';
+import { DX, DY } from '../core/types';
+import { t } from '../strings';
+import { TipManager } from '../ui/LumoTip';
+import {
+  authPromptDue,
+  canShowModal,
+  completeTutorial,
+  hasSeenTip,
+  IDLE_HINT_SECONDS,
+  isTutorialActive,
+  logTutorialStep,
+  modalClosed,
+  modalOpened,
+  TIP_TEXT,
+  TUTORIAL_LAST_LEVEL,
+  type TipId,
+} from '../tutorial';
 import { C, H, W } from '../ui/theme';
 import { CARD, MiniCard, TileCard } from '../ui/TileCard';
 import { trayLayout, type TrayLayout } from '../ui/layout';
@@ -81,6 +98,12 @@ export class GameScene extends Phaser.Scene {
   private restartBtn!: Button;
   private hintBtn!: Button;
   private badgesG!: Phaser.GameObjects.Graphics;
+  private goalText!: Phaser.GameObjects.Text;
+  private tips!: TipManager;
+  private idleTimer?: Phaser.Time.TimerEvent;
+  private goalCard?: Phaser.GameObjects.Container;
+  /** Последняя кнопка «Заново» на экране тупика — на неё указывает подсказка. */
+  private loseRestartPos: { x: number; y: number } | null = null;
   private hand!: Phaser.GameObjects.Text;
   private hintRing!: Phaser.GameObjects.Graphics;
   private stashGlow!: Phaser.GameObjects.Graphics;
@@ -125,10 +148,11 @@ export class GameScene extends Phaser.Scene {
     addBackground(this);
     this.streak = lossStreak(level.id);
 
-    // Верхняя панель
+    // Верхняя панель: уровень и строка цели (арка + фонари «зажжено/всего»)
     new Button(this, 90, TOP_Y, { w: 130, h: 130, icon: 'menu', onClick: () => this.leave('Menu') });
-    text(this, W / 2, TOP_Y - 14, `Уровень ${level.id}`, 54);
+    text(this, W / 2, TOP_Y - 22, `Уровень ${level.id}`, 50);
     this.badgesG = this.add.graphics().setDepth(1);
+    this.goalText = text(this, 0, TOP_Y + 58, '', 40).setOrigin(0, 0.5).setDepth(2);
     this.undoBtn = new Button(this, 840, TOP_Y, { w: 130, h: 130, icon: 'undo', onClick: () => this.onUndo() });
     this.restartBtn = new Button(this, 990, TOP_Y, { w: 130, h: 130, icon: 'restart', onClick: () => this.restart() });
 
@@ -164,6 +188,7 @@ export class GameScene extends Phaser.Scene {
     this.tweens.add({ targets: this.hintRing, alpha: 0.25, duration: 600, yoyo: true, repeat: -1 });
     this.hand = this.add.text(0, 0, '👆', { fontSize: '120px' }).setOrigin(0.3, 0.05).setDepth(30).setVisible(false);
 
+    this.tips = new TipManager(this);
     for (const card of [...this.cards, this.stashCard]) this.bindCard(card);
     this.input.on('pointermove', this.onPointerMove, this);
     this.input.on('pointerup', this.onPointerUp, this);
@@ -202,7 +227,98 @@ export class GameScene extends Phaser.Scene {
     // Уровень появляется из темноты — свет расходится от фонаря Lumo.
     irisIn(this, this.board.lumo.x, this.board.lumo.y);
     if (this.streak >= STUCK.pulseHint) this.pulse(this.hintBtn);
+    if (isTutorialActive(level.id)) logTutorialStep(`level_${level.id}_start`, level.id);
+    // Сначала карточка цели, потом подсказки этого уровня.
+    this.time.delayedCall(650, () => this.showGoalCard());
+    this.time.delayedCall(2600, () => this.startTips());
+    this.resetIdle();
+    this.input.on('pointerdown', this.resetIdle, this);
+    this.events.once('shutdown', () => this.input.off('pointerdown', this.resetIdle, this));
     if (this.state.status === 'lost') this.onLose();
+  }
+
+  // -------------------------------------------------------------------------
+  // Цель уровня и подсказки Lumo
+
+  /** Карточка цели на 1,5 с: «Доведи Lumo до двери», «Зажги все фонари: N». Тап закрывает раньше. */
+  private showGoalCard() {
+    if (this.state.status !== 'playing') return;
+    const n = this.state.level.lanterns.length;
+    const rows: { icon: 'portal' | 'lantern'; label: string }[] = [{ icon: 'portal', label: t('goal_door') }];
+    if (n > 0) rows.push({ icon: 'lantern', label: t('goal_lanterns', { n }) });
+    const h = 90 + rows.length * 110;
+    const c = this.add.container(W / 2, 780).setDepth(35);
+    const g = this.add.graphics();
+    g.fillStyle(0x000000, 0.35);
+    g.fillRoundedRect(-400, -h / 2 + 10, 800, h, 50);
+    g.fillStyle(C.panel, 0.96);
+    g.fillRoundedRect(-400, -h / 2, 800, h, 50);
+    g.lineStyle(6, C.primary, 0.9);
+    g.strokeRoundedRect(-400, -h / 2, 800, h, 50);
+    c.add(g);
+    rows.forEach((r, i) => {
+      const y = -h / 2 + 100 + i * 110;
+      const ig = this.add.graphics();
+      if (r.icon === 'portal') drawPortalIcon(ig, -300, y, 32, false);
+      else this.drawLanternIcon(ig, -300, y + 4, true, 1.5);
+      c.add(ig);
+      c.add(text(this, -230, y, r.label, 52).setOrigin(0, 0.5));
+    });
+    c.setAlpha(0).setScale(0.8);
+    this.goalCard = c;
+    this.tweens.add({ targets: c, alpha: 1, scale: 1, duration: 280, ease: 'Back.out' });
+    const hide = () => {
+      if (this.goalCard !== c) return;
+      this.goalCard = undefined;
+      this.tweens.add({ targets: c, alpha: 0, scale: 0.9, y: 740, duration: 300, onComplete: () => c.destroy() });
+    };
+    this.time.delayedCall(1800, hide);
+    this.input.once('pointerdown', hide);
+  }
+
+  /** Подсказки в начале уровня (каждая — один раз за игру). */
+  private startTips() {
+    if (this.state.status !== 'playing' || this.overlay) return;
+    const level = this.state.level;
+    const tip = level.tip as TipId | undefined;
+    if (tip === 'lantern' && level.lanterns.length) {
+      const c = this.board.center(level.lanterns[0]);
+      this.tip('lantern', { x: c.x, y: c.y - this.board.cell * 0.4 }, 'above');
+    } else if (tip === 'side_entry') {
+      // Облачко над аркой — чтобы не закрывать камень под ней (он и объясняет, почему вход сбоку).
+      const e = this.board.exitCenter();
+      this.tip('side_entry', { x: e.x, y: e.y - this.board.cell * 0.45 }, 'above');
+    } else if (tip === 'stash' && level.allowStash) {
+      this.tip('stash', { x: this.stashX, y: TRAY_Y - CARD / 2 }, 'above');
+    } else if (tip === 'water') {
+      // Первая вода: подсвечиваем мост в лотке.
+      const slot = this.state.tray.indexOf('bridge');
+      if (slot >= 0) {
+        const card = this.cards[slot];
+        this.ring(card.homeX, card.homeY);
+        this.tip('water', { x: card.homeX, y: TRAY_Y - CARD / 2 }, 'above');
+      } else {
+        const wi = level.cells.indexOf('water');
+        const c = this.board.center(wi);
+        this.tip('water', { x: c.x, y: c.y - this.board.cell * 0.4 }, 'above');
+      }
+    }
+    // Две неудачи подряд — показываем, где подсказка.
+    if (this.streak >= STUCK.pulseHint) this.tip('hint', { x: this.hintBtn.x, y: BOTTOM_Y - 58 }, 'above');
+  }
+
+  /** Подсказка обучения по id (один раз за игру). */
+  private tip(id: TipId, target: { x: number; y: number }, side: 'above' | 'below') {
+    return this.tips.show({ id, text: t(TIP_TEXT[id]), target, side });
+  }
+
+  /** Бездействие 15 с — подсказка про кнопку «Подсказка». */
+  private resetIdle() {
+    this.idleTimer?.remove();
+    if (hasSeenTip('hint')) return;
+    this.idleTimer = this.time.delayedCall(IDLE_HINT_SECONDS * 1000, () => {
+      if (this.state.status === 'playing' && !this.overlay && !this.busy) this.tip('hint', { x: this.hintBtn.x, y: BOTTOM_Y - 58 }, 'above');
+    });
   }
 
   update(time: number) {
@@ -233,27 +349,38 @@ export class GameScene extends Phaser.Scene {
     this.updateHints();
   }
 
+  /** Строка цели под заголовком: арка (с замком, пока не все фонари) и фонари «зажжено/всего». */
   private drawBadges() {
     const g = this.badgesG;
     g.clear();
-    // Фонари уровня под заголовком: зажжённые — те, через которые уже прошла дорога.
     const level = this.state.level;
     const n = level.lanterns.length;
-    const gap = 70;
-    const x0 = W / 2 - ((n - 1) * gap) / 2;
-    level.lanterns.forEach((idx, i) => this.drawLanternIcon(g, x0 + i * gap, TOP_Y + 62, this.state.onRoad[idx]));
+    const y = TOP_Y + 58;
+    const open = lanternsLeft(this.state) === 0;
+    if (n === 0) {
+      drawPortalIcon(g, W / 2, y, 22, true);
+      this.goalText.setText('');
+      return;
+    }
+    const lit = n - lanternsLeft(this.state);
+    this.goalText.setText(`${lit}/${n}`);
+    const total = 60 + 30 + 50 + this.goalText.width;
+    const x0 = W / 2 - total / 2;
+    drawPortalIcon(g, x0 + 22, y, 22, open);
+    this.drawLanternIcon(g, x0 + 110, y + 4, lit === n);
+    this.goalText.setX(x0 + 140).setColor(lit === n ? '#ffd36b' : C.text);
   }
 
-  private drawLanternIcon(g: Phaser.GameObjects.Graphics, x: number, y: number, on: boolean) {
+  private drawLanternIcon(g: Phaser.GameObjects.Graphics, x: number, y: number, on: boolean, k = 1) {
     if (on) {
       g.fillStyle(C.lanternOn, 0.25);
-      g.fillCircle(x, y, 30);
+      g.fillCircle(x, y, 30 * k);
     }
     g.fillStyle(on ? C.lanternOn : C.lanternOff, on ? 1 : 0.7);
-    g.fillRoundedRect(x - 14, y - 16, 28, 30, 7);
+    g.fillRoundedRect(x - 14 * k, y - 16 * k, 28 * k, 30 * k, 7 * k);
     g.fillStyle(C.post, 1);
-    g.fillTriangle(x - 18, y - 15, x + 18, y - 15, x, y - 28);
-    g.fillRect(x - 3, y + 14, 6, 12);
+    g.fillTriangle(x - 18 * k, y - 15 * k, x + 18 * k, y - 15 * k, x, y - 28 * k);
+    g.fillRect(x - 3 * k, y + 14 * k, 6 * k, 12 * k);
   }
 
   private drawDeck() {
@@ -472,6 +599,9 @@ export class GameScene extends Phaser.Scene {
     }
     if (pr.dragging) {
       pr.card.setPosition(p.x, p.y - 30);
+      // Конец дороги — зона, куда можно бросить плитку; над ней — предпросмотр.
+      const over = this.board.isOverDropZone(this.state, p.x, p.y);
+      this.board.showDropZone(this.state, over);
       this.stashGlow.clear();
       if (typeof pr.slot === 'number' && this.overStash(p.x, p.y)) {
         this.stashGlow.lineStyle(10, C.lanternOn, 0.9);
@@ -486,6 +616,7 @@ export class GameScene extends Phaser.Scene {
     this.press = null;
     pr.timer?.remove();
     this.stashGlow.clear();
+    this.board.showDropZone(null);
     pr.card.setDepth(10);
     this.tweens.add({ targets: pr.card, scale: 1, duration: 90 });
     if (!p.wasTouch && pr.card.isInside(p.x, p.y)) this.previewSlot(pr.slot);
@@ -494,15 +625,16 @@ export class GameScene extends Phaser.Scene {
     const snapBack = () => this.tweens.add({ targets: pr.card, x: pr.card.homeX, y: pr.card.homeY, duration: 200, ease: 'Back.out' });
 
     if (pr.dragging) {
+      // Бросили на конец дороги — плитка ложится; вне зоны — возвращается в лоток.
+      if (this.board.isOverDropZone(this.state, p.x, p.y)) {
+        pr.card.setPosition(pr.card.homeX, pr.card.homeY);
+        this.tryPlace(pr.slot, 'drag');
+        return;
+      }
       if (typeof pr.slot === 'number') {
         // Плитку лотка бросили на слот «отложить»: в пустой — отложить, в занятый — обменять.
         if (this.overStash(p.x, p.y)) {
           this.doAction(this.state.stash === null ? { type: 'stash', slot: pr.slot } : { type: 'swap', slot: pr.slot });
-          return;
-        }
-        if (pr.card.isInside(p.x, p.y, 20)) {
-          pr.card.setPosition(pr.card.homeX, pr.card.homeY);
-          this.tryPlace(pr.slot);
           return;
         }
         snapBack();
@@ -516,7 +648,7 @@ export class GameScene extends Phaser.Scene {
       }
       if (p.y < TRAY_Y - CARD * 0.75) {
         pr.card.setPosition(pr.card.homeX, pr.card.homeY);
-        this.tryPlace('stash');
+        this.tryPlace('stash', 'drag');
         return;
       }
       snapBack();
@@ -553,7 +685,7 @@ export class GameScene extends Phaser.Scene {
     else if (e.key === 'h' || e.key === 'р') this.onHint();
   }
 
-  private tryPlace(slot: SlotId) {
+  private tryPlace(slot: SlotId, source: 'tap' | 'drag' = 'tap') {
     if (this.busy || this.state.status !== 'playing') return;
     const kind = this.kindAt(slot);
     if (!kind) return;
@@ -561,6 +693,7 @@ export class GameScene extends Phaser.Scene {
       this.invalid(slot);
       return;
     }
+    logEvent({ ev: source === 'drag' ? 'drag_place' : 'tap_place', level: this.state.level.id, attempt: this.attempt });
     this.doAction(slot === 'stash' ? { type: 'placeStash' } : { type: 'place', slot });
   }
 
@@ -568,13 +701,35 @@ export class GameScene extends Phaser.Scene {
     const card = slot === 'stash' ? this.stashCard : this.cards[slot];
     sfx.invalid();
     const kind = this.kindAt(slot);
-    if (kind) this.board.showGhost(this.state, previewTile(this.state, kind));
+    if (kind) {
+      const p = previewTile(this.state, kind);
+      this.board.showGhost(this.state, p);
+      this.explainBlock(p);
+    }
     this.tweens.killTweensOf(card);
     card.setPosition(card.homeX, card.homeY).setScale(1);
     this.tweens.add({ targets: card, x: card.homeX + 14, duration: 45, yoyo: true, repeat: 3 });
     this.time.delayedCall(650, () => {
       if (!this.press) this.board.showGhost(this.state, null);
     });
+  }
+
+  /** Почему плитка не встаёт: правила элементов при первом знакомстве и реплика у закрытой двери. */
+  private explainBlock(p: ReturnType<typeof previewTile>) {
+    const s = this.board.cell;
+    const at = p.blocked ? { x: this.board.ox + (p.blocked.x + 0.5) * s, y: this.board.oy + (p.blocked.y + 0.5) * s - s * 0.35 } : null;
+    if (p.reason === 'exitClosed') {
+      const e = this.board.exitCenter();
+      this.board.shakeLock();
+      logEvent({ ev: 'door_locked_attempt', level: this.state.level.id, attempt: this.attempt });
+      this.tips.show({ text: t('tip_door_locked'), target: { x: e.x, y: e.y - s * 0.4 }, side: 'above', autoCloseMs: 2600 });
+    } else if (p.reason === 'rock' && at) {
+      this.tip('rock', at, 'above');
+    } else if (p.reason === 'water' && at) {
+      this.tip('water', at, 'above');
+    }
+    // Первая ошибка — показываем, что ход можно вернуть.
+    if (canUndo(this.state)) this.tip('undo', { x: this.undoBtn.x, y: TOP_Y + 70 }, 'below');
   }
 
   // -------------------------------------------------------------------------
@@ -588,8 +743,18 @@ export class GameScene extends Phaser.Scene {
     this.state = next;
     this.busy = true;
     this.activeHint = null;
+    this.tips.dismiss();
+    this.resetIdle();
     this.hideHints();
     this.board.showGhost(next, null);
+    // Первый поворот: иконки в лотке поворачиваются вместе с дорогой — подсвечиваем их и объясняем.
+    if (next.dir !== prev.dir && !hasSeenTip('turn')) {
+      this.time.delayedCall(450, () => this.explainTurn());
+    }
+    // После первой плитки на первом уровне — подсказка, что плитку можно и перетащить.
+    if (action.type === 'place' && next.level.id === 1 && next.moves === 1) {
+      this.time.delayedCall(700, () => this.tip('drag', { x: this.L.slotX[1], y: TRAY_Y - CARD / 2 }, 'above'));
+    }
 
     const finish = () => {
       this.busy = false;
@@ -661,6 +826,21 @@ export class GameScene extends Phaser.Scene {
         }
       },
     });
+  }
+
+  /** Стрелки поворачиваются вместе с дорогой: вспышка над плитками лотка и реплика Lumo. */
+  private explainTurn() {
+    if (this.state.status !== 'playing') return;
+    const g = this.add.graphics().setDepth(11).setBlendMode(Phaser.BlendModes.ADD);
+    for (const card of this.cards) {
+      if (!card.visible) continue;
+      g.lineStyle(10, C.lanternOn, 1);
+      g.strokeRoundedRect(card.homeX - CARD / 2 - 10, TRAY_Y - CARD / 2 - 10, CARD + 20, CARD + 20, CARD * 0.24);
+    }
+    this.tweens.add({ targets: g, alpha: { from: 1, to: 0 }, duration: 700, repeat: 2, yoyo: true, onComplete: () => g.destroy() });
+    // Иконки ещё раз «докручиваются» на глазах у игрока.
+    for (const card of this.cards) this.tweens.add({ targets: card, scale: 1.08, duration: 200, yoyo: true, repeat: 1 });
+    this.tip('turn', { x: this.L.slotX[1], y: TRAY_Y - CARD / 2 - 10 }, 'above');
   }
 
   /** Новая плитка приезжает из колоды в слот. */
@@ -767,6 +947,9 @@ export class GameScene extends Phaser.Scene {
       if (this.state !== s) return;
       sfx.lose();
       this.showLosePanel();
+      // Тупик — подсказка «Заново» (один раз за игру).
+      // Облачко под кнопкой «Заново», чтобы не закрывать главную кнопку окна.
+      if (this.loseRestartPos) this.time.delayedCall(500, () => this.overlay && this.tip('restart', { x: this.loseRestartPos!.x, y: this.loseRestartPos!.y + 58 }, 'below'));
     });
   }
 
@@ -814,38 +997,30 @@ export class GameScene extends Phaser.Scene {
       o.add(sg);
       this.tweens.add({ targets: sg, scale: 1, duration: 380, delay: 300 + i * 260, ease: 'Back.out', onStart: () => sfx.star(i) });
     }
-    const next = () => (isLast ? this.scene.start('Menu') : this.scene.start('Game', { levelIndex: this.levelIndex + 1 }));
+    // Последний обучающий уровень: обучение закончено — дальше экран уровней.
+    const tutorialEnd = isTutorialActive(this.state.level.id) && this.state.level.id === TUTORIAL_LAST_LEVEL;
+    if (isTutorialActive(this.state.level.id)) logTutorialStep(`level_${this.state.level.id}_done`, this.state.level.id);
+    if (tutorialEnd) completeTutorial();
+    const next = () =>
+      isLast || tutorialEnd ? this.scene.start('Menu') : this.scene.start('Game', { levelIndex: this.levelIndex + 1 });
     o.add(new Button(this, W / 2, top + 610, { w: 520, h: 140, icon: 'play', label: isLast ? 'Меню' : 'Дальше', primary: true, onClick: next }));
     o.add(new Button(this, W / 2 - 160, top + 750, { w: 120, h: 100, icon: 'restart', onClick: () => this.scene.start('Game', { levelIndex: this.levelIndex }) }));
     o.add(new Button(this, W / 2 + 160, top + 750, { w: 120, h: 100, icon: 'menu', onClick: () => this.scene.start('Menu') }));
     o.on('primary', next);
-    // После первой победы гостю один раз предлагаем войти или зарегистрироваться (можно «Позже»).
-    if (shouldPromptAuth({ configured: Account.configured, signedIn: !!Account.user })) {
+    // После уровня 6 гостю один раз предлагаем войти или зарегистрироваться (можно «Позже»).
+    // Не одновременно с другими окнами и не сразу после другого окна.
+    if (authPromptDue(this.state.level.id, { promptAllowed: shouldPromptAuth({ configured: Account.configured, signedIn: !!Account.user }) })) {
       this.time.delayedCall(1500, () => {
-        if (this.overlay !== o) return;
+        if (this.overlay !== o || !canShowModal()) return;
         markAuthPrompted();
+        modalOpened();
         openAuthDialog('register', {
           intro: { title: 'Сохрани прогресс', text: 'Зарегистрируйся или войди — звёзды и уровни сохранятся в облаке, и можно продолжить на любом устройстве.' },
           later: true,
+          onClose: () => modalClosed(),
         });
       });
-    } else if (shouldAskName(this.state.level.id)) {
-      // Мягкое знакомство: после уровня 3 спрашиваем имя и аватарку (можно пропустить).
-      this.time.delayedCall(1500, () => {
-        if (this.overlay !== o) return;
-        showNameDialog(this, { title: 'Как тебя зовут?', withAvatars: true, secondary: 'skip', onClose: () => this.refreshWinAvatar(o, top) });
-      });
     }
-  }
-
-  /** После знакомства аватарка в окне победы могла смениться. */
-  private refreshWinAvatar(o: Phaser.GameObjects.Container, top: number) {
-    if (this.overlay !== o) return;
-    const old = o.list.find((c) => c.getData?.('avatarBadge'));
-    old?.destroy();
-    const badge = createAvatarBadge(this, W / 2, top, 86, getProfile().avatar, { selected: true, animate: true });
-    badge.setData('avatarBadge', true);
-    o.add(badge);
   }
 
   /** Экран «Почти!»: сколько фонарей зажжено, сколько осталось до выхода, +3 плитки, заново, отменить. */
@@ -875,7 +1050,17 @@ export class GameScene extends Phaser.Scene {
       o.add(text(this, W / 2, y + 70, `Фонари: ${lit} из ${total}`, 44, C.text, false));
       y += 140;
     }
-    o.add(text(this, W / 2, y, `До выхода: ${dist} ${plural(dist, 'клетка', 'клетки', 'клеток')}`, 44, C.textDim, false));
+    // Дорога упёрлась в закрытую арку: объясняем, почему войти нельзя.
+    const w = s.level.width;
+    const facingExit =
+      (s.head % w) + DX[s.dir] === s.level.exit.x && Math.floor(s.head / w) + DY[s.dir] === s.level.exit.y && lanternsLeft(s) > 0;
+    if (facingExit) {
+      o.add(text(this, W / 2, y, t('tip_door_locked'), 46, '#ffd36b'));
+      this.board.shakeLock();
+      logEvent({ ev: 'door_locked_attempt', level: s.level.id, attempt: this.attempt });
+    } else {
+      o.add(text(this, W / 2, y, `До выхода: ${dist} ${plural(dist, 'клетка', 'клетки', 'клеток')}`, 44, C.textDim, false));
+    }
 
     const again = () => this.restart();
     const plus3 = () => {
@@ -905,6 +1090,7 @@ export class GameScene extends Phaser.Scene {
 
     const btnY = top + btnRel;
     const undoable = canUndo(s);
+    this.loseRestartPos = { x: W / 2, y: undoable || extra ? btnY + 160 : btnY };
     const undoPrimary = !extra && undoable;
     if (undoPrimary) {
       // Отмена без ограничений — самый короткий путь назад, она и главная кнопка.

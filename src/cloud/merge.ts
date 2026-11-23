@@ -51,6 +51,8 @@ export function mergeSaves(local: SaveData, cloud: CloudPayload | null): SaveDat
     createdAt: c.createdAt < l.createdAt ? c.createdAt : l.createdAt,
     nameAsked: l.nameAsked || c.nameAsked,
     authPrompted: l.authPrompted || c.authPrompted,
+    tutorialDone: l.tutorialDone || c.tutorialDone,
+    tipsSeen: [...new Set([...l.tipsSeen, ...c.tipsSeen])],
     hintsUsed: Math.max(l.hintsUsed, c.hintsUsed),
     lastPlayDay: later.lastPlayDay,
     dayStreak: later.dayStreak,

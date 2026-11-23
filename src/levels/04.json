@@ -3,9 +3,9 @@
   "name": "Камни",
   "grid": [
     ".E..",
-    "...#",
-    ".L..",
     ".#..",
+    "..L.",
+    "#...",
     "..S."
   ],
   "startDir": "N",
@@ -20,5 +20,6 @@
     "left",
     "right"
   ],
-  "allowStash": false
+  "allowStash": false,
+  "tip": "side_entry"
 }

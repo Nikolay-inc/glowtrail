@@ -43,6 +43,8 @@ export interface LevelData {
   allowStash?: boolean;
   /** Ночной уровень: поле затемнено, светятся только дорога и фонари. */
   night?: boolean;
+  /** Подсказка Lumo в начале уровня при первом прохождении (lantern, side_entry, stash, water…). */
+  tip?: string;
   /** Сколько плиток должно остаться для 2 и 3 звёзд. */
   stars: { two: number; three: number };
   /** Подсказка без текста: place — рука показывает нужную плитку, stash — показывает слот «отложить». */
@@ -72,6 +74,7 @@ export interface Level {
   tileSet: TileKind[] | null;
   allowStash: boolean;
   night: boolean;
+  tip?: string;
   stars: { two: number; three: number };
   tutorial?: 'place' | 'stash';
   easeDecks?: TileKind[][];

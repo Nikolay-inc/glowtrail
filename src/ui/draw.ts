@@ -103,7 +103,7 @@ export function drawTileIcon(g: G, kind: TileKind, s: number, color: number) {
 // ---------------------------------------------------------------------------
 // Иконки интерфейса
 
-export type IconName = 'restart' | 'undo' | 'menu' | 'stats' | 'sound' | 'mute' | 'play' | 'lock' | 'copy' | 'back' | 'trash' | 'bulb' | 'skip' | 'plus' | 'cloud' | 'user';
+export type IconName = 'restart' | 'undo' | 'menu' | 'stats' | 'sound' | 'mute' | 'play' | 'lock' | 'copy' | 'back' | 'trash' | 'bulb' | 'skip' | 'plus' | 'cloud' | 'user' | 'help';
 
 export function drawIcon(g: G, name: IconName, s: number, color: number) {
   const lw = s * 0.12;
@@ -199,6 +199,14 @@ export function drawIcon(g: G, name: IconName, s: number, color: number) {
     case 'plus':
       g.fillRoundedRect(-s * 0.06, -s * 0.3, s * 0.12, s * 0.6, s * 0.04);
       g.fillRoundedRect(-s * 0.3, -s * 0.06, s * 0.6, s * 0.12, s * 0.04);
+      break;
+    case 'help':
+      // Вопросительный знак: дуга, хвостик и точка.
+      g.beginPath();
+      g.arc(0, -s * 0.12, s * 0.18, Math.PI * 1.05, Math.PI * 2.3, false);
+      g.strokePath();
+      g.lineBetween(0, s * 0.02, 0, s * 0.12);
+      g.fillCircle(0, s * 0.3, lw * 0.75);
       break;
     case 'cloud':
       g.fillCircle(-s * 0.16, s * 0.04, s * 0.17);
@@ -409,6 +417,42 @@ export function createLumo(scene: Phaser.Scene, size: number, avatarId = 0, anim
     scene.tweens.add({ targets: glow, alpha: 0.45, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
   }
   return c;
+}
+
+/** Значок арки-портала: кольцо, светящийся проём и замок (закрыта) или искра (открыта). */
+export function drawPortalIcon(g: G, x: number, y: number, r: number, open: boolean) {
+  g.fillStyle(open ? C.exitOpen : 0x9b7bff, 0.18);
+  g.fillCircle(x, y, r * 1.35);
+  g.fillStyle(open ? 0x1d6b66 : 0x2a2350, 1);
+  g.fillCircle(x, y, r);
+  g.lineStyle(r * 0.26, 0x6c6aa0, 1);
+  g.strokeCircle(x, y, r);
+  g.fillStyle(open ? C.exitOpen : 0x9b7bff, open ? 0.9 : 0.55);
+  g.fillCircle(x, y, r * 0.45);
+  for (const [dx, dy] of [
+    [0, -1],
+    [1, 0],
+    [0, 1],
+    [-1, 0],
+  ]) {
+    g.fillStyle(open ? 0xbffff0 : 0xd8ccff, open ? 0.95 : 0.6);
+    g.fillCircle(x + dx * r * 1.28, y + dy * r * 1.28, r * 0.16);
+  }
+  if (!open) drawPadlock(g, x, y + r * 0.05, r * 0.85);
+}
+
+/** Замок (без цифры): корпус и дужка. */
+export function drawPadlock(g: G, x: number, y: number, s: number, shackleLift = 0) {
+  g.lineStyle(s * 0.14, 0xe7c66b, 1);
+  g.beginPath();
+  g.arc(x, y - s * 0.1 - shackleLift, s * 0.24, Math.PI, Math.PI * 2, false);
+  g.strokePath();
+  g.lineBetween(x - s * 0.24, y - s * 0.1 - shackleLift, x - s * 0.24, y + s * 0.02 - shackleLift);
+  g.lineBetween(x + s * 0.24, y - s * 0.1, x + s * 0.24, y + s * 0.02);
+  g.fillStyle(0xffd36b, 1);
+  g.fillRoundedRect(x - s * 0.36, y - s * 0.02, s * 0.72, s * 0.56, s * 0.1);
+  g.fillStyle(0xffffff, 0.35);
+  g.fillRoundedRect(x - s * 0.3, y + s * 0.03, s * 0.6, s * 0.12, s * 0.05);
 }
 
 /** Круглый значок с аватаркой (меню, победа, профиль). locked — серый с замком и условием. */

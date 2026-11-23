@@ -19,5 +19,6 @@
     "left",
     "right"
   ],
-  "allowStash": false
+  "allowStash": false,
+  "tip": "lantern"
 }

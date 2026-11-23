@@ -3,6 +3,8 @@ import { GameScene } from './scenes/GameScene';
 import { MenuScene } from './scenes/MenuScene';
 import { StatsScene } from './scenes/StatsScene';
 import { ProfileScene } from './scenes/ProfileScene';
+import { IntroScene } from './scenes/IntroScene';
+import { isTutorialDone, markTutorialDoneForReturningPlayer } from './tutorial';
 import { recordPlayDay } from './profile';
 import { Account } from './cloud/account';
 import { openAuthDialog } from './ui/AuthDialog';
@@ -21,11 +23,16 @@ class BootScene extends Phaser.Scene {
     logEvent({ ev: 'session' });
     recordPlayDay();
     const p = loadProgress();
+    // Обучение: первый запуск — вступление, потом уровни 1–3; прерванное обучение продолжаем с того же места.
+    markTutorialDoneForReturningPlayer();
     const firstTime = Object.keys(p.stars).length === 0 && Object.keys(p.attempts).length === 0;
+    const tutorialLevel = [1, 2, 3].find((id) => !p.stars[id]) ?? 1;
     // ?level=N — открыть уровень сразу (удобно для проверки и видео).
     const fromUrl = Number(new URLSearchParams(location.search).get('level'));
     if (fromUrl >= 1) this.scene.start('Game', { levelIndex: fromUrl - 1 });
-    else this.scene.start(firstTime ? 'Game' : 'Menu', { levelIndex: 0 });
+    else if (firstTime && !isTutorialDone()) this.scene.start('Intro');
+    else if (!isTutorialDone()) this.scene.start('Game', { levelIndex: tutorialLevel - 1 });
+    else this.scene.start('Menu');
   }
 }
 
@@ -43,7 +50,7 @@ const game = new Phaser.Game({
   // DOM-элементы поверх холста — для поля ввода имени (масштабируются вместе с игрой).
   dom: { createContainer: true },
   render: { antialias: true },
-  scene: [BootScene, MenuScene, GameScene, StatsScene, ProfileScene],
+  scene: [BootScene, MenuScene, GameScene, StatsScene, ProfileScene, IntroScene],
 });
 
 // Аккаунт и облачное сохранение (если заданы ключи Supabase).

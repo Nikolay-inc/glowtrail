@@ -52,6 +52,7 @@ export function parseLevel(data: LevelData): Level {
     tileSet: data.tileSet ? [...data.tileSet] : null,
     allowStash: data.allowStash ?? true,
     night: data.night ?? false,
+    tip: data.tip,
     stars: { ...data.stars },
     tutorial: data.tutorial,
     easeDecks: data.easeDecks?.map((d) => [...d]),
