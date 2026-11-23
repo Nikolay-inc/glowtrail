@@ -2,7 +2,8 @@
 // лучи при зажигании фонаря. Всё рисуется кодом, без картинок.
 
 import Phaser from 'phaser';
-import { H, W } from './theme';
+
+import { currentView, type ViewRect } from './viewport';
 
 /** Игрок попросил систему меньше анимаций — фон делаем спокойным. */
 export function reducedMotion(): boolean {
@@ -71,17 +72,17 @@ export function createFxTextures(scene: Phaser.Scene) {
 }
 
 /** Затемнение по краям экрана — поверх фона, под полем и кнопками. */
-export function addVignette(scene: Phaser.Scene) {
-  scene.add.image(W / 2, H / 2, 'vignette').setDisplaySize(W, H).setDepth(-7);
+export function addVignette(scene: Phaser.Scene, v: ViewRect = currentView(scene)) {
+  return scene.add.image(v.x + v.w / 2, v.y + v.h / 2, 'vignette').setDisplaySize(v.w, v.h).setDepth(-7);
 }
 
 /** Медленно плывущий туман: огромные мягкие пятна холодных цветов. */
-export function addFog(scene: Phaser.Scene) {
+export function addFog(scene: Phaser.Scene, v: ViewRect = currentView(scene)) {
   const colors = [0x3b2a80, 0x1c3f7a, 0x4a2468, 0x153a5c];
   const calm = reducedMotion();
   colors.forEach((tint, i) => {
     const fog = scene.add
-      .image(Phaser.Math.Between(0, W), Phaser.Math.Between(200, H - 200), 'glow')
+      .image(Phaser.Math.Between(v.x, v.x + v.w), Phaser.Math.Between(v.y + 200, v.y + v.h - 200), 'glow')
       .setTint(tint)
       .setBlendMode(Phaser.BlendModes.ADD)
       .setScale(Phaser.Math.FloatBetween(7, 10), Phaser.Math.FloatBetween(4, 6))
@@ -91,8 +92,8 @@ export function addFog(scene: Phaser.Scene) {
     const drift = () => {
       scene.tweens.add({
         targets: fog,
-        x: Phaser.Math.Between(-100, W + 100),
-        y: Phaser.Math.Between(150, H - 150),
+        x: Phaser.Math.Between(v.x - 100, v.x + v.w + 100),
+        y: Phaser.Math.Between(v.y + 150, v.y + v.h - 150),
         alpha: Phaser.Math.FloatBetween(0.1, 0.22),
         duration: Phaser.Math.Between(14000, 22000),
         ease: 'Sine.inOut',
@@ -104,12 +105,12 @@ export function addFog(scene: Phaser.Scene) {
 }
 
 /** Пылинки в луче света: тёплые точки медленно поднимаются и гаснут. */
-export function addDust(scene: Phaser.Scene, depth = -6) {
+export function addDust(scene: Phaser.Scene, v: ViewRect = currentView(scene), depth = -6) {
   if (reducedMotion()) return;
   scene.add
     .particles(0, 0, 'dot', {
-      x: { min: 0, max: W },
-      y: { min: H * 0.15, max: H },
+      x: { min: v.x, max: v.x + v.w },
+      y: { min: v.y + v.h * 0.15, max: v.y + v.h },
       speedY: { min: -28, max: -10 },
       speedX: { min: -8, max: 8 },
       scale: { min: 0.08, max: 0.22 },
@@ -128,14 +129,16 @@ export function addDust(scene: Phaser.Scene, depth = -6) {
  * Используется вместо обычного затемнения камеры.
  */
 export function irisIn(scene: Phaser.Scene, x: number, y: number, duration = 650) {
-  const rt = scene.add.renderTexture(0, 0, W, H).setOrigin(0).setDepth(100).setScrollFactor(0);
-  const light = scene.make.image({ x, y, key: 'glow' }, false);
+  // Темнота на всю видимую область (на высоких экранах она больше раскладки 1080×1920).
+  const v = currentView(scene);
+  const rt = scene.add.renderTexture(v.x, v.y, Math.ceil(v.w), Math.ceil(v.h)).setOrigin(0).setDepth(100);
+  const light = scene.make.image({ x: 0, y: 0, key: 'glow' }, false);
   const state = { r: 0.2 };
   const redraw = () => {
     rt.clear();
     rt.fill(0x0b0f27, 1);
     light.setScale(state.r);
-    rt.erase(light, x, y);
+    rt.erase(light, x - v.x, y - v.y);
   };
   redraw();
   scene.tweens.add({

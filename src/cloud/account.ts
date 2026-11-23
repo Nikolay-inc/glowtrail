@@ -2,6 +2,8 @@
 // удаление аккаунта. Играть можно и без аккаунта — он нужен, чтобы прогресс жил в облаке.
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { Preferences } from '@capacitor/preferences';
+import { isNative } from '../platform';
 import { defaultProgress, emptySave, SaveService } from '../save/SaveService';
 import { cloudConfigured, redirectUrl, SUPABASE_ANON_KEY, SUPABASE_URL } from './config';
 import { CloudSync, type SyncStatus } from './sync';
@@ -15,6 +17,13 @@ export interface AccountUser {
 
 /** changed — вошёл/вышел; recovery — пришёл по ссылке «сбросить пароль»; link_error — ссылка из письма не сработала. */
 export type AccountEvent = { type: 'changed' } | { type: 'recovery' } | { type: 'link_error'; message: string } | { type: 'sync'; status: SyncStatus };
+
+/** Хранилище сессии Supabase в приложении — на Preferences. */
+const preferencesAuthStorage = {
+  getItem: async (key: string) => (await Preferences.get({ key })).value,
+  setItem: (key: string, value: string) => Preferences.set({ key, value }),
+  removeItem: (key: string) => Preferences.remove({ key }),
+};
 
 /** Ошибка с текстом, который можно показать игроку. */
 export class AccountError extends Error {}
@@ -47,7 +56,14 @@ class AccountService {
     if (this.client || !cloudConfigured()) return;
     this.readLinkError();
     this.client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      auth: { flowType: 'pkce', persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+      auth: {
+        flowType: 'pkce',
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: !isNative(),
+        // В приложении вход хранится в Preferences (localStorage WebView система может очистить).
+        storage: isNative() ? preferencesAuthStorage : undefined,
+      },
     });
     this.sync = new CloudSync(supabaseStore(this.client));
     this.sync.onStatus((status) => this.emit({ type: 'sync', status }));
@@ -68,6 +84,11 @@ class AccountService {
   private api(): SupabaseClient {
     if (!this.client) throw new AccountError('Вход пока не настроен');
     return this.client;
+  }
+
+  /** Дописать отложенное сохранение в облако (приложение уходит в фон). */
+  async flushSync(): Promise<void> {
+    await this.sync?.flush().catch(() => undefined);
   }
 
   /** Регистрация. Если в проекте включено подтверждение почты — вернёт confirm_email. */

@@ -1,12 +1,15 @@
 // Простые синтезированные звуки через WebAudio — без файлов.
 
 import { loadProgress, saveProgress } from './storage';
+import { haptics } from './haptics';
 
 let ctx: AudioContext | null = null;
-let muted = loadProgress().muted;
+// Настройку читаем при каждом звуке: в приложении сохранение подгружается из Preferences уже после
+// загрузки этого модуля.
+const isMutedNow = () => loadProgress().muted;
 
 function ac(): AudioContext | null {
-  if (muted) return null;
+  if (isMutedNow() || suspended) return null;
   try {
     if (!ctx) {
       const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
@@ -44,12 +47,12 @@ export const sfx = {
   /** Плитка легла на дорогу; тон растёт с длиной дороги. */
   place(step: number) {
     tone(note(step), 0.18, 'triangle', 0.16);
-    vibrate(8);
+    haptics.place();
   },
   invalid() {
     tone(220, 0.14, 'square', 0.06);
     tone(180, 0.16, 'square', 0.05, 0.07);
-    vibrate([10, 40, 10]);
+    haptics.error();
   },
   stash() {
     tone(440, 0.1, 'sine', 0.12, 0, 330);
@@ -66,6 +69,7 @@ export const sfx = {
   },
   win() {
     [0, 2, 4, 5, 7].forEach((n, i) => tone(note(n), 0.35, 'triangle', 0.14, i * 0.09));
+    haptics.win();
   },
   lose() {
     tone(392, 0.25, 'sine', 0.12, 0, 330);
@@ -79,23 +83,23 @@ export const sfx = {
   },
 };
 
-function vibrate(p: number | number[]) {
-  if (muted) return;
-  // До первого касания браузер блокирует вибрацию и пишет ошибку в консоль (например, при игре с клавиатуры).
-  const ua = (navigator as Navigator & { userActivation?: { hasBeenActive: boolean } }).userActivation;
-  if (ua && !ua.hasBeenActive) return;
-  try {
-    navigator.vibrate?.(p);
-  } catch {
-    /* нет вибрации */
-  }
+let suspended = false;
+
+/** Приложение ушло в фон: звук выключаем совсем (а не только тише). */
+export function suspendAudio() {
+  suspended = true;
+  void ctx?.suspend().catch(() => undefined);
+}
+
+export function resumeAudio() {
+  suspended = false;
+  if (!isMutedNow()) void ctx?.resume().catch(() => undefined);
 }
 
 export function isMuted() {
-  return muted;
+  return isMutedNow();
 }
 
 export function setMuted(v: boolean) {
-  muted = v;
   saveProgress({ ...loadProgress(), muted: v });
 }

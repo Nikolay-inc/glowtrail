@@ -9,6 +9,7 @@ import { logTutorialStep } from '../tutorial';
 import { addBackground, createLumo, drawPortalIcon, text } from '../ui/draw';
 import { raysBurst } from '../ui/fx';
 import { C, H, W } from '../ui/theme';
+import { currentView } from '../ui/viewport';
 
 const LUMO_AT = { x: 250, y: 1330 };
 const ARCH_AT = { x: 820, y: 760 };
@@ -59,7 +60,8 @@ export class IntroScene extends Phaser.Scene {
     this.lumo = createLumo(this, 190, getProfile().avatar).setPosition(-140, LUMO_AT.y).setDepth(7);
 
     // Темнота поверх всего, кроме текста.
-    this.dark = this.add.renderTexture(0, 0, W, H).setOrigin(0).setDepth(20);
+    const v = currentView(this);
+    this.dark = this.add.renderTexture(v.x, v.y, Math.ceil(v.w), Math.ceil(v.h)).setOrigin(0).setDepth(20);
     this.lightImg = this.make.image({ x: 0, y: 0, key: 'glow' }, false);
 
     const line1 = text(this, W / 2, 330, t('intro_line1'), 64).setDepth(30).setAlpha(0);
@@ -117,9 +119,12 @@ export class IntroScene extends Phaser.Scene {
     ];
     layers.forEach(([color, base, amp, freq], i) => {
       const g = this.add.graphics().setDepth(1 + i);
-      const pts: Phaser.Math.Vector2[] = [new Phaser.Math.Vector2(0, H)];
-      for (let x = 0; x <= W; x += 30) pts.push(new Phaser.Math.Vector2(x, base - Math.sin(x * freq + i * 1.7) * amp - Math.sin(x * freq * 2.3) * amp * 0.4));
-      pts.push(new Phaser.Math.Vector2(W, H));
+      // Холмы — до краёв видимой области (на широких экранах она шире раскладки).
+      const v = currentView(this);
+      const bottom = v.y + v.h + 10;
+      const pts: Phaser.Math.Vector2[] = [new Phaser.Math.Vector2(v.x - 10, bottom)];
+      for (let x = v.x - 10; x <= v.x + v.w + 40; x += 30) pts.push(new Phaser.Math.Vector2(x, base - Math.sin(x * freq + i * 1.7) * amp - Math.sin(x * freq * 2.3) * amp * 0.4));
+      pts.push(new Phaser.Math.Vector2(v.x + v.w + 40, bottom));
       g.fillStyle(color, 1);
       g.fillPoints(pts, true);
     });
@@ -136,7 +141,7 @@ export class IntroScene extends Phaser.Scene {
     this.dark.fill(0x02030c, 0.94);
     const light = (x: number, y: number, d: number, a: number) => {
       this.lightImg.setScale(d / 128).setAlpha(Math.min(1, a));
-      this.dark.erase(this.lightImg, x, y);
+      this.dark.erase(this.lightImg, x - this.dark.x, y - this.dark.y);
     };
     // Мягкий край света: два слоя — широкий слабый и яркий в центре.
     light(this.lumo.x + 60, this.lumo.y - 40, W * 1.7 * this.lumoLight * flicker, 0.75);

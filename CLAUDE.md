@@ -1,6 +1,6 @@
 # Проект: Glowtrail — мобильная и веб-головоломка
 
-- Стек: TypeScript, Phaser 3, Vite. Позже Capacitor для Android/iOS.
+- Стек: TypeScript, Phaser 3, Vite, Capacitor 7 (iOS и Android; Capacitor 8 требует Node 22).
 - Игра должна работать в мобильном браузере: касания, вертикальный экран 9:16, масштабирование под любой экран.
 - Без внешних картинок: на этапе прототипов вся графика — простые фигуры и цвета в коде.
 - Уровни храним в JSON, логику игры держим отдельно от отрисовки, чтобы её можно было тестировать.
@@ -19,7 +19,9 @@
 - `npm test` — тесты Vitest (`tests/`)
 - `npm run verify` — решатель проверяет решаемость, звёзды, колоды облегчения и соответствие кривой сложности (таблица в `scripts/verify.ts`)
 - `npm run ease` — пересчитать колоды незаметного облегчения (`easeDecks` в JSON); запускать после любого изменения уровня
-- `npm run build` — проверка типов и сборка в `dist/`
+- `npm run build` — проверка типов и сборка в `dist/` для Pages (base `/glowtrail/`)
+- `npm run build:app` / `cap:sync` / `cap:ios` / `cap:android` — сборка для приложения (base `./`, mode `app`, ключи из `.env.app`) и открытие нативного проекта
+- `npm run icons` — иконка и заставка: `scripts/make-icons.ts` рисует SVG Lumo → `assets/*.png`, `capacitor-assets` нарезает размеры
 - Деплой: пуш в `main` → GitHub Actions (`.github/workflows/deploy.yml`) → https://nikolay-inc.github.io/glowtrail/
 
 ## Устройство кода
@@ -82,3 +84,16 @@
 - Имя спрашиваем мягко после первой победы на уровне 3 (`ASK_NAME_AFTER_LEVEL`), его можно пропустить. Экран «Профиль» — кнопка с аватаркой в углу меню.
 - Хранилище подменяемое (`setBackend`): сейчас localStorage, потом облако. В тестах — `memoryBackend()`.
 - Миграция цепочкой v1 → v2 → v3: v1 — старые ключи `glowtrail.progress.v1` / `glowtrail.log.v1` (не удаляются), v2 → v3 добавляет профиль. При изменении формата — поднять `SAVE_VERSION` и добавить шаг в `migrate`.
+
+## Мобильное приложение (Capacitor)
+
+- appId `com.severgames.glowtrail` (не менять), appName Glowtrail, webDir `dist`. Конфиг — `capacitor.config.ts`.
+- `ios/` — Swift Package Manager (CocoaPods не нужен). В Capacitor 7.6 у `cap add ios --packagemanager SPM` баг с проверкой CocoaPods — обходили через `CAPACITOR_COCOAPODS_PATH=/usr/bin/true`; дальше `cap sync` сам видит `CapApp-SPM`. Info.plist: только портрет, `UIRequiresFullScreen`, светлый статус-бар.
+- `android/` — `screenOrientation="portrait"`, `adjustMarginsForEdgeToEdge: 'auto'` (Android 15). Статус-бар на Android не перекрывает веб-вью (`main.ts`), на iOS — перекрывает, фон игры под ним.
+- Пошаговый запуск на iPhone — в `README.md`.
+- `src/platform.ts` — `isNative()`, `platform()`, `WEB_URL` (ссылки из писем в приложении ведут на веб-версию).
+- Весь экран: Phaser `Scale.EXPAND`, раскладка 1080×1920 ставится камерой в безопасную зону (`src/ui/viewport.ts`: `computeView` — чистая функция с тестом, `keepFitted(scene, onChange)` в каждой сцене через `addBackground`). Фон, звёзды, туман, виньетка рисуются на всю видимую область (`currentView`). Затемнения окон — `W * 4, H * 4`. Координаты указателя — `p.worldX/worldY`.
+- Запуск (`main.ts`, async `boot`): на телефоне сначала `createPreferencesBackend` (`src/save/preferencesBackend.ts`: чтение в память, запись с задержкой 400 мс, `flush()`, перенос из localStorage WebView при первом запуске), потом Phaser, `initLifecycle`, `Account.init()`; заставка прячется после первого кадра.
+- `src/lifecycle.ts`: сворачивание (`appStateChange`/`pause`, в вебе `visibilitychange`) → `suspendAudio`, `SaveService.flush()`, `Account.flushSync()`, `game.loop.sleep()`, событие `app-pause`; возврат → `app-resume`. GameScene сдвигает `t0` на время в фоне. Android «Назад»: уровень → меню (`app-back`), меню → свернуть, статистика/профиль → меню.
+- Supabase в приложении хранит сессию в Preferences (`account.ts`), `detectSessionInUrl` выключен.
+- `src/haptics.ts`: `haptics.tap/place/error/win` — в приложении `@capacitor/haptics`, в вебе `navigator.vibrate` (`WEB_PATTERNS`). Выключатель — кнопка в меню, `progress.vibration` (по умолчанию true, при слиянии с облаком берётся локальное значение).

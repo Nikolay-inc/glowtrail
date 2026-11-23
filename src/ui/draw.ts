@@ -3,6 +3,7 @@
 import Phaser from 'phaser';
 import { AVATARS, avatarById, type Avatar } from '../core/avatars';
 import { addDust, addFog, addVignette, createFxTextures } from './fx';
+import { keepFitted, type ViewRect } from './viewport';
 import type { TileKind } from '../core/types';
 import { C, FONT, H, W } from './theme';
 
@@ -103,7 +104,7 @@ export function drawTileIcon(g: G, kind: TileKind, s: number, color: number) {
 // ---------------------------------------------------------------------------
 // Иконки интерфейса
 
-export type IconName = 'restart' | 'undo' | 'menu' | 'stats' | 'sound' | 'mute' | 'play' | 'lock' | 'copy' | 'back' | 'trash' | 'bulb' | 'skip' | 'plus' | 'cloud' | 'user' | 'help';
+export type IconName = 'restart' | 'undo' | 'menu' | 'stats' | 'sound' | 'mute' | 'play' | 'lock' | 'copy' | 'back' | 'trash' | 'bulb' | 'skip' | 'plus' | 'cloud' | 'user' | 'help' | 'vibrate' | 'novibrate';
 
 export function drawIcon(g: G, name: IconName, s: number, color: number) {
   const lw = s * 0.12;
@@ -164,6 +165,24 @@ export function drawIcon(g: G, name: IconName, s: number, color: number) {
         g.lineBetween(s * 0.36, -s * 0.14, s * 0.08, s * 0.14);
       }
       break;
+    case 'vibrate':
+    case 'novibrate': {
+      // Телефон и волны вибрации по бокам; «выключено» — перечёркнуто.
+      g.lineStyle(lw * 0.8, color, 1);
+      g.strokeRoundedRect(-s * 0.13, -s * 0.28, s * 0.26, s * 0.56, s * 0.06);
+      g.fillRect(-s * 0.05, s * 0.18, s * 0.1, s * 0.04);
+      for (const side of [-1, 1]) {
+        g.beginPath();
+        g.moveTo(side * s * 0.24, -s * 0.16);
+        g.lineTo(side * s * 0.3, -s * 0.08);
+        g.lineTo(side * s * 0.24, 0);
+        g.lineTo(side * s * 0.3, s * 0.08);
+        g.lineTo(side * s * 0.24, s * 0.16);
+        g.strokePath();
+      }
+      if (name === 'novibrate') g.lineBetween(-s * 0.36, s * 0.34, s * 0.36, -s * 0.34);
+      break;
+    }
     case 'play':
       g.fillTriangle(-s * 0.2, -s * 0.32, -s * 0.2, s * 0.32, s * 0.34, 0);
       break;
@@ -491,13 +510,26 @@ export function createAvatarBadge(
 // Ночной фон: градиент, мерцающие звёзды и светлячки
 
 export function addBackground(scene: Phaser.Scene, opts: { dust?: boolean } = {}) {
+  // Фон на весь экран (а не только на раскладку 1080×1920): градиент перерисовывается при смене размера.
   const g = scene.add.graphics().setDepth(-10);
-  g.fillGradientStyle(C.bgTop, C.bgTop, C.bgBottom, C.bgBottom, 1);
-  g.fillRect(0, 0, W, H);
+  let vignette: Phaser.GameObjects.Image | null = null;
+  const paint = (v: ViewRect) => {
+    g.clear();
+    g.fillGradientStyle(C.bgTop, C.bgTop, C.bgBottom, C.bgBottom, 1);
+    g.fillRect(v.x - 4, v.y - 4, v.w + 8, v.h + 8);
+    vignette?.setPosition(v.x + v.w / 2, v.y + v.h / 2).setDisplaySize(v.w, v.h);
+  };
+  const view = keepFitted(scene, paint);
+  paint(view);
+  // Звёзды и светлячки — с запасом за краями раскладки, чтобы покрывать высокие и широкие экраны.
+  const X0 = -700;
+  const X1 = W + 700;
+  const Y0 = -1000;
+  const Y1 = H + 1000;
   const rnd = new Phaser.Math.RandomDataGenerator(['glowtrail']);
-  for (let i = 0; i < 40; i++) {
+  for (let i = 0; i < 90; i++) {
     const st = scene.add
-      .image(rnd.between(0, W), rnd.between(0, H), 'dot')
+      .image(rnd.between(X0, X1), rnd.between(Y0, Y1), 'dot')
       .setScale(rnd.realInRange(0.15, 0.35))
       .setAlpha(rnd.realInRange(0.15, 0.5))
       .setDepth(-9);
@@ -510,9 +542,9 @@ export function addBackground(scene: Phaser.Scene, opts: { dust?: boolean } = {}
       delay: rnd.between(0, 2000),
     });
   }
-  for (let i = 0; i < 7; i++) {
+  for (let i = 0; i < 9; i++) {
     const f = scene.add
-      .image(rnd.between(0, W), rnd.between(0, H), 'glow')
+      .image(rnd.between(view.x, view.x + view.w), rnd.between(view.y, view.y + view.h), 'glow')
       .setTint(0xd8ff8a)
       .setBlendMode(Phaser.BlendModes.ADD)
       .setScale(0.22)
@@ -521,8 +553,8 @@ export function addBackground(scene: Phaser.Scene, opts: { dust?: boolean } = {}
     const wander = () => {
       scene.tweens.add({
         targets: f,
-        x: Phaser.Math.Clamp(f.x + Phaser.Math.Between(-220, 220), 0, W),
-        y: Phaser.Math.Clamp(f.y + Phaser.Math.Between(-220, 220), 0, H),
+        x: Phaser.Math.Clamp(f.x + Phaser.Math.Between(-220, 220), view.x, view.x + view.w),
+        y: Phaser.Math.Clamp(f.y + Phaser.Math.Between(-220, 220), view.y, view.y + view.h),
         alpha: { from: 0, to: 0.55 },
         duration: Phaser.Math.Between(2500, 4500),
         yoyo: true,
@@ -533,9 +565,9 @@ export function addBackground(scene: Phaser.Scene, opts: { dust?: boolean } = {}
     scene.time.delayedCall(i * 500, wander);
   }
   // Атмосфера: туман, пылинки и тёмные края.
-  addFog(scene);
-  if (opts.dust !== false) addDust(scene);
-  addVignette(scene);
+  addFog(scene, view);
+  if (opts.dust !== false) addDust(scene, view);
+  vignette = addVignette(scene, view);
 }
 
 export function text(scene: Phaser.Scene, x: number, y: number, str: string, size: number, color: string = C.text, bold = true) {

@@ -20,6 +20,8 @@ export interface Progress {
   /** Пропущенные уровни. */
   skipped: Record<number, boolean>;
   muted: boolean;
+  /** Вибрация (настройка устройства, в облако не уходит). */
+  vibration: boolean;
 }
 
 /**
@@ -91,6 +93,8 @@ export interface SaveBackend {
   read(key: string): string | null;
   write(key: string, value: string): void;
   remove(key: string): void;
+  /** Дописать отложенные записи на диск (приложение уходит в фон). */
+  flush?(): Promise<void>;
 }
 
 /** localStorage; если он недоступен (приватный режим), игра работает без сохранения. */
@@ -129,7 +133,7 @@ export function memoryBackend(initial: Record<string, string> = {}): SaveBackend
   };
 }
 
-export const defaultProgress = (): Progress => ({ unlocked: 1, stars: {}, attempts: {}, lossStreak: {}, skipped: {}, muted: false });
+export const defaultProgress = (): Progress => ({ unlocked: 1, stars: {}, attempts: {}, lossStreak: {}, skipped: {}, muted: false, vibration: true });
 
 /** Случайный UUID v4 (crypto.randomUUID, если есть). */
 export function newPlayerId(): string {
@@ -179,6 +183,7 @@ function normalizeProgress(raw: unknown): Progress {
     if (isObj(raw[key])) (p as unknown as Record<string, unknown>)[key] = { ...(raw[key] as object) };
   }
   if (typeof raw.muted === 'boolean') p.muted = raw.muted;
+  if (typeof raw.vibration === 'boolean') p.vibration = raw.vibration;
   return p;
 }
 
@@ -286,6 +291,11 @@ class SaveServiceImpl {
     fn(d);
     this.save(d);
     return d;
+  }
+
+  /** Дописать сохранение на диск сейчас (перед уходом приложения в фон). */
+  flush(): Promise<void> {
+    return this.backend.flush?.() ?? Promise.resolve();
   }
 
   /** Стереть всё (кнопка «Сбросить всё»). */

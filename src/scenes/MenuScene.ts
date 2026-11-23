@@ -1,5 +1,6 @@
 // Главное меню: выбор уровня, звёзды, статистика, звук.
 
+import { isVibrationOn, setVibration } from '../haptics';
 import Phaser from 'phaser';
 import { LEVELS } from '../levels/index';
 import { isMuted, setMuted, sfx } from '../audio';
@@ -153,9 +154,9 @@ export class MenuScene extends Phaser.Scene {
 
     new Button(this, W / 2, 1450, { w: 560, h: 160, icon: 'play', label: 'Играть', primary: true, fontSize: 64, onClick: () => this.play(next) });
 
-    new Button(this, W / 2 - 220, 1700, { w: 160, h: 140, icon: 'stats', onClick: () => this.go('Stats') });
+    new Button(this, W / 2 - 330, 1700, { w: 160, h: 140, icon: 'stats', onClick: () => this.go('Stats') });
     // «Как играть»: все карточки правил с живой анимацией; в конце — «Пройти обучение с начала».
-    new Button(this, W / 2 + 220, 1700, {
+    new Button(this, W / 2 + 330, 1700, {
       w: 160,
       h: 140,
       icon: 'help',
@@ -165,8 +166,19 @@ export class MenuScene extends Phaser.Scene {
         this.scene.pause();
       },
     });
-    text(this, W / 2 + 220, 1800, t('tutorial_replay'), 30, C.textDim, false);
-    const sound = new Button(this, W / 2, 1700, {
+    text(this, W / 2 + 330, 1800, t('tutorial_replay'), 30, C.textDim, false);
+    // Вибрация (в браузере — где поддерживается, в приложении — Taptic Engine / вибромотор).
+    const vibro = new Button(this, W / 2 + 110, 1700, {
+      w: 160,
+      h: 140,
+      icon: isVibrationOn() ? 'vibrate' : 'novibrate',
+      onClick: () => {
+        setVibration(!isVibrationOn());
+        vibro.setIcon(isVibrationOn() ? 'vibrate' : 'novibrate');
+        sfx.tap();
+      },
+    });
+    const sound = new Button(this, W / 2 - 110, 1700, {
       w: 160,
       h: 140,
       icon: isMuted() ? 'mute' : 'sound',

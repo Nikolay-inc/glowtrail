@@ -1,6 +1,7 @@
 // Экран уровня: поле, лоток плиток, превью колоды, слот «отложить», отмена, подсказки,
 // защита от застревания (+3 плитки, облегчение, пропуск уровня), победа и поражение.
 
+import { APP_BACK, APP_PAUSE, APP_RESUME } from '../lifecycle';
 import Phaser from 'phaser';
 import {
   applyAction,
@@ -202,8 +203,22 @@ export class GameScene extends Phaser.Scene {
       this.ended = true;
     };
     window.addEventListener('pagehide', onHide);
+    // Приложение свернули: время в фоне не засчитываем в попытку. «Назад» на Android — в меню.
+    let pausedAt = 0;
+    const onPause = () => (pausedAt = Date.now());
+    const onResume = () => {
+      if (pausedAt) this.t0 += Date.now() - pausedAt;
+      pausedAt = 0;
+    };
+    const onBack = () => this.leave('Menu');
+    this.game.events.on(APP_PAUSE, onPause);
+    this.game.events.on(APP_RESUME, onResume);
+    this.game.events.on(APP_BACK, onBack);
     this.events.once('shutdown', () => {
       window.removeEventListener('pagehide', onHide);
+      this.game.events.off(APP_PAUSE, onPause);
+      this.game.events.off(APP_RESUME, onResume);
+      this.game.events.off(APP_BACK, onBack);
       this.input.off('pointermove', this.onPointerMove, this);
       this.input.off('pointerup', this.onPointerUp, this);
       this.input.keyboard?.off('keydown', this.onKey, this);
@@ -569,7 +584,7 @@ export class GameScene extends Phaser.Scene {
     card.on('pointerdown', (p: Phaser.Input.Pointer) => {
       if (this.busy || this.overlay || this.state.status !== 'playing') return;
       if (!card.kind && card.slot !== 'stash') return;
-      const press: Press = { slot: card.slot, card, x0: p.x, y0: p.y, dragging: false };
+      const press: Press = { slot: card.slot, card, x0: p.worldX, y0: p.worldY, dragging: false };
       if (card.kind) press.timer = this.time.delayedCall(220, () => this.previewSlot(card.slot));
       this.press = press;
       this.tweens.add({ targets: card, scale: 1.07, duration: 90 });
@@ -596,19 +611,19 @@ export class GameScene extends Phaser.Scene {
   private onPointerMove(p: Phaser.Input.Pointer) {
     const pr = this.press;
     if (!pr || !pr.card.kind) return;
-    if (!pr.dragging && Phaser.Math.Distance.Between(p.x, p.y, pr.x0, pr.y0) > 28) {
+    if (!pr.dragging && Phaser.Math.Distance.Between(p.worldX, p.worldY, pr.x0, pr.y0) > 28) {
       pr.dragging = true;
       pr.timer?.remove();
       this.previewSlot(pr.slot);
       pr.card.setDepth(25);
     }
     if (pr.dragging) {
-      pr.card.setPosition(p.x, p.y - 30);
+      pr.card.setPosition(p.worldX, p.worldY - 30);
       // Конец дороги — зона, куда можно бросить плитку; над ней — предпросмотр.
-      const over = this.board.isOverDropZone(this.state, p.x, p.y);
+      const over = this.board.isOverDropZone(this.state, p.worldX, p.worldY);
       this.board.showDropZone(this.state, over);
       this.stashGlow.clear();
-      if (typeof pr.slot === 'number' && this.overStash(p.x, p.y)) {
+      if (typeof pr.slot === 'number' && this.overStash(p.worldX, p.worldY)) {
         this.stashGlow.lineStyle(10, C.lanternOn, 0.9);
         this.stashGlow.strokeRoundedRect(this.stashX - CARD / 2 - 12, TRAY_Y - CARD / 2 - 12, CARD + 24, CARD + 24, CARD * 0.25);
       }
@@ -624,21 +639,21 @@ export class GameScene extends Phaser.Scene {
     this.board.showDropZone(null);
     pr.card.setDepth(10);
     this.tweens.add({ targets: pr.card, scale: 1, duration: 90 });
-    if (!p.wasTouch && pr.card.isInside(p.x, p.y)) this.previewSlot(pr.slot);
+    if (!p.wasTouch && pr.card.isInside(p.worldX, p.worldY)) this.previewSlot(pr.slot);
     else this.board.showGhost(this.state, null);
 
     const snapBack = () => this.tweens.add({ targets: pr.card, x: pr.card.homeX, y: pr.card.homeY, duration: 200, ease: 'Back.out' });
 
     if (pr.dragging) {
       // Бросили на конец дороги — плитка ложится; вне зоны — возвращается в лоток.
-      if (this.board.isOverDropZone(this.state, p.x, p.y)) {
+      if (this.board.isOverDropZone(this.state, p.worldX, p.worldY)) {
         pr.card.setPosition(pr.card.homeX, pr.card.homeY);
         this.tryPlace(pr.slot, 'drag');
         return;
       }
       if (typeof pr.slot === 'number') {
         // Плитку лотка бросили на слот «отложить»: в пустой — отложить, в занятый — обменять.
-        if (this.overStash(p.x, p.y)) {
+        if (this.overStash(p.worldX, p.worldY)) {
           this.doAction(this.state.stash === null ? { type: 'stash', slot: pr.slot } : { type: 'swap', slot: pr.slot });
           return;
         }
@@ -646,12 +661,12 @@ export class GameScene extends Phaser.Scene {
         return;
       }
       // Отложенную плитку перетащили: на плитку лотка — обмен, вверх на поле — поставить.
-      const slot = this.traySlotAt(p.x, p.y);
+      const slot = this.traySlotAt(p.worldX, p.worldY);
       if (slot >= 0 && this.state.tray[slot]) {
         this.doAction({ type: 'swap', slot });
         return;
       }
-      if (p.y < TRAY_Y - CARD * 0.75) {
+      if (p.worldY < TRAY_Y - CARD * 0.75) {
         pr.card.setPosition(pr.card.homeX, pr.card.homeY);
         this.tryPlace('stash', 'drag');
         return;
@@ -659,7 +674,7 @@ export class GameScene extends Phaser.Scene {
       snapBack();
       return;
     }
-    if (!pr.card.isInside(p.x, p.y, 40)) return;
+    if (!pr.card.isInside(p.worldX, p.worldY, 40)) return;
     if (pr.slot === 'stash') this.tapStash();
     else this.tryPlace(pr.slot);
   }
@@ -962,7 +977,7 @@ export class GameScene extends Phaser.Scene {
     this.closeOverlay();
     const o = this.add.container(0, 0).setDepth(40);
     o.setData('kind', kind);
-    const dim = this.add.rectangle(W / 2, H / 2, W, H, 0x060818, 0.6).setInteractive();
+    const dim = this.add.rectangle(W / 2, H / 2, W * 4, H * 4, 0x060818, 0.6).setInteractive();
     const panel = this.add.graphics();
     const pw = 880;
     const py = H / 2 - panelH / 2;

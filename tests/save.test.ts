@@ -33,7 +33,7 @@ describe('SaveService', () => {
     SaveService.setBackend(backend);
     const d = SaveService.load();
     expect(d.version).toBe(SAVE_VERSION);
-    expect(d.progress).toEqual({ unlocked: 5, stars: { 1: 3, 2: 2 }, attempts: { 1: 4 }, lossStreak: { 3: 2 }, skipped: { 4: true }, muted: true });
+    expect(d.progress).toEqual({ unlocked: 5, stars: { 1: 3, 2: 2 }, attempts: { 1: 4 }, lossStreak: { 3: 2 }, skipped: { 4: true }, muted: true, vibration: true });
     expect('hints' in d.progress).toBe(false); // подсказки теперь бесплатные
     expect(d.log).toHaveLength(1);
     // Мигрированные данные сразу сохранены в новом формате, старые ключи не тронуты.

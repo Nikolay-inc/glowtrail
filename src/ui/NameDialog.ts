@@ -25,7 +25,7 @@ export function showNameDialog(scene: Phaser.Scene, opts: NameDialogOptions) {
   let selected = profile.avatar;
 
   const o = scene.add.container(0, 0).setDepth(60);
-  const dim = scene.add.rectangle(W / 2, H / 2, W, H, 0x060818, 0.7).setInteractive();
+  const dim = scene.add.rectangle(W / 2, H / 2, W * 4, H * 4, 0x060818, 0.7).setInteractive();
   // Окно в верхней половине экрана — снизу откроется клавиатура.
   const panelH = opts.withAvatars ? 900 : 620;
   const top = 200;

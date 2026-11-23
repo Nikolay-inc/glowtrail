@@ -39,6 +39,7 @@ export function mergeSaves(local: SaveData, cloud: CloudPayload | null): SaveDat
     lossStreak: { ...lp.lossStreak }, // серия поражений — про текущую игру на этом устройстве
     skipped,
     muted: lp.muted, // звук — настройка устройства
+    vibration: lp.vibration, // вибрация — тоже
   };
 
   const l = local.profile;

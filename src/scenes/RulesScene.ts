@@ -13,6 +13,7 @@ import { BoardView } from '../ui/BoardView';
 import { Button, text } from '../ui/draw';
 import { C, FONT, H, W } from '../ui/theme';
 import { TileCard } from '../ui/TileCard';
+import { keepFitted } from '../ui/viewport';
 
 export interface RulesData {
   cards: RuleId[];
@@ -53,8 +54,9 @@ export class RulesScene extends Phaser.Scene {
     const top = H / 2 - PANEL_H / 2;
     this.alive = true;
     this.events.once('shutdown', () => (this.alive = false));
+    keepFitted(this);
 
-    this.add.rectangle(W / 2, H / 2, W, H, 0x04061a, 0.78).setInteractive();
+    this.add.rectangle(W / 2, H / 2, W * 4, H * 4, 0x04061a, 0.78).setInteractive();
     const g = this.add.graphics();
     g.fillStyle(0x000000, 0.35);
     g.fillRoundedRect(W / 2 - PANEL_W / 2, top + 14, PANEL_W, PANEL_H, 60);

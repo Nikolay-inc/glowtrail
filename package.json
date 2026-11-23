@@ -9,13 +9,28 @@
     "preview": "vite preview",
     "test": "vitest run",
     "verify": "vite-node scripts/verify.ts",
-    "ease": "vite-node scripts/ease.ts"
+    "ease": "vite-node scripts/ease.ts",
+    "build:app": "tsc --noEmit && vite build --mode app",
+    "cap:sync": "npm run build:app && cap sync",
+    "cap:ios": "npm run cap:sync && cap open ios",
+    "cap:android": "npm run cap:sync && cap open android",
+    "icons": "vite-node scripts/make-icons.ts && capacitor-assets generate --ios --android --iconBackgroundColor '#0b0f27' --splashBackgroundColor '#0b0f27'"
   },
   "dependencies": {
+    "@capacitor/android": "7.6.10",
+    "@capacitor/app": "7.1.2",
+    "@capacitor/core": "7.6.10",
+    "@capacitor/haptics": "7.0.5",
+    "@capacitor/ios": "7.6.10",
+    "@capacitor/preferences": "7.0.4",
+    "@capacitor/splash-screen": "7.0.5",
+    "@capacitor/status-bar": "7.0.6",
     "@supabase/supabase-js": "2.118.0",
     "phaser": "^3.90.0"
   },
   "devDependencies": {
+    "@capacitor/assets": "3.0.5",
+    "@capacitor/cli": "7.6.10",
     "@types/node": "^20.19.43",
     "typescript": "^5.9.3",
     "vite": "^6.4.6",
