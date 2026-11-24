@@ -168,18 +168,20 @@ export class BoardView {
         emitting: false,
       })
       .setDepth(8);
-    // Пыль из-под камешков дороги и искры серии без ошибок.
+    // Свет разлетается искрами, когда дорога дотягивается до клетки; искры серии без ошибок.
     this.dust = scene.add
       .particles(0, 0, 'glow', {
-        speed: { min: 30, max: 110 },
+        speed: { min: 30, max: 120 },
         angle: { min: 180, max: 360 },
-        scale: { start: 0.32 * (this.cell / 200), end: 0 },
-        alpha: { start: 0.55, end: 0 },
-        lifespan: 520,
-        tint: 0xe8d4a8,
+        scale: { start: 0.22 * (this.cell / 200), end: 0 },
+        alpha: { start: 0.9, end: 0 },
+        lifespan: 650,
+        gravityY: -40,
+        blendMode: Phaser.BlendModes.ADD,
+        tint: [0xffd36b, 0xfff1cc],
         emitting: false,
       })
-      .setDepth(2.5);
+      .setDepth(6.9);
     this.sparks = scene.add
       .particles(0, 0, 'glow', {
         speed: { min: 40, max: 160 },
@@ -192,7 +194,7 @@ export class BoardView {
         emitting: false,
       })
       .setDepth(8);
-    if (opts.dark ?? level.night) this.initDarkness();
+    if (opts.dark ?? true) this.initDarkness();
     if (opts.ambient !== false) this.ambient();
   }
 
@@ -285,10 +287,10 @@ export class BoardView {
     const x0 = fromLeft ? this.ox - cell * 0.4 : this.ox + cell * (level.width + 0.4);
     const x1 = fromLeft ? this.ox + cell * (level.width + 0.4) : this.ox - cell * 0.4;
     const baseY = this.oy + cell * Phaser.Math.FloatBetween(0.5, level.height - 0.5);
-    const color = Phaser.Utils.Array.GetRandom([0xffb3d9, 0xfff0a0, 0xbfe6ff, 0xffc98a]);
+    const color = Phaser.Utils.Array.GetRandom([0xc9b8e8, 0xd8e6f0, 0xe8dcb0]);
     const wings = scene.add.graphics();
     const s = cell * 0.13;
-    wings.fillStyle(color, 0.95);
+    wings.fillStyle(color, 0.55);
     wings.fillEllipse(-s * 0.55, -s * 0.2, s * 1.1, s * 1.2);
     wings.fillEllipse(s * 0.55, -s * 0.2, s * 1.1, s * 1.2);
     wings.fillEllipse(-s * 0.4, s * 0.45, s * 0.7, s * 0.7);
@@ -408,7 +410,7 @@ export class BoardView {
       .renderTexture(this.darkX, this.darkY, w, h)
       .setOrigin(0)
       .setDepth(6.5)
-      .setAlpha(level.night ? 0.72 : 0.48);
+      .setAlpha(level.night ? 0.74 : 0.52);
     this.darkShape = this.scene.make.graphics({}, false);
     this.darkShape.fillStyle(0x03040f, 1);
     this.darkShape.fillRoundedRect(0, 0, w, h, cell * 0.25);
@@ -436,7 +438,7 @@ export class BoardView {
     const flicker = 1 + Math.sin(time * 0.006) * 0.03 + Math.sin(time * 0.0173) * 0.02;
     this.dark.clear();
     this.dark.draw(this.darkShape, 0, 0);
-    for (const p of this.roadLights) this.light(p.x, p.y, cell * 2.1, 0.85);
+    for (const p of this.roadLights) this.light(p.x, p.y, cell * 2.7, 0.9);
     for (const l of this.lanterns) {
       if (l.state === 'off') continue;
       const c = this.center(l.idx);
@@ -506,14 +508,12 @@ export class BoardView {
         this.addWaves(x, y);
         return;
       }
-      // Клетка луга: два оттенка зелени, светлее сверху (вечернее солнце).
+      // Клетка тёмного луга: два близких оттенка, чтобы поле не было однотонным.
       const tone = hash(idx, level.width) * 0.5;
       g.fillStyle(C.cell, 1);
       g.fillRoundedRect(x + pad, y + pad, cell - pad * 2, cell - pad * 2, r);
-      g.fillStyle(C.cellLight, 0.35 + tone * 0.3);
+      g.fillStyle(C.cellLight, 0.3 + tone * 0.35);
       g.fillRoundedRect(x + pad, y + pad, cell - pad * 2, (cell - pad * 2) * 0.5, r);
-      g.fillStyle(0xffd27a, 0.05);
-      g.fillRoundedRect(x + pad, y + pad, cell - pad * 2, (cell - pad * 2) * 0.2, r);
       if (type === 'rock') {
         const cx = x + cell / 2;
         const cy = y + cell / 2;
@@ -944,7 +944,7 @@ export class BoardView {
           this.lumo.angle = 0;
           this.lumo.setScale(Math.sign(this.lumo.scaleX || 1), 1);
           this.face(r.dirOut);
-          // Камешки легли: пыль, «бум» и лёгкая вибрация шага.
+          // Свет дошёл до клетки: искры, мягкое «бум» и лёгкая вибрация шага.
           const c = this.center(r.idx);
           this.dust.explode(jump ? 10 : 6, c.x, c.y + s * 0.2);
           this.flash(c.x, c.y, s * 2.4);
@@ -993,15 +993,29 @@ export class BoardView {
         g.fillRect(p.x + w / 2 - s * 0.06, p.y - h / 2, s * 0.06, h);
       }
     });
-    // Ночью дорога светится; днём — тёплая тропа из камешков с тёмным краем.
-    if (this.level.night) this.polyline(g, pts, upTo, s * 0.56, C.roadGlow, 0.16);
-    this.polyline(g, pts, upTo, s * 0.44, C.roadEdge, 0.9, true);
-    this.polyline(g, pts, upTo, s * 0.36, C.road, 1, true);
-    this.cobbles(g, pts, upTo);
+    // Дорога — лента света: широкое мягкое сияние, тёплая полоса и яркая сердцевина.
+    this.polyline(g, pts, upTo, s * 0.8, C.roadGlow, 0.07);
+    this.polyline(g, pts, upTo, s * 0.52, C.roadGlow, 0.16);
+    this.polyline(g, pts, upTo, s * 0.3, C.road, 0.95);
+    this.polyline(g, pts, upTo, s * 0.11, C.roadCore, 0.85);
+    this.motes(g, pts, upTo);
+    // Пока свет растекается — на его краю горит яркий огонёк.
+    const full = Math.floor(upTo);
+    const frac = upTo - full;
+    if (frac > 0.01 && full + 1 < pts.length && !pts[full + 1].jump) {
+      const a = pts[full];
+      const b = pts[full + 1];
+      const x = a.x + (b.x - a.x) * frac;
+      const y = a.y + (b.y - a.y) * frac;
+      g.fillStyle(C.roadGlow, 0.35);
+      g.fillCircle(x, y, s * 0.26);
+      g.fillStyle(C.roadCore, 1);
+      g.fillCircle(x, y, s * 0.11);
+    }
   }
 
-  /** Камешки на дороге: по 5 пар на отрезок, у края выкладки — «падают» (крупнее и прозрачнее). */
-  private cobbles(g: Phaser.GameObjects.Graphics, pts: RoadPt[], upTo: number) {
+  /** Искорки света вдоль дороги (неподвижные, разной яркости). */
+  private motes(g: Phaser.GameObjects.Graphics, pts: RoadPt[], upTo: number) {
     const s = this.cell;
     for (let i = 0; i < pts.length - 1; i++) {
       const b = pts[i + 1];
@@ -1010,23 +1024,12 @@ export class BoardView {
       const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
       const nx = -(b.y - a.y) / len;
       const ny = (b.x - a.x) / len;
-      for (let k = 0; k < 5; k++) {
-        const t = (k + 0.5) / 5;
-        const at = i + t;
-        if (at > upTo) break;
-        const d = upTo - at;
-        const drop = d < 0.4 ? 1 + ((0.4 - d) / 0.4) * 0.7 : 1;
-        for (const side of [-1, 1]) {
-          const h1 = hash(i * 7 + k, side);
-          const off = side * s * (0.075 + h1 * 0.04) + (k % 2 ? s * 0.02 : -s * 0.02);
-          const x = a.x + (b.x - a.x) * t + nx * off;
-          const y = a.y + (b.y - a.y) * t + ny * off;
-          const r = s * (0.055 + hash(k, i * 3 + side) * 0.025) * drop;
-          g.fillStyle(C.roadEdge, 0.35 / drop);
-          g.fillEllipse(x, y + r * 0.35, r * 2.1, r * 1.5);
-          g.fillStyle(h1 < 0.5 ? C.cobble : C.cobbleDark, 1 / drop);
-          g.fillEllipse(x, y, r * 2, r * 1.5);
-        }
+      for (let k = 0; k < 4; k++) {
+        const t = (k + hash(i, k)) / 4;
+        if (i + t > upTo) break;
+        const off = (hash(k, i * 5) - 0.5) * s * 0.5;
+        g.fillStyle(C.roadCore, 0.35 + hash(i * 3, k) * 0.5);
+        g.fillCircle(a.x + (b.x - a.x) * t + nx * off, a.y + (b.y - a.y) * t + ny * off, s * (0.015 + hash(i, k * 7) * 0.02));
       }
     }
   }
@@ -1403,7 +1406,7 @@ function createDecorTextures(scene: Phaser.Scene) {
     for (const [x, h, lean, w] of bl) blade(x + 1, h * 0.8, lean * 0.8, w * 0.55, C.grass);
     g.generateTexture(`tuft${i}`, S, S);
   });
-  const petals = [0xffb3cf, 0xfff4e0, 0xffd45a];
+  const petals = [0xb79ac8, 0xc8d6e6, 0xd8c27a];
   petals.forEach((col, i) => {
     g.clear();
     g.lineStyle(3, C.grassDark, 1);

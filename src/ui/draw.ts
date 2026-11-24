@@ -563,15 +563,13 @@ export function addBackground(scene: Phaser.Scene, opts: { dust?: boolean; eveni
       g.fillRect(v.x - 4, v.y - 4, v.w + 8, mid - v.y + 4);
       g.fillGradientStyle(C.eveMid, C.eveMid, C.eveBottom, C.eveBottom, 1);
       g.fillRect(v.x - 4, mid, v.w + 8, v.y + v.h - mid + 4);
-      // Солнце садится за холмы, холмы — тёмные силуэты.
+      // Последний отсвет заката за холмами, холмы — чёрные силуэты.
       const by = v.y + v.h;
-      g.fillStyle(0xffd27a, 0.18);
-      g.fillCircle(v.x + v.w * 0.7, by - v.h * 0.2, v.w * 0.28);
-      g.fillStyle(0xffe2a0, 0.35);
-      g.fillCircle(v.x + v.w * 0.7, by - v.h * 0.2, v.w * 0.12);
-      g.fillStyle(0x3c2f52, 1);
+      g.fillStyle(0xff9a6a, 0.07);
+      g.fillCircle(v.x + v.w * 0.7, by - v.h * 0.16, v.w * 0.3);
+      g.fillStyle(0x16122a, 1);
       g.fillEllipse(v.x + v.w * 0.2, by - v.h * 0.06, v.w * 1.1, v.h * 0.26);
-      g.fillStyle(0x2a2440, 1);
+      g.fillStyle(0x0d0b1c, 1);
       g.fillEllipse(v.x + v.w * 0.85, by - v.h * 0.02, v.w * 1.2, v.h * 0.22);
     } else {
       g.fillGradientStyle(C.bgTop, C.bgTop, C.bgBottom, C.bgBottom, 1);
@@ -587,10 +585,10 @@ export function addBackground(scene: Phaser.Scene, opts: { dust?: boolean; eveni
   const Y0 = -1000;
   const Y1 = H + 1000;
   const rnd = new Phaser.Math.RandomDataGenerator(['glowtrail']);
-  // Вечером звёзд меньше и только наверху неба.
-  for (let i = 0; i < (opts.evening ? 30 : 90); i++) {
+  // В сумерках звёзды только в верхней части неба.
+  for (let i = 0; i < (opts.evening ? 60 : 90); i++) {
     const st = scene.add
-      .image(rnd.between(X0, X1), opts.evening ? rnd.between(Y0, H * 0.35) : rnd.between(Y0, Y1), 'dot')
+      .image(rnd.between(X0, X1), opts.evening ? rnd.between(Y0, H * 0.55) : rnd.between(Y0, Y1), 'dot')
       .setScale(rnd.realInRange(0.15, 0.35))
       .setAlpha(rnd.realInRange(0.15, 0.5))
       .setDepth(-9);
