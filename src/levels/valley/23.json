@@ -1,33 +1,28 @@
 {
   "id": "valley-23",
-  "name": "Каменный сад",
+  "name": "Две переправы",
   "grid": [
-    "...F..",
-    "##...L",
-    ".....L",
-    ".....E",
-    "..#...",
     "......",
-    "S....."
+    ".L...E",
+    "......",
+    "......",
+    "~-~~~~",
+    ".....#",
+    ".S#..."
   ],
   "startDir": "N",
   "deck": [
     "straight",
-    "straight",
-    "right",
-    "straight",
-    "left",
-    "straight",
-    "straight2",
-    "left",
-    "right",
     "straight2",
     "straight",
-    "left",
+    "right",
+    "straight",
     "right",
     "straight",
     "straight",
-    "right"
+    "straight2",
+    "straight",
+    "straight2"
   ],
   "stars": {
     "two": 2,
@@ -35,50 +30,40 @@
   },
   "easeDecks": [
     [
-      "straight",
-      "straight",
-      "right",
-      "straight",
       "left",
-      "right",
       "straight",
       "straight2",
-      "left",
+      "straight",
       "right",
+      "straight",
+      "right",
+      "straight",
+      "straight",
       "straight2",
       "straight",
-      "left",
-      "right",
-      "straight",
-      "straight",
-      "right"
+      "straight2"
     ],
     [
-      "straight",
-      "straight",
-      "right",
-      "straight",
       "left",
-      "right",
       "straight",
       "straight2",
+      "straight",
+      "right",
+      "straight",
       "left",
       "right",
+      "straight",
+      "straight",
       "straight2",
       "straight",
-      "left",
-      "right",
-      "straight",
-      "right",
-      "straight",
-      "right"
+      "straight2"
     ]
   ],
   "metrics": {
     "rating": 3.5,
-    "roads": 24,
-    "minTiles": 12,
+    "roads": 2,
+    "minTiles": 7,
     "reserve": 4,
-    "trap": 0.192
+    "trap": 0.203
   }
 }

@@ -12,11 +12,15 @@ export const turnLeft = (d: Dir): Dir => ((d + 3) % 4) as Dir;
 export const turnRight = (d: Dir): Dir => ((d + 1) % 4) as Dir;
 
 /** Виды плиток. Все они относительны текущего направления дороги. */
-export type TileKind = 'straight' | 'straight2' | 'left' | 'right' | 'bridge';
+export type TileKind = 'straight' | 'straight2' | 'left' | 'right' | 'bridge' | 'jump';
 
-export const TILE_KINDS: readonly TileKind[] = ['straight', 'straight2', 'left', 'right', 'bridge'];
+export const TILE_KINDS: readonly TileKind[] = ['straight', 'straight2', 'left', 'right', 'bridge', 'jump'];
 
-export type CellType = 'empty' | 'rock' | 'water' | 'lantern' | 'exit' | 'start' | 'firefly';
+/**
+ * Типы клеток. turnbridge — поворотный мост через воду (после каждой поставленной плитки поворачивается на 90°).
+ * Гаснущий фонарь — это lantern с числом ходов (Level.fade).
+ */
+export type CellType = 'empty' | 'rock' | 'water' | 'lantern' | 'exit' | 'start' | 'firefly' | 'turnbridge';
 
 export const CELL_BY_CHAR: Record<string, CellType> = {
   '.': 'empty',
@@ -26,20 +30,38 @@ export const CELL_BY_CHAR: Record<string, CellType> = {
   E: 'exit',
   S: 'start',
   F: 'firefly',
+  '-': 'turnbridge', // поворотный мост, сначала горизонтальный (проход слева направо)
+  '|': 'turnbridge', // поворотный мост, сначала вертикальный (проход сверху вниз)
+  '2': 'lantern', // гаснущий фонарь: цифра — сколько ходов горит после зажигания
+  '3': 'lantern',
+  '4': 'lantern',
+  '5': 'lantern',
+  '6': 'lantern',
+  '7': 'lantern',
+  '8': 'lantern',
+  '9': 'lantern',
 };
 
-/** Обратная таблица: тип клетки → символ (редактор, генератор). */
-export const CHAR_BY_CELL: Record<CellType, string> = { empty: '.', rock: '#', water: '~', lantern: 'L', exit: 'E', start: 'S', firefly: 'F' };
+/** Обратная таблица: тип клетки → символ (редактор, генератор). Для моста и гаснущего фонаря — cellChar в level.ts. */
+export const CHAR_BY_CELL: Record<CellType, string> = { empty: '.', rock: '#', water: '~', lantern: 'L', exit: 'E', start: 'S', firefly: 'F', turnbridge: '-' };
+
+/** Цель уровня: classic — дойти до арки через все фонари; fireflies — собрать всех светлячков (арки нет). */
+export type GoalType = 'classic' | 'fireflies';
 
 /** Уровень в том виде, как он лежит в JSON. */
 export interface LevelData {
   /** Постоянный id уровня (по нему хранится прогресс): «valley-07». */
   id: string;
   name: string;
-  /** Строки поля сверху вниз: . пусто, # камень, ~ вода, L фонарь, E выход, S старт, F светлячок. */
+  /**
+   * Строки поля сверху вниз: . пусто, # камень, ~ вода, L фонарь, E выход, S старт, F светлячок,
+   * - | поворотный мост (горизонтальный / вертикальный на старте), 2–9 гаснущий фонарь (горит N ходов).
+   */
   grid: string[];
   /** Куда смотрит фонарщик на старте: N, E, S, W. */
   startDir: 'N' | 'E' | 'S' | 'W';
+  /** Цель уровня (по умолчанию classic). */
+  goal?: GoalType;
   /** Колода плиток сверху вниз: первые три сразу попадают в лоток. Пусто, если колода бесконечная. */
   deck: TileKind[];
   /** Бесконечная колода: плитки выдаются случайно из этого набора (обучающие уровни). */
@@ -89,9 +111,21 @@ export interface Level {
   cells: CellType[]; // индекс = y * width + x
   start: Point;
   startDir: Dir;
+  /** Арка. У цели fireflies арки нет: { x: -1, y: -1 }. */
   exit: Point;
-  lanterns: number[]; // индексы клеток с фонарями
-  fireflies: number[]; // индексы клеток со светлячками (собирать по желанию)
+  goal: GoalType;
+  lanterns: number[]; // индексы клеток с фонарями (вместе с гаснущими)
+  fireflies: number[]; // индексы клеток со светлячками (собирать по желанию, у цели fireflies — обязательно)
+  /** По клеткам: сколько ходов горит гаснущий фонарь (0 — обычная клетка или обычный фонарь). */
+  fade: number[];
+  /** Гаснущие фонари (индексы клеток) — порядок для состояния решателя. */
+  fades: number[];
+  /** Поворотные мосты (индексы клеток). */
+  turnBridges: number[];
+  /** По клеткам: поворотный мост на старте горизонтальный (проход слева направо). */
+  bridgeH: boolean[];
+  /** На поле есть то, что меняется со временем (поворотный мост, гаснущий фонарь). */
+  timed: boolean;
   deck: TileKind[];
   /** Набор бесконечной колоды или null, если колода конечная. */
   tileSet: TileKind[] | null;

@@ -74,10 +74,18 @@ describe('когда показывать карточки', () => {
     expect(RULES_BY_LEVEL[firstWith((l) => l.lanterns.length > 0)]).toContain('lantern');
     expect(RULES_BY_LEVEL[firstWith((l) => l.cells.includes('rock'))]).toContain('rock');
     expect(RULES_BY_LEVEL[firstWith((l) => l.cells.includes('water'))]).toContain('water');
-    // Светлячков объясняем по содержимому уровня — там, где они встретились впервые (по плану — уровень 12).
-    expect(Object.values(RULES_BY_LEVEL).flat().sort()).toEqual(ALL_RULES.filter((r) => r !== 'firefly').sort());
+    // Остальное объясняем по содержимому уровня — там, где элемент встретился впервые.
+    const byContent = ['firefly', 'jump', 'ffgoal', 'turnbridge', 'fade'];
+    expect(Object.values(RULES_BY_LEVEL).flat().sort()).toEqual(ALL_RULES.filter((r) => !byContent.includes(r)).sort());
     const ff = LEVELS.find((l) => l.fireflies.length > 0);
     expect(ff?.num).toBe(FIREFLY_FROM);
     expect(rulesFor(ff!)).toContain('firefly');
+    expect(rulesFor(LEVELS.find((l) => l.deck.includes('jump'))!)).toContain('jump');
+    expect(rulesFor(LEVELS.find((l) => l.goal === 'fireflies')!)).toContain('ffgoal');
+    expect(rulesFor(LEVELS.find((l) => l.turnBridges.length > 0)!)).toContain('turnbridge');
+    expect(rulesFor(LEVELS.find((l) => l.fades.length > 0)!)).toContain('fade');
+    // Каждая карточка правил где-то встречается.
+    const shown = new Set(LEVELS.flatMap((l) => rulesFor(l)));
+    for (const r of ALL_RULES) if (r !== 'side') expect(shown.has(r), r).toBe(true);
   });
 });

@@ -2,83 +2,72 @@
   "id": "valley-27",
   "name": "Туманная лощина",
   "grid": [
-    "#E..FF",
-    ".#....",
+    "...4#.",
+    ".E....",
     "......",
-    "....L.",
-    "...#..",
-    "#.L...",
-    "....S."
+    "......",
+    "~~~~~~",
+    "#.....",
+    "......",
+    "..S..."
   ],
   "startDir": "N",
   "deck": [
     "left",
-    "left",
-    "straight",
-    "right",
-    "straight",
-    "straight",
+    "bridge",
+    "straight2",
     "left",
     "right",
     "straight2",
     "straight2",
-    "right",
     "left",
-    "straight2",
+    "straight",
     "left",
-    "straight2",
-    "straight2"
+    "straight",
+    "left"
   ],
   "stars": {
-    "two": 2,
-    "three": 4
+    "two": 1,
+    "three": 2
   },
   "easeDecks": [
     [
       "left",
+      "bridge",
+      "straight2",
+      "left",
+      "right",
+      "straight2",
+      "right",
+      "straight2",
       "left",
       "straight",
-      "right",
+      "left",
       "straight",
-      "right",
-      "straight",
-      "left",
-      "right",
-      "straight2",
-      "straight2",
-      "right",
-      "left",
-      "straight2",
-      "left",
-      "straight2",
-      "straight2"
+      "left"
     ],
     [
-      "left",
-      "left",
-      "straight",
       "right",
-      "straight",
-      "straight",
-      "right",
-      "straight",
+      "left",
+      "bridge",
+      "straight2",
       "left",
       "right",
       "straight2",
-      "straight2",
       "right",
-      "left",
       "straight2",
       "left",
-      "straight2",
-      "straight2"
+      "straight",
+      "left",
+      "straight",
+      "left"
     ]
   ],
   "metrics": {
     "rating": 5,
-    "roads": 8,
-    "minTiles": 11,
-    "reserve": 5,
-    "trap": 0.365
+    "roads": 4,
+    "minTiles": 9,
+    "reserve": 3,
+    "trap": 0.292
   }
 }

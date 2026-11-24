@@ -1,13 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { applyAction, createGame, firefliesOnRoad, type GameState } from '../src/core/game';
-import { parseLevel } from '../src/core/level';
+import { levelRows, parseLevel } from '../src/core/level';
 import { analyzeLevel, ratingOf, trapRate } from '../src/core/difficulty';
 import { generateOne, mulberry32, randomPath } from '../src/core/generator';
 import { geoMinBounded, geoMinTiles } from '../src/core/geo';
 import { solutionOf, solveLevel, TooManyStates } from '../src/core/solver';
 import type { LevelData, TileKind } from '../src/core/types';
 import { isChallenge, LEVELS, levelById, nextLevelOf, numberInWorld, WORLDS } from '../src/levels/index';
-import { MAX_H, MAX_W, VALLEY_PLAN } from '../src/levels/curve';
+import { BREATHER_MAX_RATING, BREATHER_MIN_ROADS, MAX_H, MAX_W, NOVELTY, VALLEY_PLAN } from '../src/levels/curve';
+import { featuresOf } from '../src/core/generator';
+
+function dataOf(l: ReturnType<typeof parseLevel>): LevelData {
+  return { id: l.id, name: l.name, grid: levelRows(l), startDir: (['N', 'E', 'S', 'W'] as const)[l.startDir], deck: l.deck, stars: l.stars, goal: l.goal };
+}
 
 function level(grid: string[], deck: TileKind[], extra: Partial<LevelData> = {}) {
   return parseLevel({ id: 'test', name: 't', grid, startDir: 'N', deck, stars: { two: 0, three: 0 }, ...extra });
@@ -120,6 +125,36 @@ describe('генератор', () => {
     }
     expect(found).toBeGreaterThan(0);
   });
+
+  it('новые элементы в кандидатах действительно нужны', () => {
+    const cases: { features: ('jump' | 'turnbridge' | 'fade' | 'rock' | 'water')[]; check: (l: ReturnType<typeof parseLevel>) => void }[] = [
+      { features: ['jump', 'rock'], check: (l) => expect(solveLevel(parseLevel({ ...dataOf(l), deck: l.deck.filter((k) => k !== 'jump') })).solvable).toBe(false) },
+      { features: ['turnbridge'], check: (l) => expect(l.turnBridges.length).toBeGreaterThan(0) },
+      { features: ['fade'], check: (l) => expect(l.fades.length).toBeGreaterThan(0) },
+    ];
+    for (const c of cases) {
+      const r = mulberry32(7);
+      let ok = 0;
+      for (let i = 0; i < 300 && ok < 1; i++) {
+        const cand = generateOne(r, { width: 5, height: 6, features: c.features });
+        if (typeof cand === 'string') continue;
+        ok++;
+        c.check(parseLevel(cand.data));
+      }
+      expect(ok, c.features.join('+')).toBe(1);
+    }
+  });
+
+  it('цель «светлячки»: кандидат без арки, решаем, все светлячки обязательны', () => {
+    const r = mulberry32(3);
+    let cand = generateOne(r, { width: 5, height: 6, features: ['firefly'], goal: 'fireflies' });
+    for (let i = 0; i < 100 && typeof cand === 'string'; i++) cand = generateOne(r, { width: 5, height: 6, features: ['firefly'], goal: 'fireflies' });
+    expect(typeof cand).not.toBe('string');
+    const l = parseLevel((cand as Exclude<typeof cand, string>).data);
+    expect(l.goal).toBe('fireflies');
+    expect(l.exit.x).toBe(-1);
+    expect(solveLevel(l).solvable).toBe(true);
+  });
 });
 
 describe('мир «Долина»', () => {
@@ -148,8 +183,40 @@ describe('мир «Долина»', () => {
     }
   });
 
-  it('светлячки появляются с уровня 12', () => {
-    expect(LEVELS.slice(0, 11).every((l) => l.fireflies.length === 0)).toBe(true);
-    expect(LEVELS[11].fireflies.length).toBeGreaterThan(0);
+  it('светлячки появляются с уровня 11, уровни 1–10 без новых элементов', () => {
+    expect(LEVELS.slice(0, 10).every((l) => l.fireflies.length === 0)).toBe(true);
+    expect(LEVELS[10].fireflies.length).toBeGreaterThan(0);
+    for (const l of LEVELS.slice(0, 10)) {
+      expect(l.goal, l.id).toBe('classic');
+      expect(l.timed, l.id).toBe(false);
+      expect([...l.deck, ...(l.tileSet ?? [])].includes('jump'), l.id).toBe(false);
+    }
+  });
+
+  it('что-то новое каждые ~5 уровней: в каждом блоке плана — его элемент', () => {
+    const has: Record<string, (l: (typeof LEVELS)[number]) => boolean> = {
+      светлячки: (l) => l.fireflies.length > 0 && l.goal === 'classic',
+      прыжок: (l) => l.deck.includes('jump'),
+      'цель «только светлячки»': (l) => l.goal === 'fireflies',
+      'поворотный мост': (l) => l.turnBridges.length > 0,
+      'гаснущий фонарь': (l) => l.fades.length > 0,
+      'всё вместе': (l) => l.deck.includes('jump') && l.turnBridges.length > 0 && l.fades.length > 0,
+    };
+    for (const b of NOVELTY) {
+      for (let n = b.from; n <= b.to; n++) expect(has[b.what](LEVELS[n - 1]), `${n}: ${b.what}`).toBe(true);
+    }
+  });
+
+  it('передышки действительно лёгкие, цели и элементы — по плану', () => {
+    for (const slot of VALLEY_PLAN) {
+      const l = levelById(`valley-${slot.num}`)!;
+      expect(l.goal, l.id).toBe(slot.goal ?? 'classic');
+      const f = featuresOf(l);
+      for (const need of slot.needs) expect(f, `${l.id} нужен ${need}`).toContain(need);
+      if (slot.role === 'breather') {
+        expect(l.metrics!.rating, l.id).toBeLessThanOrEqual(BREATHER_MAX_RATING);
+        expect(l.metrics!.roads, l.id).toBeGreaterThanOrEqual(BREATHER_MIN_ROADS);
+      }
+    }
   });
 });

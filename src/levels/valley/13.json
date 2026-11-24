@@ -2,74 +2,71 @@
   "id": "valley-13",
   "name": "Светлячки среди камней",
   "grid": [
-    "#E...",
-    "...F.",
-    ".L...",
+    "..E..",
+    ".#...",
+    "....F",
+    ".F#..",
     ".....",
-    "...##",
     ".....",
-    "....S"
+    "S...."
   ],
   "startDir": "N",
   "deck": [
     "left",
+    "right",
     "left",
     "straight2",
-    "straight",
-    "right",
-    "right",
-    "right",
     "straight2",
-    "straight2",
-    "straight",
-    "straight2",
+    "right",
     "left",
-    "straight2"
+    "straight2",
+    "right",
+    "straight",
+    "left",
+    "right"
   ],
   "stars": {
     "two": 3,
-    "three": 6
+    "three": 5
   },
   "easeDecks": [
     [
       "left",
+      "right",
       "left",
       "straight2",
+      "straight2",
+      "right",
       "straight",
-      "right",
       "left",
-      "right",
-      "right",
       "straight2",
-      "straight2",
+      "right",
       "straight",
-      "straight2",
       "left",
-      "straight2"
+      "right"
     ],
     [
-      "left",
-      "left",
-      "straight2",
-      "straight",
-      "right",
       "straight",
       "left",
       "right",
-      "right",
-      "straight2",
-      "straight2",
-      "straight",
-      "straight2",
       "left",
-      "straight2"
+      "straight2",
+      "straight2",
+      "right",
+      "straight",
+      "left",
+      "straight2",
+      "right",
+      "straight",
+      "left",
+      "right"
     ]
   ],
   "metrics": {
     "rating": 2.5,
-    "roads": 12,
+    "roads": 40,
     "minTiles": 6,
-    "reserve": 7,
-    "trap": 0.217
+    "reserve": 6,
+    "trap": 0.243
   }
 }

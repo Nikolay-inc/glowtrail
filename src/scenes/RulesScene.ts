@@ -67,7 +67,7 @@ export class RulesScene extends Phaser.Scene {
     text(this, W / 2, top + 85, t(rule.title), 64);
 
     // Мини-поле: то же, что в игре, но без темноты — чтобы всё было хорошо видно.
-    this.board = new BoardView(this, demoLevel(ph), { x: W / 2 - 390, y: top + 140, w: 780, h: 530 }, { avatar: getProfile().avatar, dark: false });
+    this.board = new BoardView(this, demoLevel(ph), { x: W / 2 - 390, y: top + 140, w: 780, h: 530 }, { avatar: getProfile().avatar, dark: false, ambient: false });
     this.card = new TileCard(this, W / 2, top + 770, 0);
     this.card.disableInteractive();
     this.card.setScale(0.8);

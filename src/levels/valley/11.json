@@ -1,66 +1,68 @@
 {
   "id": "valley-11",
-  "name": "Каменная тропа",
+  "name": "Первый светлячок",
   "grid": [
-    ".#...",
-    "E....",
-    "...##",
-    "...#.",
-    ".L...",
+    "..E.F",
     ".....",
+    "..F..",
+    "....#",
+    "..#..",
     ".S..."
   ],
   "startDir": "N",
   "deck": [
-    "straight2",
     "left",
     "straight",
+    "straight",
     "right",
-    "left",
-    "left",
     "straight",
     "right",
     "straight2",
-    "right"
+    "straight2",
+    "left",
+    "right",
+    "straight2"
   ],
   "stars": {
-    "two": 2,
-    "three": 4
+    "two": 3,
+    "three": 5
   },
   "easeDecks": [
     [
-      "right",
-      "straight2",
       "left",
+      "straight",
+      "straight",
+      "right",
       "straight",
       "right",
       "left",
-      "left",
-      "straight",
-      "right",
       "straight2",
-      "right"
+      "straight2",
+      "left",
+      "right",
+      "straight2"
     ],
     [
       "right",
-      "straight2",
       "left",
+      "straight",
+      "straight",
+      "right",
       "straight",
       "right",
       "left",
-      "straight",
-      "left",
-      "straight",
-      "right",
       "straight2",
-      "right"
+      "straight2",
+      "left",
+      "right",
+      "straight2"
     ]
   ],
   "metrics": {
-    "rating": 2.1,
+    "rating": 2,
     "roads": 25,
     "minTiles": 5,
-    "reserve": 5,
-    "trap": 0.213
+    "reserve": 6,
+    "trap": 0.198
   }
 }

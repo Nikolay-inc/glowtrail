@@ -1,76 +1,60 @@
 {
   "id": "valley-21",
-  "name": "Светлячки в ночи",
+  "name": "Поворотный мост",
   "grid": [
-    ".E...",
-    "..F..",
     ".....",
+    "#....",
     ".....",
-    ".L...",
+    "S....",
     ".....",
-    "...S."
+    "~~|-~",
+    "#..E."
   ],
-  "startDir": "N",
+  "startDir": "E",
   "deck": [
+    "right",
+    "right",
+    "straight",
+    "straight2",
     "straight",
     "left",
     "straight2",
-    "straight",
-    "straight",
-    "straight",
-    "right",
-    "right",
-    "straight2",
-    "left",
-    "right",
-    "straight2",
-    "left"
+    "right"
   ],
   "stars": {
-    "two": 3,
-    "three": 6
+    "two": 2,
+    "three": 3
   },
-  "night": true,
   "easeDecks": [
     [
-      "straight",
       "left",
+      "right",
+      "right",
+      "straight",
       "straight2",
       "straight",
       "left",
-      "straight",
-      "straight",
-      "right",
-      "right",
       "straight2",
-      "left",
-      "right",
-      "straight2",
-      "left"
+      "right"
     ],
     [
+      "left",
       "right",
+      "right",
+      "straight",
+      "straight2",
+      "straight",
       "straight",
       "left",
       "straight2",
-      "straight",
-      "left",
-      "straight",
-      "straight",
-      "right",
-      "right",
-      "straight2",
-      "left",
-      "right",
-      "straight2",
-      "left"
+      "right"
     ]
   ],
   "metrics": {
     "rating": 3,
-    "roads": 26,
-    "minTiles": 6,
-    "reserve": 7,
-    "trap": 0.3
+    "roads": 3,
+    "minTiles": 4,
+    "reserve": 4,
+    "trap": 0.275
   }
 }

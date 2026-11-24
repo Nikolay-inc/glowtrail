@@ -1,81 +1,69 @@
 {
   "id": "valley-15",
-  "name": "Мельничный ручей",
+  "name": "Прыжок через камень",
   "grid": [
-    "...E.#",
-    "L.....",
-    "L#.#..",
-    "......",
-    "~~.~~~",
-    "#.....",
-    "..S..."
+    ".....",
+    ".E.#.",
+    ".#...",
+    "....F",
+    ".....",
+    ".....",
+    "....S"
   ],
   "startDir": "N",
   "deck": [
+    "jump",
+    "jump",
     "left",
-    "right",
-    "bridge",
-    "left",
-    "straight",
-    "right",
-    "right",
     "straight2",
+    "straight2",
+    "left",
+    "left",
     "right",
     "left",
-    "straight",
-    "left",
-    "right",
-    "straight",
-    "straight"
+    "jump",
+    "straight2"
   ],
   "stars": {
-    "two": 2,
-    "three": 4
+    "two": 3,
+    "three": 5
   },
   "easeDecks": [
     [
+      "jump",
+      "jump",
       "left",
-      "right",
-      "bridge",
-      "left",
-      "straight",
-      "right",
-      "straight",
-      "right",
       "straight2",
+      "straight2",
+      "left",
+      "left",
+      "left",
       "right",
       "left",
-      "straight",
-      "left",
-      "right",
-      "straight",
-      "straight"
+      "jump",
+      "straight2"
     ],
     [
+      "jump",
+      "jump",
+      "left",
+      "straight2",
+      "straight",
       "straight2",
       "left",
-      "right",
-      "bridge",
       "left",
-      "straight",
-      "right",
-      "straight",
-      "right",
-      "straight2",
-      "right",
-      "left",
-      "straight",
       "left",
       "right",
-      "straight",
-      "straight"
+      "left",
+      "jump",
+      "straight2"
     ]
   ],
   "metrics": {
-    "rating": 3.5,
-    "roads": 12,
-    "minTiles": 10,
-    "reserve": 5,
-    "trap": 0.217
+    "rating": 3,
+    "roads": 3,
+    "minTiles": 5,
+    "reserve": 6,
+    "trap": 0.292
   }
 }

@@ -27,10 +27,11 @@ function webVibrate(pattern: number | number[]) {
 }
 
 /** Что выбрать для события: нативный тактильный отклик или шаблон для браузера. */
-export type HapticKind = 'tap' | 'place' | 'error' | 'win';
+export type HapticKind = 'tap' | 'place' | 'step' | 'error' | 'win';
 export const WEB_PATTERNS: Record<HapticKind, number | number[]> = {
   tap: 6,
   place: 10,
+  step: 4,
   error: [12, 50, 12],
   win: [20, 60, 20, 60, 40],
 };
@@ -49,6 +50,10 @@ function play(kind: HapticKind) {
     case 'place':
       void safe(Haptics.impact({ style: ImpactStyle.Light }));
       break;
+    case 'step':
+      // Шаг Lumo — самый лёгкий удар.
+      void safe(Haptics.impact({ style: ImpactStyle.Light }));
+      break;
     case 'error':
       void safe(Haptics.notification({ type: NotificationType.Error }));
       break;
@@ -64,6 +69,8 @@ function play(kind: HapticKind) {
 export const haptics = {
   tap: () => play('tap'),
   place: () => play('place'),
+  /** Лёгкий отклик на каждый шаг Lumo. */
+  step: () => play('step'),
   error: () => play('error'),
   win: () => play('win'),
 };

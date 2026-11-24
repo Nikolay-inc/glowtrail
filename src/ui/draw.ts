@@ -80,6 +80,17 @@ export function drawTileIcon(g: G, kind: TileKind, s: number, color: number) {
       arrowHead(g, m * s * 0.44, s * 0.06 - r, m < 0 ? Math.PI : 0, s * 0.3);
       break;
     }
+    case 'jump': {
+      // Дуга со стрелкой над препятствием: дорога перепрыгивает одну клетку.
+      g.fillStyle(0x8f8679, 1);
+      g.fillRoundedRect(s * 0.02, -s * 0.06, s * 0.2, s * 0.2, s * 0.04);
+      g.fillStyle(color, 1);
+      const curve = new Phaser.Curves.QuadraticBezier(new Phaser.Math.Vector2(0, s * 0.4), new Phaser.Math.Vector2(-s * 0.62, s * 0.04), new Phaser.Math.Vector2(-s * 0.02, -s * 0.3));
+      g.strokePoints(curve.getPoints(16), false);
+      g.fillCircle(0, s * 0.4, lw / 2);
+      arrowHead(g, s * 0.04, -s * 0.36, up + 0.75, s * 0.3);
+      break;
+    }
     case 'bridge': {
       // Арка моста над волнами и стрелка вперёд.
       g.beginPath();
@@ -537,14 +548,35 @@ export function createAvatarBadge(
 // ---------------------------------------------------------------------------
 // Ночной фон: градиент, мерцающие звёзды и светлячки
 
-export function addBackground(scene: Phaser.Scene, opts: { dust?: boolean } = {}) {
+/**
+ * Фон сцены. evening — тёплый вечер «Долины» (закатное небо и тёмные холмы внизу), иначе ночное небо.
+ */
+export function addBackground(scene: Phaser.Scene, opts: { dust?: boolean; evening?: boolean } = {}) {
   // Фон на весь экран (а не только на раскладку 1080×1920): градиент перерисовывается при смене размера.
   const g = scene.add.graphics().setDepth(-10);
   let vignette: Phaser.GameObjects.Image | null = null;
   const paint = (v: ViewRect) => {
     g.clear();
-    g.fillGradientStyle(C.bgTop, C.bgTop, C.bgBottom, C.bgBottom, 1);
-    g.fillRect(v.x - 4, v.y - 4, v.w + 8, v.h + 8);
+    if (opts.evening) {
+      const mid = v.y + v.h * 0.55;
+      g.fillGradientStyle(C.eveTop, C.eveTop, C.eveMid, C.eveMid, 1);
+      g.fillRect(v.x - 4, v.y - 4, v.w + 8, mid - v.y + 4);
+      g.fillGradientStyle(C.eveMid, C.eveMid, C.eveBottom, C.eveBottom, 1);
+      g.fillRect(v.x - 4, mid, v.w + 8, v.y + v.h - mid + 4);
+      // Солнце садится за холмы, холмы — тёмные силуэты.
+      const by = v.y + v.h;
+      g.fillStyle(0xffd27a, 0.18);
+      g.fillCircle(v.x + v.w * 0.7, by - v.h * 0.2, v.w * 0.28);
+      g.fillStyle(0xffe2a0, 0.35);
+      g.fillCircle(v.x + v.w * 0.7, by - v.h * 0.2, v.w * 0.12);
+      g.fillStyle(0x3c2f52, 1);
+      g.fillEllipse(v.x + v.w * 0.2, by - v.h * 0.06, v.w * 1.1, v.h * 0.26);
+      g.fillStyle(0x2a2440, 1);
+      g.fillEllipse(v.x + v.w * 0.85, by - v.h * 0.02, v.w * 1.2, v.h * 0.22);
+    } else {
+      g.fillGradientStyle(C.bgTop, C.bgTop, C.bgBottom, C.bgBottom, 1);
+      g.fillRect(v.x - 4, v.y - 4, v.w + 8, v.h + 8);
+    }
     vignette?.setPosition(v.x + v.w / 2, v.y + v.h / 2).setDisplaySize(v.w, v.h);
   };
   const view = keepFitted(scene, paint);
@@ -555,9 +587,10 @@ export function addBackground(scene: Phaser.Scene, opts: { dust?: boolean } = {}
   const Y0 = -1000;
   const Y1 = H + 1000;
   const rnd = new Phaser.Math.RandomDataGenerator(['glowtrail']);
-  for (let i = 0; i < 90; i++) {
+  // Вечером звёзд меньше и только наверху неба.
+  for (let i = 0; i < (opts.evening ? 30 : 90); i++) {
     const st = scene.add
-      .image(rnd.between(X0, X1), rnd.between(Y0, Y1), 'dot')
+      .image(rnd.between(X0, X1), opts.evening ? rnd.between(Y0, H * 0.35) : rnd.between(Y0, Y1), 'dot')
       .setScale(rnd.realInRange(0.15, 0.35))
       .setAlpha(rnd.realInRange(0.15, 0.5))
       .setDepth(-9);

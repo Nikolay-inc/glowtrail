@@ -15,7 +15,7 @@ import { easeDeck, TooManyStates } from '../src/core/solver';
 import type { DifficultyReport } from '../src/core/difficulty';
 import { starThresholds } from '../src/core/game';
 import type { LevelData } from '../src/core/types';
-import { VALLEY_PLAN, type Slot } from '../src/levels/curve';
+import { BREATHER_MAX_RATING, BREATHER_MIN_ROADS, VALLEY_PLAN, type Slot } from '../src/levels/curve';
 
 const dry = process.argv.includes('--dry');
 const onlyArg = process.argv.indexOf('--only');
@@ -47,6 +47,8 @@ for (const slot of VALLEY_PLAN) {
 function fits(slot: Slot, c: Candidate): boolean {
   const [w, h] = c.size.split('x').map(Number);
   if (w > slot.maxW || h > slot.maxH) return false;
+  if ((c.data.goal ?? 'classic') !== (slot.goal ?? 'classic')) return false;
+  if (slot.role === 'breather' && (c.metrics.rating > BREATHER_MAX_RATING || c.metrics.roads < BREATHER_MIN_ROADS)) return false;
   const f = featuresOf(parseLevel(c.data));
   if (!slot.needs.every((x) => f.includes(x))) return false;
   return f.every((x) => slot.needs.includes(x) || slot.allows.includes(x));
@@ -56,7 +58,8 @@ function fits(slot: Slot, c: Candidate): boolean {
 function score(slot: Slot, c: Candidate): number {
   const [w, h] = c.size.split('x').map(Number);
   const area = (w * h) / (slot.maxW * slot.maxH);
-  return Math.abs(ratingOf(c.metrics) - slot.rating) + (1 - area) * 0.6;
+  // С запасом меньше 2 плиток звёзды теряют смысл (3 звезды за любую победу) — такие берём в последнюю очередь.
+  return Math.abs(ratingOf(c.metrics) - slot.rating) + (1 - area) * 0.6 + (c.metrics.reserve < 2 ? 1 : 0);
 }
 
 const rows: string[] = [];
@@ -88,6 +91,7 @@ for (const slot of VALLEY_PLAN) {
     deck: best.data.deck,
     stars: { two: 0, three: 0 },
   };
+  if (slot.goal && slot.goal !== 'classic') data.goal = slot.goal;
   if (slot.night) data.night = true;
   // Звёзды, облегчение и метрики — заново, теми же функциями, что verify и ease.
   const level = parseLevel(data);

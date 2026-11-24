@@ -5,7 +5,7 @@ import { SaveService } from './save/SaveService';
 import type { StringKey } from './strings';
 
 /** Подсказки Lumo. Каждая показывается один раз и запоминается в сохранении. */
-export type TipId = 'undo' | 'hint' | 'restart' | 'stash' | 'turn' | 'rock' | 'water' | 'lantern' | 'side_entry' | 'drag';
+export type TipId = 'undo' | 'hint' | 'restart' | 'stash' | 'turn' | 'rock' | 'water' | 'lantern' | 'side_entry' | 'drag' | 'turnbridge' | 'fade';
 
 /** Ключ текста подсказки в файле строк. */
 export const TIP_TEXT: Record<TipId, StringKey> = {
@@ -19,23 +19,39 @@ export const TIP_TEXT: Record<TipId, StringKey> = {
   lantern: 'tip_lantern',
   side_entry: 'tip_side_entry',
   drag: 'tip_drag',
+  turnbridge: 'tip_turnbridge',
+  fade: 'tip_fade',
 };
 
 /** Карточки правил с анимацией: показываются перед уровнем, где элемент появляется впервые. */
-export type RuleId = 'road' | 'lantern' | 'side' | 'rock' | 'water' | 'firefly';
-export const ALL_RULES: readonly RuleId[] = ['road', 'lantern', 'side', 'rock', 'water', 'firefly'];
+export type RuleId = 'road' | 'lantern' | 'side' | 'rock' | 'water' | 'firefly' | 'jump' | 'ffgoal' | 'turnbridge' | 'fade';
+export const ALL_RULES: readonly RuleId[] = ['road', 'lantern', 'side', 'rock', 'water', 'firefly', 'jump', 'ffgoal', 'turnbridge', 'fade'];
+
+/** Что на уровне — для выбора карточек правил по содержимому. */
+export interface RulesLevel {
+  num: number;
+  fireflies: readonly number[];
+  goal?: 'classic' | 'fireflies';
+  deck?: readonly string[];
+  turnBridges?: readonly number[];
+  fades?: readonly number[];
+}
 /** Обучающие уровни (по номеру): какие карточки перед ними. */
 export const RULES_BY_LEVEL: Record<number, RuleId[]> = { 1: ['road'], 3: ['lantern'], 4: ['rock', 'side'], 8: ['water'] };
 
 /** Карточки перед уровнем: по номеру (обучение) и по содержимому — светлячки объясняем там, где они встретились впервые. */
-export function rulesFor(level: { num: number; fireflies: readonly number[] }): RuleId[] {
+export function rulesFor(level: RulesLevel): RuleId[] {
   const out = [...(RULES_BY_LEVEL[level.num] ?? [])];
-  if (level.fireflies.length > 0) out.push('firefly');
+  if (level.goal === 'fireflies') out.push('ffgoal');
+  else if (level.fireflies.length > 0) out.push('firefly');
+  if (level.deck?.includes('jump')) out.push('jump');
+  if (level.turnBridges?.length) out.push('turnbridge');
+  if (level.fades?.length) out.push('fade');
   return out;
 }
 
 /** Карточки, которые ещё не показывали перед этим уровнем. */
-export function pendingRules(level: { num: number; fireflies: readonly number[] }): RuleId[] {
+export function pendingRules(level: RulesLevel): RuleId[] {
   const seen = SaveService.load().profile.tipsSeen;
   return rulesFor(level).filter((r) => !seen.includes(`rule:${r}`));
 }

@@ -2,7 +2,8 @@
 // В продакшен-сборку не попадает: main.ts подключает его через import.meta.env.DEV (Vite вырезает ветку).
 //
 // Сетка выбранного размера, рисование клеток тапом (пусто, камень, вода, фонарь, старт с направлением, выход,
-// светлячок), колода, кнопки «Проверить» (метрики решателя), «Сыграть» (пройти уровень в игре),
+// светлячок, поворотный мост — повторный тап меняет положение, гаснущий фонарь — повторный тап меняет число),
+// цель уровня (дверь или «только светлячки»), колода (с прыжком), кнопки «Проверить» (метрики решателя), «Сыграть» (пройти уровень в игре),
 // «Показать решение», «Экспорт JSON» (в буфер) и «Загрузить» (вставить JSON или открыть уровень игры).
 // Обычный HTML поверх игры; черновик сохраняется в localStorage.
 
@@ -11,24 +12,49 @@ import { analyzeLevel } from '../core/difficulty';
 import { starThresholds } from '../core/game';
 import { parseLevel } from '../core/level';
 import { easeDeck, solutionOf } from '../core/solver';
-import { CELL_BY_CHAR, CHAR_BY_CELL, TILE_KINDS, type CellType, type LevelData, type TileKind } from '../core/types';
+import { CELL_BY_CHAR, CHAR_BY_CELL, TILE_KINDS, type CellType, type GoalType, type LevelData, type TileKind } from '../core/types';
 import { LEVELS } from '../levels/index';
 import { EDITOR_RETURN } from '../scenes/GameScene';
 
-type Tool = CellType;
+/** Инструмент — символ клетки в формате JSON ('-' — поворотный мост, '5' — гаснущий фонарь). */
+type Tool = string;
 const DIRS = ['N', 'E', 'S', 'W'] as const;
 const ARROW = { N: '⬆', E: '➡', S: '⬇', W: '⬅' } as const;
 const CELL_VIEW: Record<CellType, { label: string; bg: string; title: string }> = {
-  empty: { label: '', bg: '#232c5e', title: 'Пусто' },
-  rock: { label: '🪨', bg: '#3c4062', title: 'Камень' },
-  water: { label: '〰', bg: '#1d4d8f', title: 'Вода' },
+  empty: { label: '', bg: '#4f7f3a', title: 'Пусто' },
+  rock: { label: '🪨', bg: '#5f574f', title: 'Камень' },
+  water: { label: '〰', bg: '#2f78ad', title: 'Вода' },
   lantern: { label: '🏮', bg: '#3a3350', title: 'Фонарь' },
   start: { label: '⬆', bg: '#7a5a1f', title: 'Старт (тап ещё раз — повернуть)' },
   exit: { label: '🚪', bg: '#1d6b66', title: 'Выход' },
   firefly: { label: '✨', bg: '#2f4a2a', title: 'Светлячок' },
+  turnbridge: { label: '═', bg: '#2f78ad', title: 'Поворотный мост (тап ещё раз — повернуть)' },
 };
-const TILE_VIEW: Record<TileKind, string> = { straight: '↑', straight2: '⇈', left: '↰', right: '↱', bridge: '═' };
-const TILE_RU: Record<TileKind, string> = { straight: 'прямо', straight2: 'прямо ×2', left: 'налево', right: 'направо', bridge: 'мост' };
+/** Палитра: символ → подпись. */
+const TOOLS: { ch: string; title: string }[] = [
+  { ch: '.', title: 'Пусто' },
+  { ch: '#', title: 'Камень' },
+  { ch: '~', title: 'Вода' },
+  { ch: 'L', title: 'Фонарь' },
+  { ch: '5', title: 'Гаснущий фонарь' },
+  { ch: '-', title: 'Поворотный мост' },
+  { ch: 'S', title: 'Старт' },
+  { ch: 'E', title: 'Выход' },
+  { ch: 'F', title: 'Светлячок' },
+];
+const TILE_VIEW: Record<TileKind, string> = { straight: '↑', straight2: '⇈', left: '↰', right: '↱', bridge: '═', jump: '⤴' };
+const TILE_RU: Record<TileKind, string> = { straight: 'прямо', straight2: 'прямо ×2', left: 'налево', right: 'направо', bridge: 'мост', jump: 'прыжок' };
+
+/** Как показать клетку-символ в сетке редактора. */
+function viewOf(ch: string, startDir: LevelData['startDir']) {
+  const type = CELL_BY_CHAR[ch] ?? 'empty';
+  const v = CELL_VIEW[type];
+  if (type === 'start') return { ...v, label: ARROW[startDir] };
+  if (ch === '-') return { ...v, label: '═' };
+  if (ch === '|') return { ...v, label: '║' };
+  if (ch >= '2' && ch <= '9') return { ...v, label: `🏮${ch}`, title: `Гаснущий фонарь: горит ${ch} ходов (тап ещё раз — изменить)` };
+  return v;
+}
 const STORE_KEY = 'glowtrail.editor';
 
 interface Draft {
@@ -36,32 +62,40 @@ interface Draft {
   name: string;
   width: number;
   height: number;
-  cells: CellType[];
+  /** Символы клеток в формате JSON. */
+  cells: string[];
   startDir: LevelData['startDir'];
   deck: TileKind[];
   tileSet?: TileKind[];
   allowStash: boolean;
   night: boolean;
+  goal?: GoalType;
 }
 
 function emptyDraft(width = 5, height = 7): Draft {
-  const cells: CellType[] = new Array(width * height).fill('empty');
-  cells[(height - 1) * width + Math.floor(width / 2)] = 'start';
-  cells[Math.floor(width / 2)] = 'exit';
+  const cells: string[] = new Array(width * height).fill('.');
+  cells[(height - 1) * width + Math.floor(width / 2)] = 'S';
+  cells[Math.floor(width / 2)] = 'E';
   return { id: 'valley-99', name: 'Новый уровень', width, height, cells, startDir: 'N', deck: ['straight', 'straight', 'left', 'right', 'straight', 'straight2'], allowStash: true, night: false };
 }
 
 function fromData(d: LevelData): Draft {
   const height = d.grid.length;
   const width = d.grid[0].length;
-  const cells = d.grid.flatMap((row) => [...row].map((ch) => CELL_BY_CHAR[ch] ?? 'empty'));
-  return { id: String(d.id), name: d.name, width, height, cells, startDir: d.startDir, deck: [...d.deck], tileSet: d.tileSet ? [...d.tileSet] : undefined, allowStash: d.allowStash ?? true, night: !!d.night };
+  const cells = d.grid.flatMap((row) => [...row].map((ch) => (CELL_BY_CHAR[ch] ? ch : '.')));
+  return { id: String(d.id), name: d.name, width, height, cells, startDir: d.startDir, deck: [...d.deck], tileSet: d.tileSet ? [...d.tileSet] : undefined, allowStash: d.allowStash ?? true, night: !!d.night, goal: d.goal };
+}
+
+/** Черновик старого формата (типы клеток словами) — переводим в символы. */
+function migrateDraft(dr: Draft): Draft {
+  return { ...dr, cells: dr.cells.map((c) => (c.length > 1 ? (CHAR_BY_CELL[c as CellType] ?? '.') : c)) };
 }
 
 function toData(dr: Draft): LevelData {
   const grid: string[] = [];
-  for (let y = 0; y < dr.height; y++) grid.push(dr.cells.slice(y * dr.width, (y + 1) * dr.width).map((c) => CHAR_BY_CELL[c]).join(''));
+  for (let y = 0; y < dr.height; y++) grid.push(dr.cells.slice(y * dr.width, (y + 1) * dr.width).join(''));
   const d: LevelData = { id: dr.id, name: dr.name, grid, startDir: dr.startDir, deck: [...dr.deck], stars: { two: 0, three: 0 } };
+  if (dr.goal === 'fireflies') d.goal = 'fireflies';
   if (dr.tileSet) d.tileSet = [...dr.tileSet];
   if (!dr.allowStash) d.allowStash = false;
   if (dr.night) d.night = true;
@@ -101,11 +135,11 @@ export function startEditor(game: Phaser.Game) {
   let draft: Draft = emptyDraft();
   try {
     const saved = localStorage.getItem(STORE_KEY);
-    if (saved) draft = JSON.parse(saved) as Draft;
+    if (saved) draft = migrateDraft(JSON.parse(saved) as Draft);
   } catch {
     /* черновика нет */
   }
-  let tool: Tool = 'rock';
+  let tool: Tool = '#';
   let selected = -1;
   let solution: number[][] = [];
   let report = '';
@@ -124,14 +158,21 @@ export function startEditor(game: Phaser.Game) {
   function setCell(i: number) {
     const cur = draft.cells[i];
     solution = [];
-    if (tool === 'start' && cur === 'start') {
+    const fade = (ch: string) => ch >= '2' && ch <= '9';
+    if (tool === 'S' && cur === 'S') {
       draft.startDir = DIRS[(DIRS.indexOf(draft.startDir) + 1) % 4];
-    } else if (tool === 'start' || tool === 'exit') {
+    } else if (tool === 'S' || tool === 'E') {
       // Старт и выход — по одному: старый становится пустой клеткой.
-      draft.cells = draft.cells.map((c) => (c === tool ? 'empty' : c));
+      draft.cells = draft.cells.map((c) => (c === tool ? '.' : c));
       draft.cells[i] = tool;
+    } else if (tool === '-' && (cur === '-' || cur === '|')) {
+      draft.cells[i] = cur === '-' ? '|' : '.'; // горизонтальный → вертикальный → стереть
+    } else if (fade(tool) && fade(cur)) {
+      draft.cells[i] = cur === '9' ? '.' : String(Number(cur) + 1); // 2 → 3 → … → 9 → стереть
+    } else if (fade(tool)) {
+      draft.cells[i] = '3';
     } else {
-      draft.cells[i] = cur === tool ? 'empty' : tool;
+      draft.cells[i] = cur === tool ? '.' : tool;
     }
     save();
     render();
@@ -151,7 +192,7 @@ export function startEditor(game: Phaser.Game) {
             `Решений: ${m.roads >= 500 ? '500+' : m.roads}`,
             `Минимум плиток: ${m.minTiles}, запас: ${m.reserve < 0 ? '∞' : m.reserve}`,
             `Тупиковых ходов: ${Math.round(m.trap * 100)}%`,
-            l.fireflies.length ? `Светлячков: ${l.fireflies.length}, собрать можно ${r.maxFireflies}` : 'Светлячков нет',
+            l.goal === 'fireflies' ? `Цель — все светлячки (${l.fireflies.length})` : l.fireflies.length ? `Светлячков: ${l.fireflies.length}, собрать можно ${r.maxFireflies}` : 'Светлячков нет',
             l.tileSet ? 'Звёзды — по отменам' : `Звёзды: 2★ от ${stars.two}, 3★ от ${stars.three} (макс. остаток ${r.maxLeftover})`,
             r.solvableWithoutStash ? '«Отложить» не обязателен' : '⚠ без «отложить» не решить',
             m.roads < 2 ? '⚠ одно решение — в мире таких уровней нет' : '',
@@ -277,7 +318,7 @@ export function startEditor(game: Phaser.Game) {
     const resize = () => {
       const w = Number(wSel.value);
       const hh = Number(hSel.value);
-      const cells: CellType[] = new Array(w * hh).fill('empty');
+      const cells: string[] = new Array(w * hh).fill('.');
       for (let y = 0; y < Math.min(hh, draft.height); y++) for (let x = 0; x < Math.min(w, draft.width); x++) cells[y * w + x] = draft.cells[y * draft.width + x];
       draft = { ...draft, width: w, height: hh, cells };
       solution = [];
@@ -291,9 +332,10 @@ export function startEditor(game: Phaser.Game) {
 
     // Палитра
     const pal = h('div', { class: 'row' });
-    for (const t of Object.keys(CELL_VIEW) as CellType[]) {
-      const v = CELL_VIEW[t];
-      pal.append(btn(`${t === 'start' ? ARROW[draft.startDir] : v.label || '▢'} ${v.title.split(' (')[0]}`, () => ((tool = t), render()), tool === t ? 'on' : ''));
+    for (const t of TOOLS) {
+      const v = viewOf(t.ch, draft.startDir);
+      const on = tool === t.ch || (t.ch === '5' && tool >= '2' && tool <= '9');
+      pal.append(btn(`${v.label || '▢'} ${t.title}`, () => ((tool = t.ch), render()), on ? 'on' : ''));
     }
     root.append(pal);
 
@@ -302,8 +344,8 @@ export function startEditor(game: Phaser.Game) {
     const grid = h('div', { class: 'grid' });
     grid.style.gridTemplateColumns = `repeat(${draft.width}, 56px)`;
     draft.cells.forEach((c, i) => {
-      const v = CELL_VIEW[c];
-      const cell = btn(c === 'start' ? ARROW[draft.startDir] : v.label, () => setCell(i), `cell${order.has(i) ? ' path' : ''}`);
+      const v = viewOf(c, draft.startDir);
+      const cell = btn(v.label, () => setCell(i), `cell${order.has(i) ? ' path' : ''}`);
       cell.style.background = v.bg;
       cell.title = v.title;
       if (order.has(i)) cell.append(h('span', { class: 'n' }, String(order.get(i))));
@@ -358,11 +400,22 @@ export function startEditor(game: Phaser.Game) {
     const night = h('input', { type: 'checkbox' }) as HTMLInputElement;
     night.checked = draft.night;
     night.onchange = () => ((draft.night = night.checked), save());
+    const ffGoal = h('input', { type: 'checkbox' }) as HTMLInputElement;
+    ffGoal.checked = draft.goal === 'fireflies';
+    ffGoal.onchange = () => {
+      draft.goal = ffGoal.checked ? 'fireflies' : undefined;
+      // У цели «светлячки» арки нет.
+      if (ffGoal.checked) draft.cells = draft.cells.map((c) => (c === 'E' ? '.' : c));
+      save();
+      render();
+    };
     const l1 = h('label');
     l1.append(stash, ' «отложить»');
     const l2 = h('label');
     l2.append(night, ' ночь');
-    move.append(l1, l2);
+    const l3 = h('label');
+    l3.append(ffGoal, ' цель: только светлячки');
+    move.append(l1, l2, l3);
     side.append(move);
 
     // Действия
@@ -386,7 +439,7 @@ export function startEditor(game: Phaser.Game) {
       box.append(ta, h('br'), btn('Загрузить JSON', () => load(ta.value)), ' ', pick);
       side.append(box);
     }
-    if (!l) side.append(h('pre', {}, 'Поле пока не готово: нужен старт и выход.'));
+    if (!l) side.append(h('pre', {}, draft.goal === 'fireflies' ? 'Поле пока не готово: нужен старт и светлячки (арки быть не должно).' : 'Поле пока не готово: нужен старт и выход.'));
     if (report) side.append(h('pre', {}, report));
     wrap.append(side);
     root.append(wrap);

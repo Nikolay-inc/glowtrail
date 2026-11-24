@@ -14,6 +14,7 @@ export interface DemoPhase {
   grid: string[];
   startDir: 'N' | 'E' | 'S' | 'W';
   steps: DemoStep[];
+  goal?: 'classic' | 'fireflies';
 }
 
 export interface RuleCard {
@@ -77,6 +78,45 @@ export const RULE_CARDS: Record<RuleId, RuleCard> = {
       { grid: ['.E.', 'F..', '.S.'], startDir: 'N', steps: [{ place: 'left' }, { place: 'right' }, { place: 'right' }, { place: 'straight' }] },
     ],
   },
+  jump: {
+    id: 'jump',
+    title: 'rule_jump_title',
+    text: 'rule_jump_text',
+    phases: [
+      // Камень прямо перед дверью: прямо нельзя, прыжок перелетает.
+      { grid: ['.E.', '.#.', '.S.'], startDir: 'N', steps: [{ fail: 'straight' }, { place: 'jump' }] },
+      // Над фонарём тоже можно перепрыгнуть, но он не зажжётся — дверь останется запертой.
+      { grid: ['.E.', '...', '.L.', '.S.'], startDir: 'N', steps: [{ place: 'jump' }, { fail: 'straight' }, { reset: true }, { place: 'straight' }, { place: 'straight' }, { place: 'straight' }] },
+    ],
+  },
+  ffgoal: {
+    id: 'ffgoal',
+    title: 'rule_ffgoal_title',
+    text: 'rule_ffgoal_text',
+    phases: [{ grid: ['.F.', '...', '.F.', '.S.'], startDir: 'N', goal: 'fireflies', steps: [{ place: 'straight' }, { place: 'straight' }, { place: 'straight' }] }],
+  },
+  turnbridge: {
+    id: 'turnbridge',
+    title: 'rule_turnbridge_title',
+    text: 'rule_turnbridge_text',
+    phases: [
+      // Мост стоит поперёк — «прямо x2» не проходит; шаг — и мост повернулся вдоль дороги.
+      { grid: ['.E.', '.-.', '...', '.S.'], startDir: 'N', steps: [{ fail: 'straight2' }, { place: 'straight' }, { place: 'straight' }, { place: 'straight' }] },
+    ],
+  },
+  fade: {
+    id: 'fade',
+    title: 'rule_fade_title',
+    text: 'rule_fade_text',
+    phases: [
+      // Длинный путь: фонарь гаснет, не дождавшись двери. Короткий — успели.
+      {
+        grid: ['..E', '...', '.2.', '.S.'],
+        startDir: 'N',
+        steps: [{ place: 'straight' }, { place: 'right' }, { place: 'left' }, { reset: true }, { place: 'right' }, { place: 'left' }, { place: 'straight2' }],
+      },
+    ],
+  },
   water: {
     id: 'water',
     title: 'rule_water_title',
@@ -87,7 +127,7 @@ export const RULE_CARDS: Record<RuleId, RuleCard> = {
 
 export function demoLevel(phase: DemoPhase): Level {
   // Колода не важна: плитки демонстрации подкладываются в лоток перед каждым шагом.
-  return parseLevel({ id: 'demo', name: 'demo', grid: phase.grid, startDir: phase.startDir, deck: ['straight'], stars: { two: 0, three: 0 }, allowStash: false });
+  return parseLevel({ id: 'demo', name: 'demo', grid: phase.grid, startDir: phase.startDir, deck: ['straight'], stars: { two: 0, three: 0 }, allowStash: false, goal: phase.goal });
 }
 
 /** Поставить плитку kind на конец дороги (подкладываем её в лоток и ходим настоящим ходом). */

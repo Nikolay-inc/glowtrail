@@ -2,10 +2,10 @@
 // Состояние неизменяемое: каждое действие возвращает новое состояние.
 
 import { geoCanMove, geoMinTiles } from './geo';
-import { placeTile, type PlacedCell, type Placement } from './tiles';
+import { anyExpired, fadeLeft, goalReached, placeTile, type PlacedCell, type Placement, type TimeState } from './tiles';
 import type { Dir, Level, TileKind } from './types';
 
-export { placeTile, tileShape, type BlockReason, type PlacedCell, type Placement } from './tiles';
+export { placeTile, tileShape, type BlockReason, type PlacedCell, type Placement, type TimeState } from './tiles';
 
 export const TRAY_SIZE = 3;
 
@@ -19,6 +19,8 @@ export interface RoadCell extends PlacedCell {
   dirIn: Dir;
   /** Направление, в котором дорога выходит из клетки. */
   dirOut: Dir;
+  /** Номер плитки, которая заняла клетку (0 — старт). По нему считаются часы уровня. */
+  step: number;
 }
 
 export type Status = 'playing' | 'won' | 'lost';
@@ -130,7 +132,7 @@ export function createGame(level: Level, deck: TileKind[] = level.deck, seed = 1
   const state: GameState = {
     level,
     deck: dealt,
-    road: [{ ...level.start, idx: startIdx, kind: 'start', dirIn: level.startDir, dirOut: level.startDir }],
+    road: [{ ...level.start, idx: startIdx, kind: 'start', dirIn: level.startDir, dirOut: level.startDir, step: 0 }],
     onRoad,
     head: startIdx,
     dir: level.startDir,
@@ -146,8 +148,26 @@ export function createGame(level: Level, deck: TileKind[] = level.deck, seed = 1
   return { ...state, status: computeStatus(state) };
 }
 
+/** Сколько плиток поставлено на поле (часы уровня: поворотные мосты, гаснущие фонари). */
+export function tilesPlaced(state: GameState): number {
+  return state.road[state.road.length - 1].step;
+}
+
+/** Время уровня для правил: число поставленных плиток и когда зажглись гаснущие фонари. */
+export function timeOf(state: GameState): TimeState {
+  const t = tilesPlaced(state);
+  if (!state.level.fades.length) return { t, lit: [] };
+  return { t, lit: state.level.fades.map((idx) => state.road.find((r) => r.idx === idx)?.step ?? -1) };
+}
+
+/** Сколько ходов ещё горит гаснущий фонарь в клетке idx: -1 — не зажжён, 0 — погас. */
+export function fadeLeftAt(state: GameState, idx: number): number {
+  const k = state.level.fades.indexOf(idx);
+  return k < 0 ? -1 : fadeLeft(state.level, timeOf(state), k);
+}
+
 export function previewTile(state: GameState, kind: TileKind): Placement {
-  return placeTile(state.level, (i) => state.onRoad[i], state.head, state.dir, kind);
+  return placeTile(state.level, (i) => state.onRoad[i], state.head, state.dir, kind, timeOf(state));
 }
 
 export function canPlace(state: GameState, kind: TileKind | null): boolean {
@@ -169,8 +189,13 @@ export function upcoming(state: GameState, n: number): TileKind[] {
   return isInfinite(state.level) ? [] : state.deck.slice(state.deckIndex, state.deckIndex + n);
 }
 
+/** Сколько фонарей сейчас горит (гаснущий фонарь, который погас, не считается). */
 export function lanternsOnRoad(state: GameState): number {
-  return state.level.lanterns.filter((l) => state.onRoad[l]).length;
+  const level = state.level;
+  // После победы все фонари на дороге считаются горящими (в арку вошли, пока они горели).
+  if (!level.fades.length || state.status === 'won') return level.lanterns.filter((l) => state.onRoad[l]).length;
+  const ts = timeOf(state);
+  return level.lanterns.filter((l) => state.onRoad[l] && (level.fade[l] === 0 || fadeLeft(level, ts, level.fades.indexOf(l)) > 0)).length;
 }
 
 /** Сколько светлячков собрала дорога (собирать не обязательно). */
@@ -182,11 +207,18 @@ export function isExitOpen(state: GameState): boolean {
   return lanternsOnRoad(state) === state.level.lanterns.length;
 }
 
-/** Сколько клеток (по прямой сетке) от конца дороги до выхода. */
+/** Сколько клеток (по прямой сетке) от конца дороги до выхода (цель «светлячки» — до ближайшего несобранного). */
 export function distanceToExit(state: GameState): number {
   const w = state.level.width;
   const hx = state.head % w;
   const hy = Math.floor(state.head / w);
+  if (state.level.goal === 'fireflies') {
+    let best = Infinity;
+    for (const f of state.level.fireflies) {
+      if (!state.onRoad[f]) best = Math.min(best, Math.abs(hx - (f % w)) + Math.abs(hy - Math.floor(f / w)));
+    }
+    return best === Infinity ? 0 : best;
+  }
   return Math.abs(hx - state.level.exit.x) + Math.abs(hy - state.level.exit.y);
 }
 
@@ -211,8 +243,18 @@ export function hasAnyMove(state: GameState): boolean {
 }
 
 function computeStatus(state: GameState): Status {
-  if (state.head === state.level.exit.y * state.level.width + state.level.exit.x) return 'won';
+  if (goalReached(state.level, state.head, (i) => state.onRoad[i])) return 'won';
+  // Гаснущий фонарь погас до прихода в арку — снова не зажжён, а пройти через него ещё раз нельзя.
+  if (state.level.fades.length && anyExpired(state.level, timeOf(state))) return 'lost';
   return hasAnyMove(state) ? 'playing' : 'lost';
+}
+
+/** Какой гаснущий фонарь погас (индекс клетки) или -1. После победы фонари не гаснут. */
+export function expiredLantern(state: GameState): number {
+  if (state.level.goal !== 'classic' || state.status === 'won') return -1;
+  const ts = timeOf(state);
+  const k = state.level.fades.findIndex((_, i) => fadeLeft(state.level, ts, i) === 0);
+  return k < 0 ? -1 : state.level.fades[k];
 }
 
 export function isLegal(state: GameState, action: Action): boolean {
@@ -262,12 +304,13 @@ export function applyAction(state: GameState, action: Action): GameState {
       stash = null;
     }
     const p = previewTile(state, kind);
+    const step = tilesPlaced(state) + 1;
     onRoad = [...state.onRoad];
     road = [...state.road];
     p.cells.forEach((c, i) => {
       onRoad[c.idx] = true;
       const last = i === p.cells.length - 1;
-      road.push({ ...c, kind, dirIn: state.dir, dirOut: last ? p.newDir : state.dir });
+      road.push({ ...c, kind, dirIn: state.dir, dirOut: last ? p.newDir : state.dir, step });
     });
     head = p.cells[p.cells.length - 1].idx;
     dir = p.newDir;

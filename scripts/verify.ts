@@ -11,7 +11,7 @@ import { featuresOf } from '../src/core/generator';
 import type { Level } from '../src/core/types';
 import { portalSides } from '../src/core/portal';
 import { TIP_TEXT } from '../src/tutorial';
-import { FIREFLY_FROM, MAX_H, MAX_W, RATING_TOLERANCE, slotOf, VALLEY_PLAN, type Role } from '../src/levels/curve';
+import { BREATHER_MAX_RATING, BREATHER_MIN_ROADS, FIREFLY_FROM, MAX_H, MAX_W, NOVELTY, RATING_TOLERANCE, slotOf, VALLEY_PLAN, type Role } from '../src/levels/curve';
 
 /** Целевая кривая обучающих уровней 1–10. */
 interface Target {
@@ -67,6 +67,15 @@ function isSubsequence(a: string[], b: string[]) {
   return i === a.length;
 }
 
+/** Новые элементы уровня — коротко для таблицы. */
+function elementsOf(level: Level): string {
+  const out: string[] = [];
+  if (level.deck.includes('jump')) out.push('прыжок');
+  if (level.turnBridges.length) out.push('мост');
+  if (level.fades.length) out.push(`гаснущий ${level.fades.map((i) => level.fade[i]).join(',')}`);
+  return out.join(' + ');
+}
+
 let errors = 0;
 let warnings = 0;
 let stashLevels = 0;
@@ -90,7 +99,7 @@ for (const [i, level] of LEVELS.entries()) {
 
   if (!r.solvable) err.push('НЕ РЕШАЕТСЯ');
   if (level.tip && !(level.tip in TIP_TEXT)) err.push(`неизвестная подсказка tip: "${level.tip}"`);
-  if (level.fireflies.length && r.maxFireflies < level.fireflies.length) {
+  if (level.goal === 'classic' && level.fireflies.length && r.maxFireflies < level.fireflies.length) {
     err.push(`светлячков ${level.fireflies.length}, а собрать за одну победу можно только ${r.maxFireflies}`);
   }
   const jm = level.metrics;
@@ -132,6 +141,8 @@ for (const [i, level] of LEVELS.entries()) {
     if (c.rocks && !t.allows.rocks) warn.push('камни раньше времени');
     if (c.water && !t.allows.water) warn.push('вода или мост раньше времени');
     if (level.fireflies.length) warn.push('светлячки раньше времени');
+    const late = featuresOf(level).filter((f) => f === 'jump' || f === 'turnbridge' || f === 'fade');
+    if (late.length || level.goal !== 'classic') warn.push(`новые элементы раньше времени: ${[...late, level.goal].join(', ')}`);
     if (t.teachesStash && !needsStash) warn.push('учит «отложить», но решается без него');
     if (t.teachesStash && level.tutorial !== 'stash') warn.push('нет подсказки-обучения «отложить» (tutorial: "stash")');
     if (t.sideEntry) {
@@ -141,8 +152,12 @@ for (const [i, level] of LEVELS.entries()) {
       if (vertical || !horizontal) warn.push('в арку должно быть можно войти только сбоку');
     }
   } else if (slot) {
-    plan = `${ROLE_RU[slot.role]} ~${slot.rating}`;
+    plan = `${ROLE_RU[slot.role]} ~${slot.rating}${slot.goal === 'fireflies' ? ', светлячки' : ''}`;
     if (r.roads < 2) err.push('одно решение — по плану мира таких уровней нет');
+    if (level.goal !== (slot.goal ?? 'classic')) warn.push(`цель ${level.goal}, по плану ${slot.goal ?? 'classic'}`);
+    if (slot.role === 'breather' && (m.rating > BREATHER_MAX_RATING || r.roads < BREATHER_MIN_ROADS)) {
+      warn.push(`передышка должна быть лёгкой: рейтинг ≤ ${BREATHER_MAX_RATING} и решений ≥ ${BREATHER_MIN_ROADS} (сейчас ${m.rating} и ${r.roads})`);
+    }
     if (level.width > slot.maxW || level.height > slot.maxH) warn.push(`поле ${size}, по плану не больше ${slot.maxW}x${slot.maxH}`);
     if (level.width > MAX_W || level.height > MAX_H) warn.push(`поле больше ${MAX_W}x${MAX_H}`);
     const f = featuresOf(level);
@@ -173,7 +188,8 @@ for (const [i, level] of LEVELS.entries()) {
     `${Math.round(m.trap * 100)}%`,
     m.rating.toFixed(1),
     plan,
-    level.fireflies.length ? `${level.fireflies.length}` : '',
+    elementsOf(level),
+    level.fireflies.length ? `${level.fireflies.length}${level.goal === 'fireflies' ? ' (цель)' : ''}` : '',
     infinite ? 'по отменам' : `${level.stars.two}/${level.stars.three} из ${r.maxLeftover}`,
     !level.allowStash ? '—' : needsStash ? 'нужно' : 'можно',
     `${ms} мс`,
@@ -215,9 +231,23 @@ const decadeAvg = (lo: number) => {
 const avg2 = decadeAvg(11);
 const avg3 = decadeAvg(21);
 
-const head = ['#', 'Уровень', 'Поле', 'Колода', 'Запас', 'Мин.', 'Решений', 'Тупики', 'Рейтинг', 'План', 'Светл.', 'Звёзды 2/3', '«Отложить»', 'Время', ''];
+// Что-то новое примерно каждые 5 уровней: в каждом блоке плана есть его новинка.
+for (const b of NOVELTY) {
+  const lv = LEVELS.filter((l) => l.num >= b.from && l.num <= b.to);
+  const has = (l: Level) =>
+    b.what === 'светлячки' ? l.fireflies.length > 0 : b.what === 'прыжок' ? l.deck.includes('jump') : b.what.startsWith('цель') ? l.goal === 'fireflies'
+      : b.what === 'поворотный мост' ? l.turnBridges.length > 0 : b.what === 'гаснущий фонарь' ? l.fades.length > 0
+        : l.deck.includes('jump') && l.turnBridges.length > 0 && l.fades.length > 0;
+  const miss = lv.filter((l) => !has(l)).map((l) => l.num);
+  if (miss.length) {
+    notes.push(`! ${b.from}–${b.to} (${b.what}): нет новинки на уровнях ${miss.join(', ')}`);
+    warnings++;
+  }
+}
+
+const head = ['#', 'Уровень', 'Поле', 'Колода', 'Запас', 'Мин.', 'Решений', 'Тупики', 'Рейтинг', 'План', 'Новое', 'Светл.', 'Звёзды 2/3', '«Отложить»', 'Время', ''];
 const widths = head.map((h, c) => Math.max(h.length, ...rows.map((r) => r[c].length)));
-const line = (r: string[]) => r.map((v, c) => (c === 1 || c === 9 ? v.padEnd(widths[c]) : v.padStart(widths[c]))).join(' | ');
+const line = (r: string[]) => r.map((v, c) => (c === 1 || c === 9 || c === 10 ? v.padEnd(widths[c]) : v.padStart(widths[c]))).join(' | ');
 console.log(line(head));
 console.log(widths.map((w) => '-'.repeat(w)).join('-|-'));
 for (const r of rows) console.log(line(r));

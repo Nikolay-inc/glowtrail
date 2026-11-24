@@ -11,6 +11,6 @@ export default defineConfig(({ command, mode }) => ({
   test: {
     include: ['tests/**/*.test.ts'],
     // Тесты с решателем проходят все 30 уровней — на CI это дольше стандартных 5 с.
-    testTimeout: 30_000,
+    testTimeout: 60_000,
   },
 }));

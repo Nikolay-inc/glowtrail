@@ -21,6 +21,9 @@ import {
   upcoming,
   type Action,
   type GameState,
+  expiredLantern,
+  fadeLeftAt,
+  tilesPlaced,
 } from '../core/game';
 import { easeDeck, findExtraTiles, findHint, nearestSolvable } from '../core/solver';
 import type { Level, TileKind } from '../core/types';
@@ -142,6 +145,8 @@ export class GameScene extends Phaser.Scene {
   private activeHint: Action | null = null;
   private extraUsed = false;
   private streak = 0;
+  /** Ходов подряд без отмены (серия без ошибок). */
+  private cleanRun = 0;
   /** Раскладка нижней панели: зависит от того, есть ли на уровне слот «отложить». */
   private L: TrayLayout = trayLayout(true);
 
@@ -192,7 +197,7 @@ export class GameScene extends Phaser.Scene {
     this.trayY = TRAY_Y + down;
     this.previewY = PREVIEW_Y + down;
     this.bottomY = BOTTOM_Y + down;
-    addBackground(this);
+    addBackground(this, { evening: !level.night });
     this.streak = this.custom ? 0 : lossStreak(level.id);
 
     // Верхняя панель: уровень и строка цели (арка + фонари «зажжено/всего»)
@@ -205,7 +210,7 @@ export class GameScene extends Phaser.Scene {
     this.restartBtn = new Button(this, 990, this.topY, { w: 130, h: 130, icon: 'restart', onClick: () => this.restart() });
 
     recordPlayDay(); // если сессия перешла через полночь
-    this.board = new BoardView(this, level, { x: 40, y: BOARD_Y - up, w: 1000, h: BOARD_H + up + down }, { avatar: getProfile().avatar, maxCell: 250 });
+    this.board = new BoardView(this, level, { x: 40, y: BOARD_Y - up, w: 1000, h: BOARD_H + up + down }, { avatar: getProfile().avatar, maxCell: 250, sound: true });
 
     // Лоток
     const slotsG = this.add.graphics();
@@ -282,7 +287,7 @@ export class GameScene extends Phaser.Scene {
     // Для бесконечной колоды — своё случайное зерно на каждую попытку.
     this.state = createGame(level, deck, Math.floor(Math.random() * 2 ** 31));
     const m = level.metrics;
-    this.attempt = this.custom ? 1 : startAttempt(level.id, m ? { rating: m.rating, trap: m.trap, roads: m.roads } : {});
+    this.attempt = this.custom ? 1 : startAttempt(level.id, { ...(m ? { rating: m.rating, trap: m.trap, roads: m.roads } : {}), goal_type: level.goal });
     if (extra > 0) this.log({ ev: 'auto_ease', level: level.id, attempt: this.attempt, added: extra, streak: this.streak });
     this.t0 = Date.now();
     this.board.setRoad(this.state);
@@ -319,10 +324,16 @@ export class GameScene extends Phaser.Scene {
   private showGoalCard() {
     if (this.state.status !== 'playing') return;
     const n = this.state.level.lanterns.length;
-    const rows: { icon: 'portal' | 'lantern' | 'firefly'; label: string }[] = [{ icon: 'portal', label: t('goal_door') }];
-    if (n > 0) rows.push({ icon: 'lantern', label: t('goal_lanterns', { n }) });
     const ff = this.state.level.fireflies.length;
-    if (ff > 0) rows.push({ icon: 'firefly', label: t('goal_fireflies', { n: ff }) });
+    const rows: { icon: 'portal' | 'lantern' | 'firefly'; label: string }[] = [];
+    if (this.state.level.goal === 'fireflies') {
+      // Цель «светлячки»: двери нет, нужно собрать всех.
+      rows.push({ icon: 'firefly', label: t('goal_all_fireflies', { n: ff }) });
+    } else {
+      rows.push({ icon: 'portal', label: t('goal_door') });
+      if (n > 0) rows.push({ icon: 'lantern', label: t('goal_lanterns', { n }) });
+      if (ff > 0) rows.push({ icon: 'firefly', label: t('goal_fireflies', { n: ff }) });
+    }
     const h = 90 + rows.length * 110;
     const c = this.add.container(W / 2, 780).setDepth(35);
     const g = this.add.graphics();
@@ -435,10 +446,13 @@ export class GameScene extends Phaser.Scene {
     // Ширина строки: арка, [фонарь + текст], [светлячок + текст].
     const lanternW = n > 0 ? 30 + 50 + this.goalText.width : 0;
     const ffW = ffTotal > 0 ? 40 + 50 + this.ffText.width : 0;
-    const total = 44 + lanternW + ffW;
+    const door = level.goal === 'classic';
+    const total = (door ? 44 : -40) + lanternW + ffW;
     let x = W / 2 - total / 2;
-    drawPortalIcon(g, x + 22, y, 22, open);
-    x += 44;
+    if (door) {
+      drawPortalIcon(g, x + 22, y, 22, open);
+      x += 44;
+    } else x -= 40; // цель «светлячки»: арки нет, в строке цели только светлячки
     if (n > 0) {
       this.drawLanternIcon(g, x + 66, y + 4, lit === n);
       this.goalText.setX(x + 96).setColor(lit === n ? '#ffd36b' : C.text);
@@ -599,6 +613,7 @@ export class GameScene extends Phaser.Scene {
     this.showRollbackPanel(back.steps, () => {
       this.spendHint(back.steps);
       this.state = { ...back.state, undosUsed: this.state.undosUsed };
+      this.cleanRun = 0;
       this.board.setRoad(this.state);
       this.resetCards();
       this.activeHint = findHint(this.state);
@@ -806,6 +821,9 @@ export class GameScene extends Phaser.Scene {
       this.tip('rock', at, 'above');
     } else if (p.reason === 'water' && at) {
       this.tip('water', at, 'above');
+    } else if (p.reason === 'bridgeTurned') {
+      this.log({ ev: 'bridge_rotated_blocked', level: this.state.level.id, attempt: this.attempt, tile: tilesPlaced(this.state) });
+      if (at) this.tip('turnbridge', at, 'above');
     }
     // Первая ошибка — показываем, что ход можно вернуть.
     if (canUndo(this.state)) this.tip('undo', { x: this.undoBtn.x, y: this.topY + 70 }, 'below');
@@ -885,7 +903,23 @@ export class GameScene extends Phaser.Scene {
     const headPos = this.board.center(next.head);
     const card = action.type === 'place' ? this.cards[action.slot] : this.stashCard;
     const newCells = next.road.length - prev.road.length;
-    sfx.place(next.road.length - 1);
+    const placed = next.road[next.road.length - 1];
+    if (placed.kind === 'jump') this.log({ ev: 'tile_jump_used', level: next.level.id, attempt: this.attempt, tile: placed.step });
+    const expired = expiredLantern(next);
+    if (next.status !== 'won' && expired >= 0 && expiredLantern(prev) < 0) {
+      this.log({ ev: 'lantern_expired', level: next.level.id, attempt: this.attempt, tile: placed.step });
+      const c = this.board.center(expired);
+      this.time.delayedCall(500, () => this.tip('fade', { x: c.x, y: c.y - this.board.cell * 0.4 }, 'above'));
+    }
+    // Серия без отмен: с третьего хода подряд — искры на дороге и нарастающая нота.
+    this.cleanRun++;
+    if (this.cleanRun >= 3 && next.status === 'playing') {
+      const n = this.cleanRun - 2;
+      this.time.delayedCall(280, () => {
+        this.board.sparkle(next, n);
+        sfx.streak(n);
+      });
+    }
     this.tweens.add({
       targets: card,
       x: headPos.x,
@@ -942,6 +976,7 @@ export class GameScene extends Phaser.Scene {
   private onUndo() {
     if (this.busy || !canUndo(this.state)) return;
     this.state = undo(this.state);
+    this.cleanRun = 0;
     this.ended = false;
     this.activeHint = null;
     this.closeOverlay();
@@ -1152,7 +1187,8 @@ export class GameScene extends Phaser.Scene {
       const g = this.add.graphics();
       const gap = 70;
       const x0 = W / 2 - ((total - 1) * gap) / 2;
-      s.level.lanterns.forEach((idx, i) => this.drawLanternIcon(g, x0 + i * gap, y, s.onRoad[idx]));
+      // Гаснущий фонарь, который погас, — снова не горит.
+      s.level.lanterns.forEach((idx, i) => this.drawLanternIcon(g, x0 + i * gap, y, s.onRoad[idx] && (s.level.fade[idx] === 0 || fadeLeftAt(s, idx) > 0)));
       o.add(g);
       o.add(text(this, W / 2, y + 70, `Фонари: ${lit} из ${total}`, 44, C.text, false));
       y += 140;
@@ -1160,13 +1196,15 @@ export class GameScene extends Phaser.Scene {
     // Дорога упёрлась в закрытую арку: объясняем, почему войти нельзя.
     const w = s.level.width;
     const facingExit =
+      s.level.goal === 'classic' &&
       (s.head % w) + DX[s.dir] === s.level.exit.x && Math.floor(s.head / w) + DY[s.dir] === s.level.exit.y && lanternsLeft(s) > 0;
     if (facingExit) {
       o.add(text(this, W / 2, y, t('tip_door_locked'), 46, '#ffd36b'));
       this.board.shakeLock();
       this.log({ ev: 'door_locked_attempt', level: s.level.id, attempt: this.attempt });
     } else {
-      o.add(text(this, W / 2, y, `До выхода: ${dist} ${plural(dist, 'клетка', 'клетки', 'клеток')}`, 44, C.textDim, false));
+      const what = s.level.goal === 'fireflies' ? 'До светлячка' : 'До выхода';
+      o.add(text(this, W / 2, y, `${what}: ${dist} ${plural(dist, 'клетка', 'клетки', 'клеток')}`, 44, C.textDim, false));
     }
 
     const again = () => this.restart();

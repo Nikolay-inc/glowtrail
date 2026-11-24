@@ -2,64 +2,77 @@
   "id": "valley-18",
   "name": "Поляна",
   "grid": [
-    "...E.",
-    "...F.",
+    "....#",
+    "F#...",
     ".....",
-    ".....",
-    ".....",
-    "....S"
+    "S....",
+    "..F..",
+    "....."
   ],
-  "startDir": "N",
+  "startDir": "E",
   "deck": [
     "left",
-    "straight",
     "left",
     "right",
     "straight",
     "straight",
-    "straight",
-    "straight",
     "right",
-    "straight"
+    "straight2",
+    "right",
+    "left",
+    "left",
+    "straight2",
+    "straight2",
+    "right",
+    "left"
   ],
   "stars": {
     "two": 2,
-    "three": 3
+    "three": 4
   },
+  "goal": "fireflies",
   "easeDecks": [
     [
       "left",
-      "straight",
       "left",
       "right",
       "straight",
       "straight",
       "right",
-      "straight",
-      "straight",
+      "left",
+      "straight2",
       "right",
-      "straight"
+      "left",
+      "left",
+      "straight2",
+      "straight2",
+      "right",
+      "left"
     ],
     [
+      "left",
+      "left",
+      "right",
+      "straight",
+      "straight",
+      "right",
+      "left",
       "straight2",
+      "right",
       "left",
-      "straight",
       "left",
+      "straight2",
+      "straight2",
       "right",
-      "straight",
-      "straight",
-      "right",
-      "straight",
-      "straight",
-      "right",
-      "straight"
+      "left",
+      "left"
     ]
   ],
   "metrics": {
     "rating": 2.5,
-    "roads": 21,
-    "minTiles": 6,
-    "reserve": 4,
-    "trap": 0.197
+    "roads": 72,
+    "minTiles": 9,
+    "reserve": 5,
+    "trap": 0.213
   }
 }

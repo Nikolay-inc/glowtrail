@@ -33,6 +33,7 @@ export interface LevelMetricsLog {
   rating?: number;
   trap?: number;
   roads?: number;
+  goal_type?: string;
 }
 
 /** Отмечает начало попытки и возвращает её номер. */

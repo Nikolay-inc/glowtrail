@@ -55,7 +55,7 @@ export interface Profile {
   bestDayStreak: number;
 }
 
-export type EventType = 'session' | 'start' | 'win' | 'lose' | 'abandon' | 'hint_used' | 'extra_tiles' | 'auto_ease' | 'level_skipped' | 'signup' | 'login' | 'logout' | 'auth_prompt' | 'tutorial_step' | 'tip_shown' | 'drag_place' | 'tap_place' | 'door_locked_attempt' | 'fireflies_collected';
+export type EventType = 'session' | 'start' | 'win' | 'lose' | 'abandon' | 'hint_used' | 'extra_tiles' | 'auto_ease' | 'level_skipped' | 'signup' | 'login' | 'logout' | 'auth_prompt' | 'tutorial_step' | 'tip_shown' | 'drag_place' | 'tap_place' | 'door_locked_attempt' | 'fireflies_collected' | 'tile_jump_used' | 'bridge_rotated_blocked' | 'lantern_expired';
 
 export interface LogEvent {
   /** Время события, ISO. */
@@ -90,6 +90,10 @@ export interface LogEvent {
   rating?: number;
   trap?: number;
   roads?: number;
+  /** Цель уровня на старте попытки (classic / fireflies). */
+  goal_type?: string;
+  /** Номер плитки на поле (bridge_rotated_blocked, lantern_expired, tile_jump_used). */
+  tile?: number;
 }
 
 export interface SaveData {

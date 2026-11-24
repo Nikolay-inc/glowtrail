@@ -1,8 +1,9 @@
 // Решатель: поиск в глубину по всем ходам с учётом лотка из 3 плиток и слота «отложить».
 // Используется в npm run verify (проверка уровней), в подсказках, в «+3 плитки» и в облегчении уровня.
 
-import { dealExtra, isInfinite, placeTile, tileLeadsToExit, TRAY_SIZE, type Action, type GameState } from './game';
+import { dealExtra, isInfinite, placeTile, tileLeadsToExit, timeOf, TRAY_SIZE, type Action, type GameState } from './game';
 import { geoCountRoads, geoMaxFireflies, geoMinTiles } from './geo';
+import { advanceTime, anyExpired, goalReached, timeKey, timeStart, type TimeState } from './tiles';
 import { TILE_KINDS, type Dir, type Level, type TileKind } from './types';
 
 export interface Node {
@@ -12,6 +13,8 @@ export interface Node {
   deckIndex: number;
   tray: TileKind[]; // порядок в лотке на логику не влияет
   stash: TileKind | null;
+  /** Часы уровня: сколько плиток поставлено и когда зажглись гаснущие фонари. */
+  time: TimeState;
 }
 
 interface Result {
@@ -69,7 +72,6 @@ export interface SolveReport {
 
 export class Solver {
   private memo = new Map<string, Result>();
-  private readonly exitIdx: number;
   private readonly isFirefly: boolean[];
   private readonly roadLimit: number;
 
@@ -78,7 +80,6 @@ export class Solver {
     readonly deck: TileKind[],
     private opts: { allowStash: boolean; countRoads: boolean; roadLimit?: number; maxStates?: number },
   ) {
-    this.exitIdx = level.exit.y * level.width + level.exit.x;
     this.isFirefly = level.cells.map((c) => c === 'firefly');
     this.roadLimit = opts.roadLimit ?? ROAD_LIMIT;
   }
@@ -95,7 +96,12 @@ export class Solver {
   }
 
   key(n: Node): string {
-    return `${n.head},${n.dir},${n.mask.toString(36)},${n.deckIndex},${[...n.tray].sort().join('+')},${n.stash ?? '-'}`;
+    return `${n.head},${n.dir},${n.mask.toString(36)},${n.deckIndex},${[...n.tray].sort().join('+')},${n.stash ?? '-'}|${timeKey(this.level, n.time)}`;
+  }
+
+  /** Цель достигнута: конец дороги в арке или собраны все светлячки. */
+  isGoal(n: Node): boolean {
+    return goalReached(this.level, n.head, (i) => ((n.mask >> BigInt(i)) & 1n) === 1n);
   }
 
   leftover(n: Node): number {
@@ -112,15 +118,16 @@ export class Solver {
     const deck = this.deck;
 
     const place = (kind: TileKind, tray: TileKind[], deckIndex: number, stash: TileKind | null, from: MoveFrom) => {
-      const p = placeTile(this.level, isOnRoad, n.head, n.dir, kind);
+      const p = placeTile(this.level, isOnRoad, n.head, n.dir, kind, n.time);
       if (!p.ok) return;
       let mask = n.mask;
       for (const c of p.cells) mask |= 1n << BigInt(c.idx);
+      const time = advanceTime(this.level, n.time, p.cells);
       out.push({
         kind,
         from,
         cells: p.cells.map((c) => c.idx),
-        next: { head: p.cells[p.cells.length - 1].idx, dir: p.newDir, mask, deckIndex, tray, stash },
+        next: { head: p.cells[p.cells.length - 1].idx, dir: p.newDir, mask, deckIndex, tray, stash, time },
       });
     };
 
@@ -152,7 +159,7 @@ export class Solver {
   }
 
   explore(n: Node): Result {
-    if (n.head === this.exitIdx) {
+    if (this.isGoal(n)) {
       return { best: this.leftover(n), ff: 0, roads: this.opts.countRoads ? new Set(['']) : null };
     }
     const k = this.key(n);
@@ -161,6 +168,7 @@ export class Solver {
 
     const res: Result = { best: -1, ff: -1, roads: this.opts.countRoads ? new Set() : null };
     this.memo.set(k, res); // дорога только растёт, циклов нет
+    if (this.level.fades.length && anyExpired(this.level, n.time)) return res; // фонарь погас — арку не открыть
     if (this.opts.maxStates && this.memo.size > this.opts.maxStates) throw new TooManyStates(this.opts.maxStates);
     for (const m of this.moves(n)) {
       const r = this.explore(m.next);
@@ -190,7 +198,7 @@ export class Solver {
   solution(n: Node): Move[] {
     const out: Move[] = [];
     let cur = n;
-    while (cur.head !== this.exitIdx) {
+    while (!this.isGoal(cur)) {
       let best: { m: Move; score: number } | null = null;
       for (const m of this.moves(cur)) {
         const r = this.explore(m.next);
@@ -217,6 +225,7 @@ export function startNode(level: Level, deck: TileKind[]): Node {
     deckIndex: Math.min(TRAY_SIZE, deck.length),
     tray: deck.slice(0, TRAY_SIZE),
     stash: null,
+    time: timeStart(level),
   };
 }
 
@@ -232,6 +241,7 @@ export function nodeOf(state: GameState): Node {
     deckIndex: state.deckIndex,
     tray: state.tray.filter((t): t is TileKind => t !== null),
     stash: state.stash,
+    time: timeOf(state),
   };
 }
 
@@ -341,9 +351,11 @@ export function nearestSolvable(state: GameState): { state: GameState; steps: nu
   return null;
 }
 
-/** Виды плиток, которые имеет смысл добавлять на этом поле (мост — только если есть вода). */
+/** Виды плиток, которые имеет смысл добавлять на этом поле: мост — только если есть вода, прыжок — только если он есть в колоде. */
 function usefulKinds(level: Level): readonly TileKind[] {
-  return level.cells.includes('water') ? TILE_KINDS : TILE_KINDS.filter((k) => k !== 'bridge');
+  const water = level.cells.includes('water');
+  const jump = level.deck.includes('jump');
+  return TILE_KINDS.filter((k) => (k !== 'bridge' || water) && (k !== 'jump' || jump));
 }
 
 /** Все наборы из n видов плиток (с повторами). */
@@ -442,12 +454,11 @@ export function solutionOf(level: Level, deck: TileKind[] = level.deck): Solutio
   if (level.tileSet && deck === level.deck) {
     // Бесконечная колода: жадно по геометрии — каждая плитка приближает к выходу.
     const kinds = level.tileSet;
-    const exit = level.exit.y * level.width + level.exit.x;
     let head = level.start.y * level.width + level.start.x;
     let dir = level.startDir;
     let mask = 1n << BigInt(head);
     const out: SolutionStep[] = [];
-    while (head !== exit) {
+    while (!goalReached(level, head, (i) => ((mask >> BigInt(i)) & 1n) === 1n)) {
       let best: { step: SolutionStep; rem: number; head: number; dir: Dir; mask: bigint } | null = null;
       for (const k of kinds) {
         const p = placeTile(level, (i) => ((mask >> BigInt(i)) & 1n) === 1n, head, dir, k);

@@ -2,7 +2,7 @@
 // Чистая логика без Phaser: используется в npm run verify, ease, gen, pick и в редакторе уровней.
 
 import { geoMinTiles } from './geo';
-import { placeTile } from './tiles';
+import { goalReached, placeTile } from './tiles';
 import { solveLevel, Solver, startNode, type Node, type SolveReport } from './solver';
 import type { Dir, Level, LevelMetrics, TileKind } from './types';
 
@@ -52,8 +52,7 @@ export function trapRate(level: Level, deck: readonly TileKind[] = level.deck, s
       let dir: Dir = level.startDir;
       let mask = 1n << BigInt(start);
       if (geoMinTiles(level, kinds, head, dir, mask) < 0) return 1;
-      const exit = level.exit.y * level.width + level.exit.x;
-      while (head !== exit && total < samples) {
+      while (!goalReached(level, head, (i) => ((mask >> BigInt(i)) & 1n) === 1n) && total < samples) {
         const opts = kinds
           .map((k) => placeTile(level, (i) => ((mask >> BigInt(i)) & 1n) === 1n, head, dir, k))
           .filter((m) => m.ok);
@@ -78,10 +77,9 @@ export function trapRate(level: Level, deck: readonly TileKind[] = level.deck, s
   const solver = new Solver(level, [...deck], { allowStash: level.allowStash, countRoads: false, maxStates });
   const start = startNode(level, [...deck]);
   if (!solver.winnable(start)) return 1;
-  const exit = level.exit.y * level.width + level.exit.x;
   for (let p = 0; p < samples * 3 && total < samples; p++) {
     let n: Node = start;
-    while (n.head !== exit && total < samples) {
+    while (!solver.isGoal(n) && total < samples) {
       const moves = solver.moves(n);
       if (!moves.length) break;
       const m = moves[Math.floor(rand() * moves.length)];

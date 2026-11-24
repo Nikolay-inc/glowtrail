@@ -1,6 +1,6 @@
 // Арка-портал (выход): с каких сторон в неё можно войти, где сейчас конец дороги, сколько фонарей ещё не зажжено.
 
-import type { GameState } from './game';
+import { lanternsOnRoad, type GameState } from './game';
 import { DX, DY, type Dir, type Level } from './types';
 
 export interface PortalSide {
@@ -30,7 +30,7 @@ export function headSide(state: GameState): Dir | null {
   return null;
 }
 
-/** Сколько фонарей ещё не на дороге — это число на замке арки. */
+/** Сколько фонарей ещё не горит — это число на замке арки. */
 export function lanternsLeft(state: GameState): number {
-  return state.level.lanterns.filter((i) => !state.onRoad[i]).length;
+  return state.level.lanterns.length - lanternsOnRoad(state);
 }

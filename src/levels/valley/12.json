@@ -1,62 +1,75 @@
 {
   "id": "valley-12",
-  "name": "Первый светлячок",
+  "name": "Светлячковая тропа",
   "grid": [
+    "..S..",
+    "....F",
     ".....",
+    "..LL.",
+    "E....",
     ".....",
-    "...FE",
-    "...F.",
-    "S....",
     "....."
   ],
-  "startDir": "E",
+  "startDir": "S",
   "deck": [
     "left",
+    "straight",
+    "straight",
+    "left",
+    "right",
+    "right",
+    "straight2",
+    "straight",
+    "straight",
     "right",
     "left",
     "straight2",
-    "right",
-    "straight",
-    "straight2",
-    "straight2",
-    "straight"
+    "straight2"
   ],
   "stars": {
-    "two": 2,
-    "three": 3
+    "two": 3,
+    "three": 5
   },
   "easeDecks": [
     [
+      "right",
+      "left",
+      "straight",
       "straight",
       "left",
       "right",
+      "right",
+      "straight2",
+      "straight",
+      "straight",
+      "right",
       "left",
       "straight2",
-      "right",
-      "straight",
-      "straight2",
-      "straight2",
-      "straight"
+      "straight2"
     ],
     [
+      "right",
+      "left",
+      "straight",
       "straight",
       "left",
       "right",
       "left",
+      "right",
       "straight2",
-      "right",
-      "right",
       "straight",
+      "straight",
+      "right",
+      "left",
       "straight2",
-      "straight2",
-      "straight"
+      "straight2"
     ]
   ],
   "metrics": {
     "rating": 2,
-    "roads": 19,
-    "minTiles": 5,
-    "reserve": 4,
-    "trap": 0.162
+    "roads": 49,
+    "minTiles": 7,
+    "reserve": 6,
+    "trap": 0.17
   }
 }

@@ -1,36 +1,34 @@
 {
   "id": "valley-26",
-  "name": "Два берега",
+  "name": "Тающий свет",
   "grid": [
-    "....#S",
+    "...#.E",
     "......",
+    ".6...#",
     "#.....",
-    "...L..",
-    "..L..#",
-    "~~~~~~",
-    "....L.",
-    "..#E.#"
+    "......",
+    ".#....",
+    "S.#..."
   ],
-  "startDir": "S",
+  "startDir": "N",
   "deck": [
+    "right",
+    "straight",
+    "straight",
     "straight2",
-    "right",
-    "straight",
-    "straight",
+    "left",
     "left",
     "right",
-    "left",
-    "left",
-    "left",
-    "bridge",
     "straight2",
+    "left",
     "right",
-    "straight",
-    "right"
+    "right",
+    "left",
+    "straight"
   ],
   "stars": {
-    "two": 1,
-    "three": 1
+    "two": 2,
+    "three": 3
   },
   "easeDecks": [
     [
@@ -38,42 +36,40 @@
       "right",
       "straight",
       "straight",
-      "left",
-      "right",
-      "right",
-      "left",
-      "left",
-      "left",
-      "bridge",
       "straight2",
+      "left",
+      "left",
       "right",
-      "straight",
-      "right"
+      "straight2",
+      "left",
+      "right",
+      "right",
+      "left",
+      "straight"
     ],
     [
       "straight2",
       "right",
       "straight",
       "straight",
-      "left",
-      "right",
-      "straight",
-      "right",
-      "left",
-      "left",
-      "left",
-      "bridge",
       "straight2",
+      "left",
+      "left",
       "right",
-      "straight",
-      "right"
+      "straight2",
+      "left",
+      "right",
+      "right",
+      "left",
+      "straight2",
+      "straight"
     ]
   ],
   "metrics": {
-    "rating": 5,
-    "roads": 10,
-    "minTiles": 12,
-    "reserve": 2,
-    "trap": 0.258
+    "rating": 4.8,
+    "roads": 17,
+    "minTiles": 9,
+    "reserve": 4,
+    "trap": 0.382
   }
 }
