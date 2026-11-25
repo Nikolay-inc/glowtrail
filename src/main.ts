@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { initMusic } from './audio';
 import { VillageScene } from './scenes/VillageScene';
 import { WorkshopScene } from './scenes/WorkshopScene';
 import { ShopScene } from './scenes/ShopScene';
@@ -85,6 +86,8 @@ async function boot() {
   });
 
   initLifecycle(game);
+  // Ночная музыка — после первого касания (политика автозапуска iOS).
+  initMusic();
   // Заставку прячем, когда первая сцена уже нарисовалась.
   if (isNative()) game.events.once('poststep', () => void SplashScreen.hide({ fadeOutDuration: 250 }).catch(() => undefined));
 

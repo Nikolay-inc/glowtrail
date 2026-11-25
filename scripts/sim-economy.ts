@@ -22,6 +22,17 @@ console.log(`Новых целей в первый час: ${gaps.length}, пр�
 console.log(`Итог через 2 часа: монет ${res.final.coins}, света ${res.final.light}.`);
 const avg = 60 / gaps.length;
 console.log(`В среднем новая цель раз в ${avg.toFixed(1)} мин.`);
-// Цель: в среднем раз в 2–5 минут, без «пустых» отрезков дольше 7,5 минуты; деревня — к концу мира 1 (уровни 26–30).
-const ok = avg >= 2 && avg <= 5 && maxGap <= 7.5 && res.villageDoneAt !== null && res.villageDoneAt >= 26;
-console.log(ok ? '\nЦели экономики выполнены ✓' : '\n! Цели экономики не выполнены — подкрути цены в src/core/economy.ts');
+const left = res.leftAtWorldEnd;
+console.log(`После мира 1 ещё хочется купить: ${left.map((x) => `${x.label} (${x.price})`).join(', ') || '— ничего'}`);
+// Цели: в первый час между целями не больше 5 минут; деревня — к концу мира 1 (уровни 26–30);
+// после мира 1 остаётся на что копить (хотя бы 3 вещи от 200 монет, среди них — улучшение).
+const problems: string[] = [];
+if (maxGap > 5) problems.push(`промежуток ${maxGap} мин > 5`);
+if (res.villageDoneAt === null || res.villageDoneAt < 26) problems.push(`деревня восстановлена слишком рано или не восстановлена (уровень ${res.villageDoneAt ?? '—'})`);
+const expensive = left.filter((x) => x.price >= 200);
+if (expensive.length < 3 || !expensive.some((x) => x.label.includes('улучшение'))) problems.push('после мира 1 не осталось дорогих покупок');
+if (problems.length) {
+  console.error(`\n✗ Цели экономики не выполнены: ${problems.join('; ')} — подкрути цены в src/core/economy.ts`);
+  process.exit(1);
+}
+console.log('\nЦели экономики выполнены ✓');

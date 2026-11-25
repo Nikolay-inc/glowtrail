@@ -2,24 +2,31 @@
 
 import { loadProgress, saveProgress } from './storage';
 import { haptics } from './haptics';
+import { music, type Mood } from './audio/music';
 
 let ctx: AudioContext | null = null;
 // Настройку читаем при каждом звуке: в приложении сохранение подгружается из Preferences уже после
 // загрузки этого модуля.
 const isMutedNow = () => loadProgress().muted;
+const isMusicNow = () => loadProgress().music;
 
-function ac(): AudioContext | null {
-  if (isMutedNow() || suspended) return null;
+/** Один AudioContext на звуки и музыку. */
+function context(): AudioContext | null {
   try {
     if (!ctx) {
       const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       ctx = new Ctor();
     }
-    if (ctx.state === 'suspended') void ctx.resume();
+    if (ctx.state === 'suspended' && !suspended) void ctx.resume();
     return ctx;
   } catch {
     return null;
   }
+}
+
+function ac(): AudioContext | null {
+  if (isMutedNow() || suspended) return null;
+  return context();
 }
 
 function tone(freq: number, dur = 0.15, type: OscillatorType = 'sine', vol = 0.18, delay = 0, slideTo?: number) {
@@ -112,15 +119,60 @@ export const sfx = {
 
 let suspended = false;
 
-/** Приложение ушло в фон: звук выключаем совсем (а не только тише). */
+/** Приложение ушло в фон: музыка — пауза, звук выключаем совсем (а не только тише). */
 export function suspendAudio() {
   suspended = true;
+  music.stop(0.2);
   void ctx?.suspend().catch(() => undefined);
 }
 
+/** Возврат из фона: контекст продолжает, музыка плавно появляется снова. */
 export function resumeAudio() {
   suspended = false;
-  if (!isMutedNow()) void ctx?.resume().catch(() => undefined);
+  if (!ctx) return;
+  void ctx.resume().then(() => startMusic()).catch(() => undefined);
+}
+
+/** Музыка стартует только после первого касания (политика автозапуска iOS) и если она включена. */
+let gestured = false;
+export function startMusic() {
+  if (!gestured || suspended || !isMusicNow()) return;
+  const a = context();
+  if (a) music.start(a);
+}
+
+/** Подписаться на первое касание: после него звук разрешён — запускаем музыку. */
+export function initMusic() {
+  const go = () => {
+    gestured = true;
+    window.removeEventListener('pointerdown', go);
+    window.removeEventListener('touchend', go);
+    window.removeEventListener('keydown', go);
+    startMusic();
+  };
+  window.addEventListener('pointerdown', go);
+  window.addEventListener('touchend', go);
+  window.addEventListener('keydown', go);
+}
+
+export function isMusicOn() {
+  return isMusicNow();
+}
+
+export function setMusicOn(v: boolean) {
+  saveProgress({ ...loadProgress(), music: v });
+  if (v) startMusic();
+  else music.stop(1);
+}
+
+/** Победа — музыка мягко приглушается на 2 с. */
+export function duckMusic(seconds = 2) {
+  music.duck(seconds);
+}
+
+/** Настроение музыки: деревня — теплее. */
+export function setMusicMood(mood: Mood) {
+  music.setMood(mood);
 }
 
 export function isMuted() {

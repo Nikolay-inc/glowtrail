@@ -51,8 +51,14 @@ export function rulesFor(level: RulesLevel): RuleId[] {
 }
 
 /** Карточки, которые ещё не показывали перед этим уровнем. */
-export function pendingRules(level: RulesLevel): RuleId[] {
-  const seen = SaveService.load().profile.tipsSeen;
+/**
+ * Карточки, которые ещё не показывали перед этим уровнем. На уже пройденном (или пропущенном) уровне карточек нет:
+ * переигровка — не первая встреча с правилом. Исключение — «Пройти обучение заново» (обучение снова идёт).
+ */
+export function pendingRules(level: RulesLevel & { id?: string }): RuleId[] {
+  const d = SaveService.load();
+  if (level.id && (d.progress.stars[level.id] || d.progress.skipped[level.id]) && !isTutorialActive(level.num)) return [];
+  const seen = d.profile.tipsSeen;
   return rulesFor(level).filter((r) => !seen.includes(`rule:${r}`));
 }
 
@@ -133,9 +139,12 @@ let modalOpen = false;
 /** Сколько мс после закрытия окна не показываем следующее. */
 export const MODAL_GAP_MS = 20_000;
 
-export function canShowModal(now = Date.now()): boolean {
-  return !modalOpen && now - lastModalAt >= MODAL_GAP_MS;
+export function canShowModal(now = Date.now(), gap = MODAL_GAP_MS): boolean {
+  return !modalOpen && now - lastModalAt >= gap;
 }
+
+/** Награда дня — приятное окно: после другого окна ждём меньше. */
+export const DAILY_GAP_MS = 4_000;
 
 export function modalOpened() {
   modalOpen = true;
@@ -149,6 +158,16 @@ export function modalClosed(now = Date.now()) {
 /** Предложить войти после победы: только с уровня 6, только гостю и если сейчас можно показать окно. */
 export function authPromptDue(levelNum: number, opts: { promptAllowed: boolean; now?: number }): boolean {
   return levelNum >= AUTH_PROMPT_AFTER_LEVEL && opts.promptAllowed && canShowModal(opts.now);
+}
+
+/**
+ * Окно «Награда дня» на карте: show — показать сейчас; badge — награда есть, но окно пока нельзя
+ * (обучение, знакомство, другое окно недавно) — горит отметка на кнопке-подарке, окно — по тапу или позже;
+ * none — награды нет.
+ */
+export function dailyPrompt(o: { available: boolean; tutorialDone: boolean; nameAsked: boolean; canShow: boolean }): 'show' | 'badge' | 'none' {
+  if (!o.available || !o.tutorialDone) return 'none';
+  return o.nameAsked && o.canShow ? 'show' : 'badge';
 }
 
 /** Для тестов. */

@@ -1,46 +1,41 @@
-// «Деревня в долине»: вечерняя деревня из 10 объектов без огней. Свет, собранный на уровнях, восстанавливает их
+// «Деревня в долине»: вечерняя деревня из 10 построек без огней. Свет, собранный на уровнях, восстанавливает их
 // по порядку (по цене): строительные искры → в окнах зажигается тёплый свет, дым из трубы, жители-силуэты.
-// Каждый объект даёт награду (монеты, скин, способность). Всегда видна ближайшая цель. Уровни деревня не блокирует.
+// Каждая постройка даёт награду (монеты, скин, способность). Под постройкой — название и цена; тап по
+// невосстановленной — плашка «Название · награда · цена». Всегда видна ближайшая цель. Уровни деревня не блокирует.
 
 import Phaser from 'phaser';
-import { sfx } from '../audio';
+import { setMusicMood, sfx } from '../audio';
 import { nextVillageObject, skinById, VILLAGE, type Reward, type VillageObject } from '../core/economy';
 import { getEconomy, restoreVillage, wallet } from '../meta';
 import { addBackground, Button, text } from '../ui/draw';
 import { addTabBar, addWallet, drawCoin, drawLight, toast } from '../ui/meta';
+import { drawBuilding } from '../ui/village';
 import { stretchLayout } from '../ui/viewport';
-import { C, H, W } from '../ui/theme';
+import { C, FONT, H, W } from '../ui/theme';
 
-
-/** Где стоит объект и где у него окна/труба (для огней и дыма). */
-interface Spot {
-  x: number;
-  y: number;
-  /** Масштаб (дальние объекты меньше). */
-  s: number;
-}
-
-const SPOTS: Record<string, Spot> = {
-  lighthouse: { x: 540, y: 610, s: 0.85 },
-  square: { x: 250, y: 770, s: 0.8 },
-  lumo: { x: 830, y: 780, s: 0.85 },
-  chapel: { x: 540, y: 910, s: 0.9 },
-  mill: { x: 190, y: 1060, s: 0.95 },
-  garden: { x: 880, y: 1080, s: 0.95 },
-  bridge: { x: 540, y: 1175, s: 1 },
-  bakery: { x: 250, y: 1360, s: 1.05 },
-  workshop: { x: 830, y: 1360, s: 1.05 },
-  well: { x: 540, y: 1470, s: 1.1 },
+/** Где стоит постройка: x, доля высоты свободной области (0 — верх, 1 — низ), масштаб. */
+const LAYOUT: Record<string, { x: number; f: number; s: number }> = {
+  chapel: { x: 220, f: 0.2, s: 0.78 },
+  lumo: { x: 545, f: 0.2, s: 0.78 },
+  lighthouse: { x: 870, f: 0.2, s: 0.7 },
+  square: { x: 250, f: 0.46, s: 0.8 },
+  mill: { x: 820, f: 0.48, s: 0.68 },
+  bridge: { x: 540, f: 0.58, s: 0.85 },
+  bakery: { x: 210, f: 0.81, s: 0.78 },
+  garden: { x: 545, f: 0.83, s: 0.76 },
+  workshop: { x: 870, f: 0.81, s: 0.72 },
+  well: { x: 390, f: 1, s: 0.85 },
 };
-
-const DARK = { wall: 0x1c2140, roof: 0x141834, window: 0x0c0f22, wood: 0x241c2e };
-const WARM = { wall: 0x5a4a6e, roof: 0x7a3f4a, window: 0xffd36b, wood: 0x6a4a34 };
 
 export class VillageScene extends Phaser.Scene {
   private views = new Map<string, Phaser.GameObjects.Container>();
   private wallet!: { refresh: () => void };
   private goal!: Phaser.GameObjects.Container;
   private goalY = 275;
+  private plaque?: Phaser.GameObjects.Container;
+  /** Свободная область для построек (между шапкой и кнопкой «Мастерская»). */
+  private yTop = 430;
+  private yBot = 1450;
 
   constructor() {
     super('Village');
@@ -48,294 +43,248 @@ export class VillageScene extends Phaser.Scene {
 
   create() {
     const bounds = stretchLayout(this);
+    // В деревне музыка теплее; уходя — снова ночь.
+    setMusicMood('warm');
+    this.events.once('shutdown', () => setMusicMood('night'));
     addBackground(this, { evening: true, dust: false });
     this.cameras.main.fadeIn(200, 11, 15, 39);
     this.views.clear();
+    this.plaque = undefined;
+    const topY = 100 + bounds.top;
+    const rowY = 1730 + (bounds.bottom - H);
+    // Постройки занимают всё место между шапкой (заголовок, валюты, цель) и кнопкой «Мастерская».
+    this.yTop = topY + 360;
+    this.yBot = rowY - 300;
     this.drawGround();
     const e = getEconomy();
     for (const v of VILLAGE) this.views.set(v.id, this.drawObject(v, e.village.includes(v.id)));
 
-    const topY = 100 + bounds.top;
     text(this, W / 2, topY, 'Деревня в долине', 60).setDepth(21).setShadow(0, 0, '#ffc65c', 20, true, true);
     this.wallet = addWallet(this, W / 2, topY + 80);
     this.goal = this.add.container(0, 0).setDepth(22);
     this.goalY = topY + 175;
     this.drawGoal();
 
-    const rowY = 1730 + (bounds.bottom - H);
-    new Button(this, W / 2, rowY - 150, { w: 460, h: 120, icon: 'plus', label: 'Мастерская', fontSize: 44, onClick: () => this.go('Workshop') }).setDepth(21);
+    new Button(this, W / 2, rowY - 150, { w: 460, h: 110, icon: 'plus', label: 'Мастерская', fontSize: 42, onClick: () => this.go('Workshop') }).setDepth(21);
     addTabBar(this, 'Village', rowY + 40, (k) => this.go(k));
+    // Тап мимо плашки — закрыть её.
+    this.input.on('pointerdown', (_p: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => {
+      if (this.plaque && !over.length) this.hidePlaque();
+    });
+  }
+
+  private spot(id: string) {
+    const l = LAYOUT[id];
+    // Чем выше свободная область, тем крупнее постройки (на коротких экранах — помельче, без наложений).
+    const k = Phaser.Math.Clamp((this.yBot - this.yTop) / 1000, 0.85, 1.25);
+    return { x: l.x, y: this.yTop + (this.yBot - this.yTop) * l.f, s: l.s * k };
   }
 
   // -------------------------------------------------------------------------
-  // Земля: холмы, тропинка, ручей под мостом
+  // Земля: холмы, тропинка, ручей под мостом, ели по краям
 
   private drawGround() {
     const g = this.add.graphics().setDepth(1);
-    g.fillStyle(0x0f1d1c, 1);
-    g.fillEllipse(540, 1250, 1900, 1500);
-    g.fillStyle(0x132621, 1);
-    g.fillEllipse(540, 1450, 1700, 1100);
-    g.fillStyle(0x0c1714, 1);
-    g.fillEllipse(540, 650, 700, 300); // холм маяка
-    // Тропинка от колодца к маяку
-    g.lineStyle(46, 0x2a2a3a, 1);
-    const pts = [new Phaser.Math.Vector2(540, 1560), new Phaser.Math.Vector2(560, 1300), new Phaser.Math.Vector2(520, 1100), new Phaser.Math.Vector2(560, 880), new Phaser.Math.Vector2(520, 760), new Phaser.Math.Vector2(540, 640)];
+    const top = this.yTop - 260;
+    const bridgeY = this.spot('bridge').y;
+    g.fillStyle(0x0d1a1a, 1);
+    g.fillEllipse(540, top + 260, 1500, 420);
+    g.fillRect(-200, top + 260, 1480, H * 2);
+    g.fillStyle(0x112220, 1);
+    g.fillEllipse(540, (top + this.yBot) / 2 + 200, 1600, this.yBot - top + 400);
+    // Тропинка от колодца наверх, к дому Lumo
+    g.lineStyle(44, 0x24243a, 1);
+    const pts = [
+      new Phaser.Math.Vector2(545, this.yBot + 80),
+      new Phaser.Math.Vector2(500, this.spot('garden').y + 20),
+      new Phaser.Math.Vector2(560, bridgeY - 10),
+      new Phaser.Math.Vector2(520, this.spot('square').y + 20),
+      new Phaser.Math.Vector2(545, this.spot('lumo').y + 30),
+    ];
     g.strokePoints(new Phaser.Curves.Spline(pts).getPoints(60), false);
-    // Ручей поперёк
-    g.lineStyle(70, 0x173a66, 1);
-    g.strokePoints(new Phaser.Curves.Spline([new Phaser.Math.Vector2(-40, 1225), new Phaser.Math.Vector2(300, 1155), new Phaser.Math.Vector2(780, 1195), new Phaser.Math.Vector2(1120, 1135)]).getPoints(40), false);
-    g.lineStyle(6, 0x5a9ad6, 0.5);
-    for (const x of [120, 380, 700, 960]) g.lineBetween(x - 30, 1175 + (x % 3) * 8, x + 30, 1175 + (x % 3) * 8);
-    // Деревья по краям
+    // Ручей поперёк — под мостом
+    g.lineStyle(64, 0x173a66, 1);
+    g.strokePoints(new Phaser.Curves.Spline([new Phaser.Math.Vector2(-60, bridgeY - 10), new Phaser.Math.Vector2(300, bridgeY - 40), new Phaser.Math.Vector2(780, bridgeY + 10), new Phaser.Math.Vector2(1140, bridgeY - 30)]).getPoints(40), false);
+    g.lineStyle(5, 0x5a9ad6, 0.45);
+    for (const x of [120, 330, 760, 960]) g.lineBetween(x - 28, bridgeY - 18 + (x % 3) * 6, x + 28, bridgeY - 18 + (x % 3) * 6);
+    // Ели по краям (не заслоняют постройки)
     const rnd = new Phaser.Math.RandomDataGenerator(['village']);
-    for (let i = 0; i < 22; i++) {
-      const x = rnd.pick([rnd.between(20, 120), rnd.between(960, 1060)]);
-      const y = rnd.between(680, 1560);
-      const s = rnd.realInRange(0.7, 1.2);
-      g.fillStyle(0x0a1412, 1);
-      g.fillTriangle(x - 40 * s, y, x + 40 * s, y, x, y - 110 * s);
-      g.fillTriangle(x - 32 * s, y - 45 * s, x + 32 * s, y - 45 * s, x, y - 140 * s);
+    for (let i = 0; i < 18; i++) {
+      const x = i % 2 ? rnd.between(1000, 1070) : rnd.between(10, 70);
+      const y = rnd.between(top + 200, this.yBot + 60);
+      const s = rnd.realInRange(0.6, 1);
+      g.fillStyle(0x08110f, 1);
+      g.fillTriangle(x - 36 * s, y, x + 36 * s, y, x, y - 100 * s);
+      g.fillTriangle(x - 28 * s, y - 40 * s, x + 28 * s, y - 40 * s, x, y - 128 * s);
     }
   }
 
   // -------------------------------------------------------------------------
-  // Объекты деревни (простые фигуры): тёмный силуэт или восстановленный с огнями
+  // Постройка: рисунок, свет, дым, жители, подпись и ценник
 
   private drawObject(v: VillageObject, lit: boolean): Phaser.GameObjects.Container {
-    const sp = SPOTS[v.id];
+    const sp = this.spot(v.id);
     const c = this.add.container(sp.x, sp.y).setDepth(5 + sp.y / 1000);
-    const g = this.add.graphics();
-    const p = lit ? WARM : DARK;
-    const windows: { x: number; y: number; w: number; h: number }[] = [];
-    let chimney: { x: number; y: number } | null = null;
-    const house = (x: number, y: number, w: number, h: number, roofH: number, win: number) => {
-      g.fillStyle(0x000000, 0.35);
-      g.fillEllipse(x, y + 6, w * 1.2, 22);
-      g.fillStyle(p.wall, 1);
-      g.fillRect(x - w / 2, y - h, w, h);
-      g.fillStyle(p.roof, 1);
-      g.fillTriangle(x - w / 2 - 14, y - h, x + w / 2 + 14, y - h, x, y - h - roofH);
-      for (let i = 0; i < win; i++) windows.push({ x: x - w / 2 + (w / (win + 1)) * (i + 1), y: y - h * 0.55, w: 22, h: 26 });
-      g.fillStyle(p.wood, 1);
-      g.fillRect(x - 13, y - 38, 26, 38); // дверь
-    };
-    switch (v.id) {
-      case 'well':
-        g.fillStyle(0x000000, 0.35);
-        g.fillEllipse(0, 8, 130, 26);
-        g.fillStyle(lit ? 0x6e6a7e : 0x262a40, 1);
-        g.fillRoundedRect(-55, -50, 110, 52, 12);
-        g.fillStyle(p.wood, 1);
-        g.fillRect(-50, -120, 10, 72);
-        g.fillRect(40, -120, 10, 72);
-        g.fillStyle(p.roof, 1);
-        g.fillTriangle(-70, -112, 70, -112, 0, -160);
-        windows.push({ x: 0, y: -40, w: 70, h: 12 });
-        break;
-      case 'bakery':
-        house(0, 0, 170, 120, 70, 2);
-        chimney = { x: 50, y: -175 };
-        g.fillStyle(p.roof, 1);
-        g.fillRect(40, -195, 22, 50);
-        break;
-      case 'workshop':
-        house(0, 0, 190, 110, 60, 2);
-        g.fillStyle(p.wood, 1);
-        g.fillRect(-120, -60, 30, 60); // поленница
-        chimney = { x: -50, y: -165 };
-        g.fillStyle(p.roof, 1);
-        g.fillRect(-60, -185, 22, 50);
-        break;
-      case 'mill':
-        house(0, 0, 110, 150, 50, 1);
-        g.fillStyle(p.wood, 1);
-        for (let i = 0; i < 4; i++) {
-          const a = (i * Math.PI) / 2 + Math.PI / 4;
-          const bx = Math.cos(a) * 95;
-          const by = -170 + Math.sin(a) * 95;
-          g.lineStyle(14, p.wood, 1);
-          g.lineBetween(0, -170, bx, by);
-        }
-        g.fillCircle(0, -170, 14);
-        break;
-      case 'bridge':
-        g.fillStyle(p.wood, 1);
-        g.fillRoundedRect(-150, -40, 300, 34, 10);
-        g.lineStyle(10, p.wood, 1);
-        g.beginPath();
-        g.arc(0, 40, 140, Math.PI * 1.15, Math.PI * 1.85, false);
-        g.strokePath();
-        for (const x of [-140, 140]) {
-          g.fillRect(x - 6, -90, 12, 55);
-          windows.push({ x, y: -96, w: 22, h: 22 }); // фонарики на перилах
-        }
-        break;
-      case 'garden':
-        g.fillStyle(lit ? 0x2f5a3a : 0x18261f, 1);
-        for (const [x, y, r] of [[-60, -40, 50], [10, -70, 60], [70, -35, 45]] as const) g.fillCircle(x, y, r);
-        g.fillStyle(p.wood, 1);
-        g.fillRect(-100, -10, 200, 10);
-        if (lit) for (const [x, y] of [[-70, -60], [0, -100], [60, -55], [30, -30]] as const) windows.push({ x, y, w: 14, h: 14 }); // яблоки-огоньки
-        else windows.push({ x: 0, y: -60, w: 1, h: 1 });
-        break;
-      case 'chapel':
-        house(0, 0, 130, 150, 50, 1);
-        g.fillStyle(p.roof, 1);
-        g.fillTriangle(-26, -195, 26, -195, 0, -290);
-        g.fillStyle(p.wall, 1);
-        g.fillRect(-20, -205, 40, 30);
-        windows.push({ x: 0, y: -232, w: 18, h: 22 });
-        break;
-      case 'square':
-        g.fillStyle(lit ? 0x3a3a52 : 0x1a1d33, 1);
-        g.fillEllipse(0, 0, 230, 60);
-        for (const x of [-80, 0, 80]) {
-          g.fillStyle(0x2a2440, 1);
-          g.fillRect(x - 5, -110, 10, 110);
-          windows.push({ x, y: -122, w: 24, h: 26 });
-        }
-        break;
-      case 'lumo':
-        house(0, 0, 150, 120, 80, 2);
-        chimney = { x: -40, y: -185 };
-        g.fillStyle(p.roof, 1);
-        g.fillRect(-52, -205, 22, 50);
-        break;
-      case 'lighthouse':
-        g.fillStyle(0x000000, 0.35);
-        g.fillEllipse(0, 6, 140, 26);
-        g.fillStyle(lit ? 0xc9c3d8 : 0x22263e, 1);
-        g.fillPoints([new Phaser.Math.Vector2(-50, 0), new Phaser.Math.Vector2(50, 0), new Phaser.Math.Vector2(30, -260), new Phaser.Math.Vector2(-30, -260)], true);
-        g.fillStyle(lit ? 0xa8404a : 0x1a1d33, 1);
-        for (const y of [-70, -170]) g.fillRect(-45 + (y === -170 ? 8 : 0), y - 20, 90 - (y === -170 ? 16 : 0), 26);
-        g.fillStyle(p.roof, 1);
-        g.fillTriangle(-40, -300, 40, -300, 0, -345);
-        windows.push({ x: 0, y: -280, w: 46, h: 34 });
-        break;
-    }
-    // Окна: тёмные или тёплые со свечением
-    const glow: Phaser.GameObjects.Image[] = [];
-    for (const w of windows) {
-      g.fillStyle(p.window, 1);
-      g.fillRect(w.x - w.w / 2, w.y - w.h / 2, w.w, w.h);
-      if (lit) {
-        const img = this.add.image(w.x, w.y, 'glow').setTint(0xffc65c).setBlendMode(Phaser.BlendModes.ADD).setScale(Math.max(w.w, w.h) / 45).setAlpha(0.8);
-        glow.push(img);
-      }
-    }
-    // Восстановленный объект освещает землю вокруг тёплым светом.
-    if (lit) c.add(this.add.image(0, -40, 'glow').setTint(0xffb84d).setBlendMode(Phaser.BlendModes.ADD).setScale(3.2, 1.8).setAlpha(0.28));
-    c.add([g, ...glow]);
-    for (const img of glow) this.tweens.add({ targets: img, alpha: 0.5, duration: Phaser.Math.Between(900, 1600), yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+    const b = drawBuilding(this, v.id, lit);
+    const body = this.add.container(0, 0, b.objects).setScale(sp.s);
     if (lit) {
-      if (v.id === 'lighthouse') {
-        // Луч маяка медленно вращается.
-        const beam = this.add.image(0, -280, 'cone').setOrigin(0, 0.5).setTint(0xffe2a0).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.35).setScale(2.4, 1.2);
+      // Тёплое свечение вокруг постройки
+      c.add(this.add.image(0, -b.height * sp.s * 0.35, 'glow').setTint(0xffb84d).setBlendMode(Phaser.BlendModes.ADD).setScale(3.4, 2.4).setAlpha(0.22));
+    }
+    c.add(body);
+    if (lit) {
+      for (const l of b.lights) {
+        const img = this.add.image(l.x * sp.s, l.y * sp.s, 'glow').setTint(0xffc65c).setBlendMode(Phaser.BlendModes.ADD).setScale((l.r * sp.s) / 34).setAlpha(0.75);
+        c.add(img);
+        this.tweens.add({ targets: img, alpha: 0.45, duration: Phaser.Math.Between(900, 1700), yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+      }
+      for (const ch of b.chimneys) {
+        c.add(
+          this.add.particles(ch.x * sp.s, ch.y * sp.s, 'glow', {
+            lifespan: 2800,
+            speedY: { min: -38, max: -22 },
+            speedX: { min: -4, max: 14 },
+            scale: { start: 0.22, end: 0.75 },
+            alpha: { start: 0.28, end: 0 },
+            tint: 0xa8aec4,
+            frequency: 380,
+          }),
+        );
+      }
+      if (b.rotor) this.tweens.add({ targets: b.rotor, angle: 360, duration: 14000, repeat: -1 });
+      if (b.beam) {
+        const beam = this.add.image(b.beam.x * sp.s, b.beam.y * sp.s, 'cone').setOrigin(0, 0.5).setTint(0xffe2a0).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.4).setScale(2.6, 1.1);
         c.add(beam);
         this.tweens.add({ targets: beam, angle: 360, duration: 9000, repeat: -1 });
       }
-      if (chimney) {
-        const smoke = this.add.particles(chimney.x, chimney.y, 'glow', {
-          lifespan: 2600,
-          speedY: { min: -40, max: -25 },
-          speedX: { min: -6, max: 14 },
-          scale: { start: 0.25, end: 0.7 },
-          alpha: { start: 0.22, end: 0 },
-          tint: 0x9aa0b8,
-          frequency: 420,
-        });
-        c.add(smoke);
-      }
-      // Жители-силуэты рядом с объектом
-      for (const dx of [-70, 80].slice(0, v.id === 'well' || v.id === 'square' ? 2 : 1)) {
+      // Жители-силуэты у входа
+      const n = v.id === 'square' || v.id === 'well' ? 2 : 1;
+      for (let i = 0; i < n; i++) {
         const fig = this.add.graphics();
-        fig.fillStyle(0x0a0d1e, 1);
-        fig.fillCircle(0, -46, 10);
-        fig.fillTriangle(-16, 0, 16, 0, 0, -40);
-        fig.setPosition(dx + (v.id === 'bridge' ? 0 : 0), 10);
+        fig.fillStyle(0x070a18, 1);
+        fig.fillCircle(0, -44, 9);
+        fig.fillTriangle(-15, 0, 15, 0, 0, -38);
+        fig.setPosition((i ? 1 : -1) * 90 * sp.s, 4);
         c.add(fig);
-        this.tweens.add({ targets: fig, y: 6, duration: 1200 + dx * 3, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+        this.tweens.add({ targets: fig, y: 0, duration: 1100 + i * 300, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
       }
     }
-    c.setScale(sp.s);
-    // Касание объекта
-    const zone = this.add.zone(0, -100, 260, 260).setInteractive({ useHandCursor: true });
+    // Подпись под постройкой: название и (для невосстановленной) цена — отдельным слоем поверх всех построек
+    const labels = this.add.container(sp.x, sp.y).setDepth(30);
+    c.once('destroy', () => labels.destroy());
+    const next = nextVillageObject(getEconomy());
+    const isNext = !lit && next?.id === v.id;
+    labels.add(
+      this.add
+        .text(0, 22, v.name, { fontFamily: FONT, fontSize: '26px', color: lit ? '#ffd36b' : isNext ? C.text : '#9aa3d6', fontStyle: 'bold' })
+        .setOrigin(0.5, 0),
+    );
+    if (!lit) {
+      const tag = this.add.container(0, 76);
+      const tg = this.add.graphics();
+      tg.fillStyle(isNext ? 0x3a2a10 : 0x000000, isNext ? 0.92 : 0.45);
+      tg.fillRoundedRect(-52, -20, 104, 40, 20);
+      if (isNext) {
+        tg.lineStyle(3, C.primary, 1);
+        tg.strokeRoundedRect(-52, -20, 104, 40, 20);
+      }
+      drawLight(tg, -24, 0, 12);
+      tag.add([tg, text(this, 14, 0, String(v.cost), 28, isNext ? '#ffd36b' : C.textDim)]);
+      tag.setAlpha(isNext ? 1 : 0.7);
+      labels.add(tag);
+      if (isNext) this.tweens.add({ targets: tag, scale: 1.08, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+    }
+    // Касание постройки (вместе с подписью)
+    const zone = this.add.zone(0, -b.height * sp.s * 0.4, 230, b.height * sp.s + 120).setInteractive({ useHandCursor: true });
     zone.on('pointerup', () => this.tap(v));
     c.add(zone);
-    // Цена у ближайшей цели и подпись у остальных
-    const e = getEconomy();
-    const next = nextVillageObject(e);
-    if (!lit) {
-      const isNext = next?.id === v.id;
-      const tag = this.add.container(0, 40);
-      const tg = this.add.graphics();
-      tg.fillStyle(isNext ? 0x3a2a10 : 0x000000, isNext ? 0.92 : 0.5);
-      tg.fillRoundedRect(-78, -26, 156, 52, 26);
-      if (isNext) {
-        tg.lineStyle(4, C.primary, 1);
-        tg.strokeRoundedRect(-78, -26, 156, 52, 26);
-      }
-      drawLight(tg, -40, 0, 16);
-      tag.add([tg, text(this, 18, 0, String(v.cost), 34, isNext ? '#ffd36b' : C.textDim)]);
-      tag.setAlpha(isNext ? 1 : 0.6);
-      c.add(tag);
-      if (isNext) this.tweens.add({ targets: tag, y: 32, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
-    }
     return c;
   }
 
-  /** Плашка ближайшей цели: «Мельница — ещё 6 света» или кнопка «Восстановить». */
+  /** Ближайшая цель вверху: «Мельница — ещё 6 света» или кнопка «Восстановить». */
   private drawGoal() {
     const y = this.goalY;
     this.goal.removeAll(true);
-    const e = getEconomy();
-    const next = nextVillageObject(e);
+    const next = nextVillageObject(getEconomy());
     if (!next) {
       this.goal.add(text(this, W / 2, y, 'Деревня восстановлена — в долине светло!', 40, '#ffd36b'));
       return;
     }
     const light = wallet().light;
     if (light >= next.cost) {
-      this.goal.add(new Button(this, W / 2, y + 10, { w: 760, h: 110, label: `Восстановить: ${next.name} (${next.cost})`, primary: true, fontSize: 40, onClick: () => this.tap(next) }));
+      this.goal.add(new Button(this, W / 2, y + 6, { w: 720, h: 100, label: `Восстановить: ${next.name} (${next.cost})`, primary: true, fontSize: 38, onClick: () => this.restore(next) }));
       return;
     }
     const g = this.add.graphics();
     g.fillStyle(0x000000, 0.35);
-    g.fillRoundedRect(W / 2 - 400, y - 40, 800, 80, 40);
+    g.fillRoundedRect(W / 2 - 380, y - 38, 760, 76, 38);
     this.goal.add(g);
-    this.goal.add(text(this, W / 2, y, `${next.name} — ещё ${next.cost - light} света`, 40));
+    this.goal.add(text(this, W / 2, y, `${next.name} — ещё ${next.cost - light} света`, 38));
   }
 
+  /** Тап по постройке: восстановленная — что она дала; невосстановленная — плашка «Название · награда · цена». */
   private tap(v: VillageObject) {
-    const e = getEconomy();
-    if (e.village.includes(v.id)) {
-      sfx.tap();
-      toast(this, `${v.name} — ${rewardText(v.reward)}`);
+    sfx.tap();
+    if (getEconomy().village.includes(v.id)) {
+      toast(this, `${v.name} — ${rewardText(v.reward)}`, this.goalY + 120);
       return;
     }
-    const next = nextVillageObject(e)!;
-    if (next.id !== v.id) {
-      sfx.invalid();
-      toast(this, `Сначала: ${next.name}`);
-      return;
-    }
+    this.showPlaque(v);
+  }
+
+  private hidePlaque() {
+    const p = this.plaque;
+    this.plaque = undefined;
+    if (p) this.tweens.add({ targets: p, alpha: 0, duration: 150, onComplete: () => p.destroy() });
+  }
+
+  private showPlaque(v: VillageObject) {
+    this.hidePlaque();
+    const sp = this.spot(v.id);
+    const next = nextVillageObject(getEconomy());
+    const light = wallet().light;
+    const can = next?.id === v.id && light >= v.cost;
+    const second = next && next.id !== v.id ? `Сначала: ${next.name}` : !can ? `Ещё ${v.cost - light} света — проходи уровни и собирай светлячков` : '';
+    const w = 820;
+    const h = can ? 220 : 160;
+    // Плашка над постройкой, но в пределах экрана и не на шапке
+    const y = Phaser.Math.Clamp(sp.y - 230 * sp.s - h / 2, this.goalY + 80 + h / 2, H - 420);
+    const p = this.add.container(W / 2, y).setDepth(50);
+    const g = this.add.graphics();
+    g.fillStyle(0x000000, 0.4);
+    g.fillRoundedRect(-w / 2, -h / 2 + 8, w, h, 30);
+    g.fillStyle(C.panel, 0.98);
+    g.fillRoundedRect(-w / 2, -h / 2, w, h, 30);
+    g.lineStyle(4, can ? C.primary : C.cardEdge, 1);
+    g.strokeRoundedRect(-w / 2, -h / 2, w, h, 30);
+    p.add(g);
+    const title = `${v.name} · ${rewardText(v.reward)} · ${v.cost} света`;
+    p.add(this.add.text(0, -h / 2 + 48, title, { fontFamily: FONT, fontSize: '32px', color: C.text, fontStyle: 'bold', align: 'center', wordWrap: { width: w - 60 } }).setOrigin(0.5));
+    if (second) p.add(text(this, 0, -h / 2 + 108, second, 26, C.textDim, false).setWordWrapWidth(w - 60));
+    if (can) p.add(new Button(this, 0, h / 2 - 55, { w: 420, h: 80, label: 'Восстановить', primary: true, fontSize: 36, onClick: () => this.restore(v) }));
+    p.setAlpha(0);
+    this.tweens.add({ targets: p, alpha: 1, duration: 160 });
+    this.plaque = p;
+  }
+
+  private restore(v: VillageObject) {
+    this.hidePlaque();
     const res = restoreVillage(v.id);
     if (!res.ok) {
       sfx.invalid();
-      toast(this, `Ещё ${v.cost - wallet().light} света — проходи уровни и собирай светлячков`);
+      toast(this, `Ещё ${v.cost - wallet().light} света — проходи уровни и собирай светлячков`, this.goalY + 120);
       return;
     }
     this.celebrate(v, res.value);
   }
 
-  /** Восстановление: строительные искры, объект загорается, награда. */
+  /** Восстановление: строительные искры, постройка загорается, награда. */
   private celebrate(v: VillageObject, reward: Reward) {
-    const sp = SPOTS[v.id];
+    const sp = this.spot(v.id);
     const old = this.views.get(v.id)!;
     sfx.lantern(2);
     const sparks = this.add
-      .particles(sp.x, sp.y - 90 * sp.s, 'glow', {
+      .particles(sp.x, sp.y - 110 * sp.s, 'glow', {
         speed: { min: 80, max: 320 },
         scale: { start: 0.35, end: 0 },
         alpha: { start: 1, end: 0 },
@@ -347,11 +296,17 @@ export class VillageScene extends Phaser.Scene {
       })
       .setDepth(40);
     for (let i = 0; i < 5; i++) this.time.delayedCall(i * 160, () => sparks.explode(18));
-    this.tweens.add({ targets: old, scale: sp.s * 1.08, duration: 160, yoyo: true, repeat: 2 });
+    this.tweens.add({ targets: old, scale: 1.06, duration: 160, yoyo: true, repeat: 2 });
     this.time.delayedCall(900, () => {
       old.destroy();
       const view = this.drawObject(v, true);
       this.views.set(v.id, view);
+      // Ценник «следующей» постройки переехал — перерисуем её подпись.
+      const next = nextVillageObject(getEconomy());
+      if (next) {
+        this.views.get(next.id)?.destroy();
+        this.views.set(next.id, this.drawObject(next, false));
+      }
       view.setAlpha(0);
       this.tweens.add({ targets: view, alpha: 1, duration: 500 });
       sfx.win();
@@ -385,8 +340,8 @@ export class VillageScene extends Phaser.Scene {
 
 export function rewardText(r: Reward): string {
   if ('coins' in r) return `+${r.coins} монет`;
-  if ('ability' in r) return 'Новая способность: «Поворот плитки»';
+  if ('ability' in r) return 'способность «Поворот плитки»';
   const s = skinById(r.skin);
-  const kind = s?.kind === 'costume' ? 'Костюм' : s?.kind === 'road' ? 'Дорога' : s?.kind === 'arch' ? 'Арка' : 'Фонарь';
+  const kind = s?.kind === 'costume' ? 'костюм' : s?.kind === 'road' ? 'дорога' : s?.kind === 'arch' ? 'арка' : 'фонарь';
   return `${kind} «${s?.name ?? r.skin}»`;
 }

@@ -14,7 +14,7 @@ import { sfx } from '../audio';
 import { isUnlocked, loadProgress, type Progress } from '../storage';
 import { displayName, getProfile } from '../profile';
 import { showNameDialog } from '../ui/NameDialog';
-import { canShowModal, isTutorialDone, modalClosed, modalOpened } from '../tutorial';
+import { canShowModal, DAILY_GAP_MS, dailyPrompt, isTutorialDone, modalClosed, modalOpened } from '../tutorial';
 import { Account } from '../cloud/account';
 import { openAuthDialog } from '../ui/AuthDialog';
 import { addBackground, Button, createAvatarBadge, createLumo, drawFireflyIcon, drawIcon, drawStar, text } from '../ui/draw';
@@ -71,24 +71,28 @@ export class MenuScene extends Phaser.Scene {
     const world = WORLDS[0];
     const next = this.nextLevel(progress);
 
-    this.hudTop = topY + 200;
+    this.hudTop = topY + 260;
     // Снизу — кнопка «Играть» и панель вкладок (Карта / Деревня / Магазин / Профиль).
-    this.hudBottom = rowY - 330;
+    this.hudBottom = rowY - 340;
     this.buildMap(world, progress, next);
 
     // --- Верхняя панель: затемнение, профиль, мир и звёзды, вход
     const hud = this.add.graphics().setDepth(20);
     const paintHud = (v: ViewRect) => {
       hud.clear();
-      // Сплошная подложка под кнопками и мягкий переход к карте.
-      hud.fillStyle(C.bgBottom, 0.94);
-      hud.fillRect(v.x, v.y, v.w, topY + 120 - v.y);
-      hud.fillGradientStyle(C.bgBottom, C.bgBottom, C.bgBottom, C.bgBottom, 0.94, 0.94, 0, 0);
-      hud.fillRect(v.x, topY + 120, v.w, 110);
-      hud.fillGradientStyle(C.bgBottom, C.bgBottom, C.bgBottom, C.bgBottom, 0, 0, 0.94, 0.94);
-      hud.fillRect(v.x, rowY - 330, v.w, 110);
-      hud.fillStyle(C.bgBottom, 0.94);
-      hud.fillRect(v.x, rowY - 220, v.w, v.y + v.h - (rowY - 220));
+      // Шапка (аватар, имя, «Войти», мир, валюты) — на своей сплошной подложке с мягким краем:
+      // карта прокручивается под ней. Край — ниже счётчиков, чтобы не резать название мира.
+      const headEnd = topY + 225;
+      hud.fillStyle(C.bgBottom, 0.97);
+      hud.fillRect(v.x, v.y, v.w, headEnd - v.y);
+      hud.fillGradientStyle(C.bgBottom, C.bgBottom, C.bgBottom, C.bgBottom, 0.97, 0.97, 0, 0);
+      hud.fillRect(v.x, headEnd, v.w, 90);
+      // Низ: «Играть» и вкладки — тоже на подложке, кружки уровней уходят под неё мягко.
+      const footStart = rowY - 245;
+      hud.fillGradientStyle(C.bgBottom, C.bgBottom, C.bgBottom, C.bgBottom, 0, 0, 0.97, 0.97);
+      hud.fillRect(v.x, footStart - 100, v.w, 100);
+      hud.fillStyle(C.bgBottom, 0.97);
+      hud.fillRect(v.x, footStart, v.w, v.y + v.h - footStart);
     };
     paintHud(currentView(this));
     // Окно изменилось (поворот планшета, браузер): камера уже подогнана (keepFitted), перерисуем панели.
@@ -153,23 +157,37 @@ export class MenuScene extends Phaser.Scene {
       this.input.off('pointerup', this.onUp, this);
     });
 
-    // Карта открыта на текущем уровне (он — чуть ниже середины экрана).
+    // Карта открыта на текущем уровне.
     const cur = this.nodes[next];
-    const v = currentView(this);
-    this.setMapY(v.cy + 160 - cur.y);
+    // Текущий уровень — посередине между шапкой и кнопкой «Играть» (выше кнопки, со звёздами).
+    this.setMapY((this.hudTop + this.hudBottom) / 2 - cur.y);
     const p = this.mapToWorld(cur);
     irisIn(this, p.x, p.y, 750);
 
-    // Награда дня — если сегодня ещё не забрали (после обучения, не вместе с другими окнами).
-    if (isTutorialDone() && profile.nameAsked && dailyAvailable() !== null && canShowModal()) {
-      this.time.delayedCall(800, () => {
-        if (!canShowModal() || !this.scene.isActive()) return;
+    // Награда дня: кнопка-подарок с отметкой, пока награда не забрана; окно — сразу, если можно,
+    // иначе — как только другие окна позволят (проверяем каждые 1,5 с), или по тапу на подарок.
+    const dailyState = () =>
+      dailyPrompt({ available: dailyAvailable() !== null, tutorialDone: isTutorialDone(), nameAsked: getProfile().nameAsked, canShow: canShowModal(Date.now(), DAILY_GAP_MS) });
+    if (dailyState() !== 'none') {
+      const openDaily = () => {
+        if (!this.scene.isActive() || dailyAvailable() === null) return;
         modalOpened();
         showDailyDialog(this, () => {
           modalClosed();
           if (this.scene.isActive()) this.scene.restart();
         });
-      });
+      };
+      const gift = new Button(this, 100, topY + 175, { w: 120, h: 100, icon: 'gift', onClick: () => (sfx.tap(), openDaily()) }).setDepth(22);
+      const dot = this.add.graphics().setDepth(23);
+      dot.fillStyle(0xff6b4a, 1);
+      dot.fillCircle(150, topY + 135, 14);
+      this.tweens.add({ targets: [gift], scale: 1.08, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+      const tryShow = () => {
+        if (dailyState() === 'show') openDaily();
+        else retry = this.time.delayedCall(1500, tryShow);
+      };
+      let retry = this.time.delayedCall(800, tryShow);
+      this.events.once('shutdown', () => retry.remove());
     }
 
     // Обучение пройдено — мягко знакомимся: имя и аватарка (не вместе с другими окнами).

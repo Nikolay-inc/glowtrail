@@ -35,7 +35,8 @@ export function trayLayout(withStash: boolean): TrayLayout {
   const slotX = [0, 1, 2].map((i) => x + CARD / 2 + i * (CARD + GAP));
   x += 3 * CARD + 2 * GAP + GAP_DECK;
   const deckX = x + DECK_W / 2;
-  const previewX = [deckX - PREVIEW_STEP / 2, deckX + PREVIEW_STEP / 2];
+  // Превью следующих плиток — по правому краю колоды, не у края экрана.
+  const previewX = [deckX + 30 - PREVIEW_STEP, deckX + 30];
   const right = Math.max(x + DECK_W + DECK_STACK, previewX[1] + PREVIEW / 2);
   return { stashX, slotX, deckX, previewX, left, right };
 }

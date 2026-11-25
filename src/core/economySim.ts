@@ -46,13 +46,38 @@ export interface SimResult {
   worldDoneAt: number | null;
   /** Промежутки между новыми целями (объект деревни, улучшение, скин) в первый час, минуты. */
   gapsFirstHour: number[];
+  /** Что игрок ещё хотел бы купить, когда прошёл мир 1 (дорогие скины, высшие уровни улучшений). */
+  leftAtWorldEnd: { label: string; price: number }[];
   final: { coins: number; light: number; economy: Economy };
 }
 
-/** Что хочет купить типичный игрок (берёт самое дешёвое из доступного). */
-export const UPGRADE_ORDER: UpgradeId[] = ['lantern', 'rotate', 'stash'];
+/**
+ * Список желаний типичного игрока: следующая вещь покупается, как только хватает монет (не больше одной
+ * между уровнями). Улучшение, которое ещё не открыто (поворот — из деревни), игрок ждёт.
+ */
+export type Wish = { upgrade: UpgradeId } | { skin: string };
+export const WISHLIST: Wish[] = [
+  { upgrade: 'lantern' },
+  { skin: 'costume-2' },
+  { upgrade: 'rotate' },
+  { skin: 'road-moon' },
+  { upgrade: 'lantern' },
+  { skin: 'arch-moon' },
+  { skin: 'costume-3' },
+  { skin: 'road-stones' },
+  { skin: 'lantern-round' },
+  { skin: 'lantern-diamond' },
+  { skin: 'road-firefly' },
+  { skin: 'road-sunset' },
+  { skin: 'arch-sunset' },
+  { skin: 'arch-stone' },
+  { upgrade: 'stash' },
+  { skin: 'costume-5' },
+  { skin: 'road-aurora' },
+  { upgrade: 'lantern' },
+  { upgrade: 'rotate' },
+];
 const UPGRADE_NAMES: Record<UpgradeId, string> = { stash: 'Отложить', rotate: 'Поворот', lantern: 'Фонарик' };
-export const SKIN_ORDER = ['costume-2', 'lantern-round', 'arch-moon', 'road-moon', 'costume-3', 'road-stones', 'lantern-diamond', 'road-firefly', 'arch-stone', 'costume-5'];
 
 function rng(seed: number) {
   let a = seed >>> 0;
@@ -73,6 +98,12 @@ export function simulate(levels: readonly SimLevel[], minutes = 120, seed = 7): 
   let t = 0;
   let villageDoneAt: number | null = null;
   let worldDoneAt: number | null = null;
+  let leftAtWorldEnd: { label: string; price: number }[] = [];
+  const wantsLeft = () =>
+    WISHLIST.slice(wish).map((w) =>
+      'upgrade' in w ? { label: `${UPGRADE_NAMES[w.upgrade]} (улучшение)`, price: upgradePrice(e, w.upgrade) ?? 0 } : { label: skinById(w.skin)!.name, price: skinById(w.skin)!.price },
+    );
+
   const log = (level: number, kind: SimEvent['kind'], what: string) =>
     events.push({ t: Math.round(t * 10) / 10, level, kind, what, coins: coins(e), light: lightBalance(e, best) });
 
@@ -82,6 +113,7 @@ export function simulate(levels: readonly SimLevel[], minutes = 120, seed = 7): 
     log(0, 'daily', `ежедневная награда, день ${daily.day}`);
   }
 
+  let wish = 0;
   const spend = (num: number) => {
     // Между уровнями игрок заходит в деревню и магазин: восстанавливает не больше одного объекта
     // и покупает не больше одной вещи (самую дешёвую из желаемых).
@@ -94,36 +126,41 @@ export function simulate(levels: readonly SimLevel[], minutes = 120, seed = 7): 
       log(num, 'village', `${next.name} (${next.cost} света)`);
       if (!nextVillageObject(e) && villageDoneAt === null) villageDoneAt = num;
     }
-    for (let k = 0; k < 1; k++) {
-      const wants: { price: number; buy: () => Economy | string; label: string; kind: SimEvent['kind'] }[] = [];
-      for (const id of new Set(UPGRADE_ORDER)) {
-        const price = upgradePrice(e, id);
-        if (price !== null) wants.push({ price, buy: () => buyUpgrade(e, id), label: `${UPGRADE_NAMES[id]} → ${e.upgrades[id] + 1}`, kind: 'upgrade' });
+    // Монеты: следующая вещь из списка желаний, если хватает.
+    if (wish < WISHLIST.length) {
+      const w = WISHLIST[wish];
+      if ('upgrade' in w) {
+        const price = upgradePrice(e, w.upgrade);
+        if (price !== null && coins(e) >= price) {
+          e = buyUpgrade(e, w.upgrade) as Economy;
+          log(num, 'upgrade', `${UPGRADE_NAMES[w.upgrade]} → ${e.upgrades[w.upgrade]}`);
+          wish++;
+        }
+      } else {
+        const res = buySkin(e, w.skin);
+        if (res === 'owned' || res === 'locked' || res === 'special') wish++;
+        else if (typeof res !== 'string') {
+          e = res;
+          log(num, 'skin', skinById(w.skin)!.name);
+          wish++;
+        }
       }
-      for (const id of SKIN_ORDER) {
-        const s = skinById(id)!;
-        if (!e.skins.owned.includes(id) && !s.special && !s.source) wants.push({ price: s.price, buy: () => buySkin(e, id), label: s.name, kind: 'skin' });
-      }
-      const pick = wants.filter((w) => w.price <= coins(e)).sort((a, b) => a.price - b.price)[0];
-      if (!pick) break;
-      const res = pick.buy();
-      if (typeof res === 'string') break;
-      e = res;
-      log(num, pick.kind, pick.label);
     }
   };
 
+  // Средний игрок: ожидаемое время уровня с учётом поражений (каждая неудачная попытка — 60% времени уровня),
+  // средние звёзды и светлячки (округлённые). Детерминированно — промежутки между целями не зависят от удачи.
   const play = (lv: SimLevel, replay: boolean) => {
     const rating = lv.rating;
-    // Поражения: шанс растёт с рейтингом; каждая неудачная попытка — 60% времени уровня.
-    const levelTime = lv.infinite ? 0.7 : 0.8 + rating * 0.45;
-    const lose = Math.min(0.55, Math.max(0.03, (rating - 2) * 0.12));
-    while (r() < lose) t += levelTime * 0.6;
-    t += levelTime;
-    const p3 = lv.infinite ? 0.85 : Math.min(0.9, Math.max(0.25, 1.15 - rating * 0.15)) + (replay ? 0.3 : 0);
-    const stars = r() < p3 ? 3 : r() < 0.8 ? 2 : 1;
-    let ff = 0;
-    for (let i = 0; i < lv.fireflies; i++) if (r() < (replay ? 0.85 : 0.6)) ff++;
+    // Калибровка: рейтинг 2 — около 1,5 мин, рейтинг 6 — около 4 мин вместе с поражениями.
+    const levelTime = lv.infinite ? 0.7 : 0.6 + rating * 0.4;
+    const lose = Math.min(0.45, Math.max(0.03, (rating - 2) * 0.1));
+    t += levelTime * (1 + (0.6 * lose) / (1 - lose));
+    const p3 = Math.min(1, (lv.infinite ? 0.85 : Math.min(0.9, Math.max(0.25, 1.15 - rating * 0.15))) + (replay ? 0.3 : 0));
+    const expectedStars = 3 * p3 + (1 - p3) * 2.2;
+    const stars = Math.max(1, Math.min(3, Math.round(expectedStars)));
+    const ff = Math.round(lv.fireflies * (replay ? 0.85 : 0.6));
+    void r;
     e = applyWin(e, lv.id, stars).economy;
     best.stars[lv.id] = Math.max(best.stars[lv.id] ?? 0, stars);
     best.fireflies[lv.id] = Math.max(best.fireflies[lv.id] ?? 0, ff);
@@ -133,17 +170,21 @@ export function simulate(levels: readonly SimLevel[], minutes = 120, seed = 7): 
   for (const lv of levels) {
     if (t >= minutes) break;
     play(lv, false);
-    if (lv === levels[levels.length - 1]) worldDoneAt = Math.round(t);
+    if (lv === levels[levels.length - 1]) {
+      worldDoneAt = Math.round(t);
+      leftAtWorldEnd = wantsLeft();
+    }
   }
   // Мир пройден, время ещё есть — переигрывает уровни с худшими звёздами.
   while (t < minutes && worldDoneAt !== null) {
     const worst = [...levels].sort((a, b) => (best.stars[a.id] ?? 0) - (best.stars[b.id] ?? 0))[0];
     if ((best.stars[worst.id] ?? 0) >= 3) break;
+    // Переигровка лучше: средние звёзды на ней выше.
     play(worst, true);
   }
 
   // Цели, полученные в одну минуту (объект и покупка сразу после уровня), считаем одним моментом.
   const goals = [...new Set(events.filter((x) => x.kind !== 'daily' && x.kind !== 'level' && x.t <= 60).map((x) => x.t))];
   const gapsFirstHour = goals.map((g, i) => Math.round((g - (i ? goals[i - 1] : 0)) * 10) / 10);
-  return { events, villageDoneAt, worldDoneAt, gapsFirstHour, final: { coins: coins(e), light: lightBalance(e, best), economy: e } };
+  return { events, villageDoneAt, worldDoneAt, gapsFirstHour, leftAtWorldEnd, final: { coins: coins(e), light: lightBalance(e, best), economy: e } };
 }

@@ -35,7 +35,7 @@ import { HINT_PRICE } from '../core/economy';
 import { easeDeck, findExtraTiles, findHint, nearestSolvable } from '../core/solver';
 import type { Level, TileKind } from '../core/types';
 import { LEVELS, nextLevelOf, numberInWorld } from '../levels/index';
-import { sfx } from '../audio';
+import { sfx, duckMusic } from '../audio';
 import { logEvent, lossStreak, recordLoss, recordSkip, startAttempt, type LogEvent } from '../storage';
 import { countHint, markAuthPrompted, recordPlayDay, shouldPromptAuth } from '../profile';
 import { Account } from '../cloud/account';
@@ -256,7 +256,9 @@ export class GameScene extends Phaser.Scene {
     this.deckText = text(this, this.L.deckX, this.trayY + 8, '0', 56);
     // «Фонарик»: сколько следующих плиток видно (2 → 3 → 4 → 5). Больше двух — ряд поменьше у колоды.
     const n = ab.preview;
-    const px = n <= 2 ? this.L.previewX : Array.from({ length: n }, (_, i) => this.L.deckX + 42 - (n - 1 - i) * 70);
+    // Ряд выровнен по правому краю колоды (а не по краю экрана), шаг — как у сетки мини-карточек.
+    const step = n <= 2 ? 84 : 70;
+    const px = Array.from({ length: n }, (_, i) => this.L.deckX + 30 - (n - 1 - i) * step);
     this.previews = px.map((x) => new MiniCard(this, x, this.previewY, n <= 2 ? 72 : 60));
 
     // Нижняя панель: подсказка и (после серии поражений) пропуск уровня
@@ -1209,6 +1211,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private onWin() {
+    duckMusic(2);
     this.busy = true;
     this.ended = true;
     const s = this.state;

@@ -44,6 +44,7 @@ export function mergeSaves(local: SaveData, cloud: CloudPayload | null): SaveDat
     lossStreak: { ...lp.lossStreak }, // серия поражений — про текущую игру на этом устройстве
     skipped,
     muted: lp.muted, // звук — настройка устройства
+    music: lp.music, // музыка — тоже
     vibration: lp.vibration, // вибрация — тоже
   };
 

@@ -97,16 +97,16 @@ export interface VillageObject {
 
 /** Десять объектов деревни по возрастанию цены (сумма ≈ свет, который типичный игрок собирает за мир 1). */
 export const VILLAGE: readonly VillageObject[] = [
-  { id: 'well', name: 'Колодец', cost: 5, reward: { coins: 50 } },
-  { id: 'bakery', name: 'Дом пекаря', cost: 10, reward: { coins: 30 } },
-  { id: 'workshop', name: 'Мастерская', cost: 14, reward: { ability: 'rotate' } },
-  { id: 'mill', name: 'Мельница', cost: 14, reward: { skin: 'road-planks' } },
+  { id: 'well', name: 'Колодец', cost: 10, reward: { coins: 30 } },
+  { id: 'bakery', name: 'Дом пекаря', cost: 12, reward: { coins: 40 } },
+  { id: 'workshop', name: 'Мастерская', cost: 12, reward: { ability: 'rotate' } },
+  { id: 'mill', name: 'Мельница', cost: 12, reward: { skin: 'road-planks' } },
   { id: 'bridge', name: 'Мост', cost: 16, reward: { coins: 60 } },
-  { id: 'garden', name: 'Сад', cost: 16, reward: { skin: 'arch-flowers' } },
-  { id: 'chapel', name: 'Часовня', cost: 16, reward: { coins: 120 } },
-  { id: 'square', name: 'Фонарная площадь', cost: 19, reward: { skin: 'lantern-star' } },
-  { id: 'lumo', name: 'Дом Lumo', cost: 21, reward: { skin: 'costume-6' } },
-  { id: 'lighthouse', name: 'Маяк', cost: 22, reward: { coins: 140 } },
+  { id: 'garden', name: 'Сад', cost: 20, reward: { skin: 'arch-flowers' } },
+  { id: 'chapel', name: 'Часовня', cost: 20, reward: { coins: 80 } },
+  { id: 'square', name: 'Фонарная площадь', cost: 20, reward: { skin: 'lantern-star' } },
+  { id: 'lumo', name: 'Дом Lumo', cost: 22, reward: { skin: 'costume-6' } },
+  { id: 'lighthouse', name: 'Маяк', cost: 24, reward: { coins: 150 } },
 ];
 
 export const villageById = (id: string) => VILLAGE.find((v) => v.id === id);
@@ -153,9 +153,9 @@ export interface UpgradeDef {
 }
 
 export const UPGRADES: Record<UpgradeId, UpgradeDef> = {
-  stash: { id: 'stash', name: 'Отложить', values: [1, 2], prices: [220], unit: 'слот' },
-  rotate: { id: 'rotate', name: 'Поворот плитки', values: [0, 1, 2, 3], prices: [null, 130, 160], unit: 'заряд' },
-  lantern: { id: 'lantern', name: 'Фонарик', values: [2, 3, 4, 5], prices: [60, 80, 160], unit: 'плитки видно' },
+  stash: { id: 'stash', name: 'Отложить', values: [1, 2], prices: [300], unit: 'слот' },
+  rotate: { id: 'rotate', name: 'Поворот плитки', values: [0, 1, 2, 3], prices: [null, 115, 420], unit: 'заряд' },
+  lantern: { id: 'lantern', name: 'Фонарик', values: [2, 3, 4, 5], prices: [45, 160, 380], unit: 'плитки видно' },
 };
 
 export const upgradeValue = (e: Economy, id: UpgradeId) => UPGRADES[id].values[e.upgrades[id]];
@@ -196,29 +196,32 @@ export const SKINS: readonly Skin[] = [
   // Костюмы Lumo (бывшие аватарки 0–7) — меняют Lumo на поле.
   { id: 'costume-0', kind: 'costume', name: 'Синий', price: 0, avatar: 0 },
   { id: 'costume-1', kind: 'costume', name: 'Лесной', price: 0, avatar: 1 },
-  { id: 'costume-2', kind: 'costume', name: 'Вишнёвый', price: 50, avatar: 2 },
-  { id: 'costume-3', kind: 'costume', name: 'Сливовый', price: 90, avatar: 3 },
+  { id: 'costume-2', kind: 'costume', name: 'Вишнёвый', price: 80, avatar: 2 },
+  { id: 'costume-3', kind: 'costume', name: 'Сливовый', price: 155, avatar: 3 },
   { id: 'costume-4', kind: 'costume', name: 'Янтарный', price: 150, source: 'daily', avatar: 4 },
-  { id: 'costume-5', kind: 'costume', name: 'Морской', price: 150, avatar: 5 },
+  { id: 'costume-5', kind: 'costume', name: 'Морской', price: 350, avatar: 5 },
   { id: 'costume-6', kind: 'costume', name: 'Лунный', price: 0, source: 'village', avatar: 6 },
   { id: 'costume-7', kind: 'costume', name: 'Золотой', price: 0, special: true, avatar: 7 },
   // Формы фонаря Lumo.
   { id: 'lantern-default', kind: 'lantern', name: 'Как у костюма', price: 0 },
-  { id: 'lantern-round', kind: 'lantern', name: 'Круглый', price: 80 },
-  { id: 'lantern-diamond', kind: 'lantern', name: 'Ромб', price: 80 },
+  { id: 'lantern-round', kind: 'lantern', name: 'Круглый', price: 60 },
+  { id: 'lantern-diamond', kind: 'lantern', name: 'Ромб', price: 45 },
   { id: 'lantern-star', kind: 'lantern', name: 'Звезда', price: 0, source: 'village' },
   { id: 'lantern-crown', kind: 'lantern', name: 'Корона', price: 0, special: true },
   // Стиль дороги.
   { id: 'road-glow', kind: 'road', name: 'Светящаяся тропа', price: 0 },
-  { id: 'road-moon', kind: 'road', name: 'Лунный свет', price: 60 },
-  { id: 'road-stones', kind: 'road', name: 'Камешки', price: 80 },
-  { id: 'road-firefly', kind: 'road', name: 'Светлячковая', price: 100 },
+  { id: 'road-moon', kind: 'road', name: 'Лунный свет', price: 70 },
+  { id: 'road-stones', kind: 'road', name: 'Камешки', price: 70 },
+  { id: 'road-firefly', kind: 'road', name: 'Светлячковая', price: 120 },
+  { id: 'road-sunset', kind: 'road', name: 'Закатная тропа', price: 140 },
+  { id: 'road-aurora', kind: 'road', name: 'Северное сияние', price: 400 },
   { id: 'road-planks', kind: 'road', name: 'Доски', price: 0, source: 'village' },
   { id: 'road-stars', kind: 'road', name: 'Звёздная пыль', price: 0, special: true },
   // Стиль арки.
   { id: 'arch-portal', kind: 'arch', name: 'Портал', price: 0 },
-  { id: 'arch-moon', kind: 'arch', name: 'Лунная', price: 80 },
-  { id: 'arch-stone', kind: 'arch', name: 'Каменная', price: 150 },
+  { id: 'arch-moon', kind: 'arch', name: 'Лунная', price: 75 },
+  { id: 'arch-sunset', kind: 'arch', name: 'Закатная', price: 140 },
+  { id: 'arch-stone', kind: 'arch', name: 'Каменная', price: 180 },
   { id: 'arch-flowers', kind: 'arch', name: 'Цветочная', price: 0, source: 'village' },
   { id: 'arch-gold', kind: 'arch', name: 'Золотая', price: 0, special: true },
 ];

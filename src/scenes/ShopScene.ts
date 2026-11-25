@@ -82,7 +82,7 @@ export class ShopScene extends Phaser.Scene {
     g.lineStyle(equipped ? 7 : 3, equipped ? C.primary : s.special ? 0xc9a8ff : C.cardEdge, equipped ? 1 : 0.7);
     g.strokeRoundedRect(x - 150, y - 170, 300, 390, 36);
     // Превью
-    const py = y - 40;
+    const py = y - 55;
     if (s.kind === 'costume') createAvatarBadge(this, x, py, 95, s.avatar ?? 0, { selected: equipped });
     else if (s.kind === 'lantern') {
       const shape = s.id === 'lantern-default' ? undefined : (s.id.replace('lantern-', '') as LanternShape);
@@ -96,9 +96,9 @@ export class ShopScene extends Phaser.Scene {
       const pg = this.add.graphics();
       drawArchSample(pg, s.id.replace('arch-', '') as ArchStyle, x, py, 62);
     }
-    text(this, x, y + 95, s.name, 34).setWordWrapWidth(280);
+    text(this, x, y + 80, s.name, 32).setWordWrapWidth(270);
     // Кнопка / статус
-    const by = y + 168;
+    const by = y + 174;
     if (equipped) text(this, x, by, 'Надето', 34, '#ffd36b');
     else if (owned) new Button(this, x, by, { w: 230, h: 80, label: 'Надеть', fontSize: 34, onClick: () => this.equip(s) });
     else if (s.special) {
@@ -114,7 +114,7 @@ export class ShopScene extends Phaser.Scene {
       drawCoin(cg, x - 70, by, 20);
       b.setDepth(1);
       cg.setDepth(2);
-      if (s.source === 'daily') text(this, x, y - 148, 'или в награде дня', 22, '#ffd36b', false);
+      if (s.source === 'daily') text(this, x, y + 110, 'или в награде дня', 22, '#ffd36b', false);
     }
   }
 

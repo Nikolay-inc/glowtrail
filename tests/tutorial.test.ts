@@ -5,6 +5,10 @@ import {
   authPromptDue,
   canShowModal,
   completeTutorial,
+  DAILY_GAP_MS,
+  dailyPrompt,
+  markRulesSeen,
+  pendingRules,
   hasSeenTip,
   isTutorialActive,
   isTutorialDone,
@@ -149,5 +153,44 @@ describe('арка-портал', () => {
     const g = createGame(l);
     expect(lanternsLeft(g)).toBe(1);
     expect(lanternsLeft(applyAction(g, { type: 'place', slot: 0 }))).toBe(0);
+  });
+});
+
+describe('баги после Р3а', () => {
+  beforeEach(() => {
+    SaveService.setBackend(memoryBackend());
+    resetModalGuard();
+  });
+
+  it('карточки правил: один раз; на пройденном уровне после обучения — нет', () => {
+    const level1 = { id: 'valley-01', num: 1, fireflies: [] as number[] };
+    expect(pendingRules(level1)).toEqual(['road']);
+    markRulesSeen(['road']);
+    expect(pendingRules(level1)).toEqual([]);
+    // Обучение пройдено, уровень 1 пройден, но карточку почему-то не отметили (старое сохранение) — всё равно не показываем.
+    SaveService.update((d) => {
+      d.profile.tipsSeen = [];
+      d.profile.tutorialDone = true;
+      d.progress.stars['valley-01'] = 3;
+    });
+    expect(pendingRules(level1)).toEqual([]);
+    // «Пройти обучение заново» — карточки снова.
+    restartTutorial();
+    expect(pendingRules(level1)).toEqual(['road']);
+  });
+
+  it('награда дня: окно сразу, иначе отметка на подарке; без награды и до обучения — ничего', () => {
+    const base = { available: true, tutorialDone: true, nameAsked: true, canShow: true };
+    expect(dailyPrompt(base)).toBe('show');
+    expect(dailyPrompt({ ...base, canShow: false })).toBe('badge'); // другое окно только что закрылось
+    expect(dailyPrompt({ ...base, nameAsked: false })).toBe('badge');
+    expect(dailyPrompt({ ...base, available: false })).toBe('none');
+    expect(dailyPrompt({ ...base, tutorialDone: false })).toBe('none');
+    // После окна знакомства награда дня ждёт недолго (не 20 с, как другие окна).
+    modalOpened();
+    modalClosed(1000);
+    expect(canShowModal(1000 + DAILY_GAP_MS - 1, DAILY_GAP_MS)).toBe(false);
+    expect(canShowModal(1000 + DAILY_GAP_MS, DAILY_GAP_MS)).toBe(true);
+    expect(canShowModal(1000 + DAILY_GAP_MS)).toBe(false);
   });
 });

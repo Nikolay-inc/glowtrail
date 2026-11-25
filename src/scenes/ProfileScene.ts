@@ -3,13 +3,13 @@
 
 import Phaser from 'phaser';
 import { LEVELS } from '../levels/index';
-import { isMuted, setMuted, sfx } from '../audio';
+import { isMusicOn, isMuted, setMusicOn, setMuted, sfx } from '../audio';
 import { isVibrationOn, setVibration } from '../haptics';
 import { displayName, getProfile, levelsPassed, totalStars } from '../profile';
 import { SKINS } from '../core/economy';
-import { equipSkin, getEconomy } from '../meta';
+import { getEconomy } from '../meta';
 import { ALL_RULES } from '../tutorial';
-import { addBackground, Button, createAvatarBadge, text } from '../ui/draw';
+import { addBackground, Button, createAvatarBadge, text, type IconName } from '../ui/draw';
 import { showNameDialog } from '../ui/NameDialog';
 import { addTabBar } from '../ui/meta';
 import { equippedLook } from '../ui/skins';
@@ -69,30 +69,25 @@ export class ProfileScene extends Phaser.Scene {
 
     // Настройки: звук, вибрация, статистика, «Как играть»
     const sy = topY + 740;
-    const sound = new Button(this, W / 2 - 360, sy, {
-      w: 200,
-      h: 120,
-      icon: isMuted() ? 'mute' : 'sound',
-      onClick: () => {
-        setMuted(!isMuted());
-        sound.setIcon(isMuted() ? 'mute' : 'sound');
-        sfx.tap();
-      },
-    });
-    const vibro = new Button(this, W / 2 - 120, sy, {
-      w: 200,
-      h: 120,
-      icon: isVibrationOn() ? 'vibrate' : 'novibrate',
-      onClick: () => {
-        setVibration(!isVibrationOn());
-        vibro.setIcon(isVibrationOn() ? 'vibrate' : 'novibrate');
-        sfx.tap();
-      },
-    });
-    new Button(this, W / 2 + 120, sy, { w: 200, h: 120, icon: 'stats', onClick: () => this.go('Stats') });
-    new Button(this, W / 2 + 360, sy, {
-      w: 200,
-      h: 120,
+    const toggle = (i: number, on: () => boolean, set: (v: boolean) => void, iconOn: IconName, iconOff: IconName) => {
+      const b: Button = new Button(this, W / 2 + (i - 2) * 200, sy, {
+        w: 176,
+        h: 116,
+        icon: on() ? iconOn : iconOff,
+        onClick: () => {
+          set(!on());
+          b.setIcon(on() ? iconOn : iconOff);
+          sfx.tap();
+        },
+      });
+    };
+    toggle(0, isMusicOn, setMusicOn, 'music', 'nomusic');
+    toggle(1, () => !isMuted(), (v) => setMuted(!v), 'sound', 'mute');
+    toggle(2, isVibrationOn, setVibration, 'vibrate', 'novibrate');
+    new Button(this, W / 2 + 200, sy, { w: 176, h: 116, icon: 'stats', onClick: () => this.go('Stats') });
+    new Button(this, W / 2 + 400, sy, {
+      w: 176,
+      h: 116,
       icon: 'help',
       onClick: () => {
         sfx.tap();
@@ -100,34 +95,22 @@ export class ProfileScene extends Phaser.Scene {
         this.scene.pause();
       },
     });
-    ['Звук', 'Вибрация', 'Статистика', 'Как играть'].forEach((l, i) => text(this, W / 2 + (i - 1.5) * 240, sy + 85, l, 26, C.textDim, false));
+    ['Музыка', 'Звуки', 'Вибрация', 'Статистика', 'Как играть'].forEach((l, i) => text(this, W / 2 + (i - 2) * 200, sy + 82, l, 24, C.textDim, false));
 
-    // Костюмы: купленные — надеть, остальные — в магазин
-    text(this, W / 2, topY + 900, 'Костюмы Lumo', 40, C.textDim, false);
+    // Костюм: какой надет и кнопка «Сменить» (выбор и покупка — в магазине)
     const e = getEconomy();
-    const costumes = SKINS.filter((x) => x.kind === 'costume');
-    costumes.forEach((c, i) => {
-      const x = W / 2 + ((i % 4) - 1.5) * 225;
-      const y = topY + 1030 + Math.floor(i / 4) * 200;
-      const owned = e.skins.owned.includes(c.id);
-      const badge = createAvatarBadge(this, x, y, 82, c.avatar ?? 0, {
-        locked: !owned,
-        selected: e.skins.equipped.costume === c.id,
-        lockLabel: c.special ? 'особый' : c.source === 'village' ? 'деревня' : `${c.price}`,
-        lantern: look.lantern,
-      });
-      badge.setSize(180, 180).setInteractive({ useHandCursor: true });
-      badge.on('pointerup', () => {
-        if (!owned) {
-          sfx.tap();
-          this.scene.start('Shop', { kind: 'costume' });
-          return;
-        }
-        equipSkin(c.id);
-        sfx.tap();
-        this.scene.restart();
-      });
-    });
+    const cy = topY + 960;
+    const cg = this.add.graphics();
+    cg.fillStyle(0x000000, 0.25);
+    cg.fillRoundedRect(W / 2 - 440, cy - 80 + 6, 880, 160, 36);
+    cg.fillStyle(C.card, 1);
+    cg.fillRoundedRect(W / 2 - 440, cy - 80, 880, 160, 36);
+    createAvatarBadge(this, W / 2 - 340, cy, 62, look.avatar, { lantern: look.lantern });
+    const costume = SKINS.find((x) => x.id === e.skins.equipped.costume);
+    const owned = SKINS.filter((x) => x.kind === 'costume' && e.skins.owned.includes(x.id)).length;
+    text(this, W / 2 - 250, cy - 22, `Костюм «${costume?.name ?? ''}»`, 40).setOrigin(0, 0.5);
+    text(this, W / 2 - 250, cy + 28, `Есть ${owned} из ${SKINS.filter((x) => x.kind === 'costume').length}`, 28, C.textDim, false).setOrigin(0, 0.5);
+    new Button(this, W / 2 + 300, cy, { w: 230, h: 96, label: 'Сменить', fontSize: 38, primary: true, onClick: () => this.go('Shop', { kind: 'costume' }) });
 
     // Аккаунт: гость — предложение войти; вошёл — email и управление аккаунтом.
     const user = Account.user;
@@ -160,10 +143,10 @@ export class ProfileScene extends Phaser.Scene {
 
   private syncedOnce = false;
 
-  private go(scene: string) {
+  private go(scene: string, data?: object) {
     sfx.tap();
     this.cameras.main.fadeOut(150, 11, 15, 39);
-    this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start(scene));
+    this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start(scene, data));
   }
 }
 

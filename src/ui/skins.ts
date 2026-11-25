@@ -6,14 +6,16 @@ import { costumeAvatar } from '../core/economy';
 import type { LanternShape } from '../core/avatars';
 import { getEconomy } from '../meta';
 
-export type RoadStyle = 'glow' | 'moon' | 'firefly' | 'stars' | 'stones' | 'planks';
-export type ArchStyle = 'portal' | 'moon' | 'stone' | 'flowers' | 'gold';
+export type RoadStyle = 'glow' | 'moon' | 'firefly' | 'sunset' | 'aurora' | 'stars' | 'stones' | 'planks';
+export type ArchStyle = 'portal' | 'moon' | 'sunset' | 'stone' | 'flowers' | 'gold';
 
 /** Цвета ленты света для светящихся стилей дороги: сияние, полоса, сердцевина. */
-export const ROAD_COLORS: Record<'glow' | 'moon' | 'firefly' | 'stars', { glow: number; band: number; core: number }> = {
+export const ROAD_COLORS: Record<'glow' | 'moon' | 'firefly' | 'sunset' | 'aurora' | 'stars', { glow: number; band: number; core: number }> = {
   glow: { glow: 0xffc65c, band: 0xf0bd6e, core: 0xfff1cc },
   moon: { glow: 0x9cc8ff, band: 0xb8d4ff, core: 0xf2f7ff },
   firefly: { glow: 0x9dff5c, band: 0xb8f07a, core: 0xf2ffd8 },
+  sunset: { glow: 0xff8a6a, band: 0xffa07a, core: 0xffe6d8 },
+  aurora: { glow: 0x5affd0, band: 0x8ab8ff, core: 0xe8fff8 },
   stars: { glow: 0xd8b8ff, band: 0xc9a8ff, core: 0xffffff },
 };
 
@@ -21,6 +23,7 @@ export const ROAD_COLORS: Record<'glow' | 'moon' | 'firefly' | 'stars', { glow: 
 export const ARCH_COLORS: Record<ArchStyle, { ring: number; rim: number; open: number; closed: number }> = {
   portal: { ring: 0x6c6aa0, rim: 0x9b7bff, open: 0x8ef0c8, closed: 0x9b7bff },
   moon: { ring: 0x9aa6c8, rim: 0xd8e4ff, open: 0xcfe6ff, closed: 0x8898c8 },
+  sunset: { ring: 0xa8586a, rim: 0xffa07a, open: 0xffd0a8, closed: 0xc87a8a },
   stone: { ring: 0x7a7468, rim: 0xa89e8c, open: 0xffd36b, closed: 0x8a7a60 },
   flowers: { ring: 0x3e6e4a, rim: 0xffb3cf, open: 0xffd0e4, closed: 0x9b7bff },
   gold: { ring: 0xc99a2a, rim: 0xffe08a, open: 0xfff1cc, closed: 0xc9a040 },

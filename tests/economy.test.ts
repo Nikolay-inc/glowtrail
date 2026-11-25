@@ -194,11 +194,15 @@ describe('симуляция экономики (типичный игрок)', 
   const levels: SimLevel[] = LEVELS.map((l) => ({ id: l.id, num: l.num, rating: l.metrics?.rating ?? 3, fireflies: l.fireflies.length, infinite: l.tileSet !== null }));
   const res = simulate(levels, 120);
 
-  it('в первый час новая цель в среднем каждые 2–5 минут, без пустых отрезков дольше 7,5 минуты', () => {
-    const avg = 60 / res.gapsFirstHour.length;
-    expect(avg).toBeGreaterThanOrEqual(2);
-    expect(avg).toBeLessThanOrEqual(5);
-    expect(Math.max(...res.gapsFirstHour)).toBeLessThanOrEqual(7.5);
+  it('в первый час между новыми целями не больше 5 минут', () => {
+    expect(Math.max(...res.gapsFirstHour)).toBeLessThanOrEqual(5);
+    expect(res.gapsFirstHour.length).toBeGreaterThanOrEqual(12);
+  });
+
+  it('после мира 1 остаётся на что тратить монеты: дорогие скины и высшие улучшения', () => {
+    const expensive = res.leftAtWorldEnd.filter((x) => x.price >= 200);
+    expect(expensive.length).toBeGreaterThanOrEqual(3);
+    expect(expensive.some((x) => x.label.includes('улучшение'))).toBe(true);
   });
 
   it('вся деревня восстанавливается примерно к концу мира 1', () => {

@@ -50,54 +50,80 @@ function arrowHead(g: G, tipX: number, tipY: number, angle: number, size: number
   );
 }
 
+/**
+ * Иконки плиток: у всех одна толщина линии, линия начинается в одной точке снизу (y = 0.38), наконечник одного
+ * размера и сидит точно на конце линии по её направлению. В лотке иконку поворачивают по направлению дороги
+ * (кратно 90°), поэтому всё симметрично относительно вертикальной оси.
+ */
+const TILE_LW = 0.13;
+const TIP = 0.3;
+const START = 0.38;
+
+/** Наконечник, у которого середина основания — ровно в точке (bx, by), остриё — по направлению angle. */
+function tipAt(g: G, bx: number, by: number, angle: number, s: number) {
+  const len = s * TIP * 0.63;
+  arrowHead(g, bx + Math.cos(angle) * len, by + Math.sin(angle) * len, angle, s * TIP);
+}
+
 export function drawTileIcon(g: G, kind: TileKind, s: number, color: number) {
-  const lw = s * 0.13;
+  const lw = s * TILE_LW;
   g.lineStyle(lw, color, 1);
   g.fillStyle(color, 1);
   const up = -Math.PI / 2;
+  const stem = (toY: number) => {
+    g.lineBetween(0, s * START, 0, toY);
+    g.fillCircle(0, s * START, lw / 2);
+  };
   switch (kind) {
     case 'straight':
-      g.lineBetween(0, s * 0.36, 0, -s * 0.12);
-      g.fillCircle(0, s * 0.36, lw / 2);
-      arrowHead(g, 0, -s * 0.4, up, s * 0.34);
+      stem(-s * 0.2);
+      tipAt(g, 0, -s * 0.2, up, s);
       break;
     case 'straight2':
-      g.lineBetween(0, s * 0.4, 0, -s * 0.04);
-      g.fillCircle(0, s * 0.4, lw / 2);
-      arrowHead(g, 0, -s * 0.18, up, s * 0.3);
-      arrowHead(g, 0, -s * 0.44, up, s * 0.3);
+      stem(-s * 0.26);
+      tipAt(g, 0, -s * 0.02, up, s);
+      tipAt(g, 0, -s * 0.26, up, s);
       break;
     case 'left':
     case 'right': {
+      // Прямо до середины, ровная четверть окружности, короткий отрезок и наконечник по горизонтали.
+      // Иконка центрирована по ширине: ствол сдвинут в сторону, противоположную повороту.
       const m = kind === 'left' ? -1 : 1;
       const r = s * 0.22;
-      g.lineBetween(0, s * 0.38, 0, s * 0.06);
-      g.fillCircle(0, s * 0.38, lw / 2);
+      const cy = s * 0.08;
+      const ox = -m * s * 0.2;
+      g.lineBetween(ox, s * START, ox, cy);
+      g.fillCircle(ox, s * START, lw / 2);
       g.beginPath();
-      if (m < 0) g.arc(-r, s * 0.06, r, 0, -Math.PI / 2, true);
-      else g.arc(r, s * 0.06, r, Math.PI, Math.PI * 1.5, false);
+      if (m < 0) g.arc(ox - r, cy, r, 0, -Math.PI / 2, true);
+      else g.arc(ox + r, cy, r, Math.PI, Math.PI * 1.5, false);
       g.strokePath();
-      arrowHead(g, m * s * 0.44, s * 0.06 - r, m < 0 ? Math.PI : 0, s * 0.3);
+      const ey = cy - r;
+      g.lineBetween(ox + m * r, ey, ox + m * s * 0.26, ey);
+      tipAt(g, ox + m * s * 0.26, ey, m < 0 ? Math.PI : 0, s);
       break;
     }
     case 'jump': {
-      // Дуга со стрелкой над препятствием: дорога перепрыгивает одну клетку.
+      // Дуга над препятствием (камешек), наконечник — по касательной к концу дуги.
       g.fillStyle(0x8f8679, 1);
-      g.fillRoundedRect(s * 0.02, -s * 0.06, s * 0.2, s * 0.2, s * 0.04);
+      g.fillRoundedRect(s * 0.04, -s * 0.06, s * 0.2, s * 0.2, s * 0.04);
       g.fillStyle(color, 1);
-      const curve = new Phaser.Curves.QuadraticBezier(new Phaser.Math.Vector2(0, s * 0.4), new Phaser.Math.Vector2(-s * 0.62, s * 0.04), new Phaser.Math.Vector2(-s * 0.02, -s * 0.3));
-      g.strokePoints(curve.getPoints(16), false);
-      g.fillCircle(0, s * 0.4, lw / 2);
-      arrowHead(g, s * 0.04, -s * 0.36, up + 0.75, s * 0.3);
+      const p0 = new Phaser.Math.Vector2(0, s * START);
+      const p1 = new Phaser.Math.Vector2(-s * 0.6, s * 0.02);
+      const p2 = new Phaser.Math.Vector2(-s * 0.04, -s * 0.24);
+      g.strokePoints(new Phaser.Curves.QuadraticBezier(p0, p1, p2).getPoints(20), false);
+      g.fillCircle(0, s * START, lw / 2);
+      tipAt(g, p2.x, p2.y, Math.atan2(p2.y - p1.y, p2.x - p1.x), s);
       break;
     }
     case 'bridge': {
-      // Арка моста над волнами и стрелка вперёд.
+      // Арка моста над волнами, стрелка вперёд из её вершины.
+      const top = s * 0.16 - s * 0.3;
       g.beginPath();
       g.arc(0, s * 0.16, s * 0.3, Math.PI, Math.PI * 2, false);
       g.strokePath();
-      g.lineStyle(lw * 0.7, color, 1);
       g.lineBetween(-s * 0.4, s * 0.16, s * 0.4, s * 0.16);
+      g.lineBetween(0, top, 0, -s * 0.26);
       g.lineStyle(lw * 0.55, 0x7fc0ff, 1);
       for (const yy of [s * 0.3, s * 0.42]) {
         g.beginPath();
@@ -106,7 +132,7 @@ export function drawTileIcon(g: G, kind: TileKind, s: number, color: number) {
         g.strokePath();
       }
       g.fillStyle(color, 1);
-      arrowHead(g, 0, -s * 0.44, up, s * 0.24);
+      tipAt(g, 0, -s * 0.26, up, s);
       break;
     }
   }
@@ -115,13 +141,60 @@ export function drawTileIcon(g: G, kind: TileKind, s: number, color: number) {
 // ---------------------------------------------------------------------------
 // Иконки интерфейса
 
-export type IconName = 'rotate' | 'restart' | 'undo' | 'menu' | 'stats' | 'sound' | 'mute' | 'play' | 'lock' | 'copy' | 'back' | 'trash' | 'bulb' | 'skip' | 'plus' | 'cloud' | 'user' | 'help' | 'vibrate' | 'novibrate';
+export type IconName = 'music' | 'nomusic' | 'stashbox' | 'lantern' | 'gift' | 'rotate' | 'restart' | 'undo' | 'menu' | 'stats' | 'sound' | 'mute' | 'play' | 'lock' | 'copy' | 'back' | 'trash' | 'bulb' | 'skip' | 'plus' | 'cloud' | 'user' | 'help' | 'vibrate' | 'novibrate';
 
 export function drawIcon(g: G, name: IconName, s: number, color: number) {
   const lw = s * 0.12;
   g.lineStyle(lw, color, 1);
   g.fillStyle(color, 1);
   switch (name) {
+    case 'music':
+    case 'nomusic': {
+      // Две ноты, связанные перекладиной; «выключено» — перечёркнуто.
+      g.fillEllipse(-s * 0.2, s * 0.24, s * 0.22, s * 0.16);
+      g.fillEllipse(s * 0.2, s * 0.16, s * 0.22, s * 0.16);
+      g.lineBetween(-s * 0.1, s * 0.22, -s * 0.1, -s * 0.28);
+      g.lineBetween(s * 0.3, s * 0.14, s * 0.3, -s * 0.36);
+      g.lineStyle(lw * 1.4, color, 1);
+      g.lineBetween(-s * 0.1, -s * 0.28, s * 0.3, -s * 0.36);
+      if (name === 'nomusic') {
+        g.lineStyle(lw, 0xff6b6b, 1);
+        g.lineBetween(-s * 0.4, s * 0.4, s * 0.4, -s * 0.4);
+      }
+      break;
+    }
+    case 'stashbox': {
+      // Слот-ящик и стрелка вниз в него.
+      g.strokeRoundedRect(-s * 0.36, s * 0.02, s * 0.72, s * 0.36, s * 0.06);
+      g.lineBetween(-s * 0.36, s * 0.14, s * 0.36, s * 0.14);
+      g.lineBetween(0, -s * 0.42, 0, -s * 0.06);
+      arrowHead(g, 0, s * 0.02, Math.PI / 2, s * 0.24);
+      break;
+    }
+    case 'lantern': {
+      // Фонарь с лучом вправо.
+      g.fillTriangle(s * 0.08, -s * 0.04, s * 0.48, -s * 0.3, s * 0.48, s * 0.22);
+      g.fillStyle(0x1a2150, 1);
+      g.fillTriangle(s * 0.14, -s * 0.04, s * 0.44, -s * 0.22, s * 0.44, s * 0.14);
+      g.fillStyle(color, 1);
+      g.fillRoundedRect(-s * 0.3, -s * 0.2, s * 0.32, s * 0.36, s * 0.06);
+      g.fillTriangle(-s * 0.36, -s * 0.2, s * 0.08, -s * 0.2, -s * 0.14, -s * 0.38);
+      g.fillRect(-s * 0.18, s * 0.16, s * 0.08, s * 0.2);
+      g.fillStyle(0x1a2150, 1);
+      g.fillCircle(-s * 0.14, -s * 0.02, s * 0.07);
+      break;
+    }
+    case 'gift': {
+      // Коробка с бантом.
+      g.fillRoundedRect(-s * 0.36, -s * 0.06, s * 0.72, s * 0.44, s * 0.05);
+      g.fillRect(-s * 0.42, -s * 0.2, s * 0.84, s * 0.16);
+      g.lineStyle(s * 0.07, 0x1a2150, 1);
+      g.lineBetween(0, -s * 0.2, 0, s * 0.38);
+      g.lineStyle(s * 0.1, color, 1);
+      g.strokeEllipse(-s * 0.14, -s * 0.3, s * 0.26, s * 0.16);
+      g.strokeEllipse(s * 0.14, -s * 0.3, s * 0.26, s * 0.16);
+      break;
+    }
     case 'rotate': {
       // Плитка и стрелка по часовой стрелке вокруг неё.
       g.strokeRoundedRect(-s * 0.18, -s * 0.18, s * 0.36, s * 0.36, s * 0.06);

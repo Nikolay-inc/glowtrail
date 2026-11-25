@@ -24,7 +24,10 @@ export interface Progress {
   skipped: Record<string, boolean>;
   /** Лучший сбор светлячков на уровне. */
   fireflies: Record<string, number>;
+  /** Звуки (эффекты) выключены. */
   muted: boolean;
+  /** Ночная музыка включена (настройка устройства). */
+  music: boolean;
   /** Вибрация (настройка устройства, в облако не уходит). */
   vibration: boolean;
 }
@@ -160,7 +163,7 @@ export function memoryBackend(initial: Record<string, string> = {}): SaveBackend
 /** Первый уровень игры — открыт всегда. */
 export const FIRST_LEVEL_ID = 'valley-01';
 
-export const defaultProgress = (): Progress => ({ unlocked: [FIRST_LEVEL_ID], stars: {}, attempts: {}, lossStreak: {}, skipped: {}, fireflies: {}, muted: false, vibration: true });
+export const defaultProgress = (): Progress => ({ unlocked: [FIRST_LEVEL_ID], stars: {}, attempts: {}, lossStreak: {}, skipped: {}, fireflies: {}, muted: false, music: true, vibration: true });
 
 /**
  * До версии 4 уровни хранились по номеру 1, 2, 3… Это уровни первого мира «Долина» — они остались на своих местах,
@@ -251,6 +254,7 @@ export function normalizeProgress(raw: unknown): Progress {
   if (isObj(raw.skipped)) p.skipped = remapRecord(raw.skipped, isBool, (a, b) => a || b);
   if (isObj(raw.fireflies)) p.fireflies = remapRecord(raw.fireflies, isNum, Math.max);
   if (typeof raw.muted === 'boolean') p.muted = raw.muted;
+  if (typeof raw.music === 'boolean') p.music = raw.music;
   if (typeof raw.vibration === 'boolean') p.vibration = raw.vibration;
   return p;
 }

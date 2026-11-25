@@ -41,6 +41,7 @@ describe('SaveService', () => {
       skipped: { 'valley-04': true },
       fireflies: {},
       muted: true,
+      music: true,
       vibration: true,
     });
     expect('hints' in d.progress).toBe(false); // подсказки теперь бесплатные
