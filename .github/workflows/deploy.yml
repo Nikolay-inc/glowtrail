@@ -25,6 +25,9 @@ jobs:
       - run: npm test
       - run: npm run verify
       - run: npm run build -- --base=/${{ github.event.repository.name }}/
+        env:
+          # Адрес для отзывов и контакта в политике конфиденциальности (секрет репозитория, в коде его нет).
+          VITE_CONTACT_EMAIL: ${{ secrets.VITE_CONTACT_EMAIL }}
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

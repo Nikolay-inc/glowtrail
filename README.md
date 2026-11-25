@@ -72,6 +72,59 @@ appId: `com.severgames.glowtrail`. Его нельзя менять после �
 
 Без телефона игру можно запустить в симуляторе: выбери вверху любой iPhone-симулятор и нажми ▶.
 
+### TestFlight (iOS): архив и загрузка в App Store Connect
+
+Версия — `0.1.0` (из `package.json`), номер сборки растёт сам при каждом `npm run build:app` (`app-build.json`,
+скрипт `scripts/app-version.ts`) и пишется в iOS- и Android-проекты. В игре версия видна внизу профиля.
+
+**Один раз — подготовка**
+
+1. Адрес для «Отправить отзыв» и контакта в политике конфиденциальности:
+   - локально — строка `VITE_CONTACT_EMAIL=твой@адрес` в `.env.local` (файл не коммитится);
+   - для сайта — секрет репозитория `VITE_CONTACT_EMAIL` (GitHub → Settings → Secrets and variables → Actions →
+     New repository secret). Страница появится по адресу https://nikolay-inc.github.io/glowtrail/privacy.html.
+2. В [App Store Connect](https://appstoreconnect.apple.com) → «Приложения» → «+» → «Новое приложение»:
+   платформа iOS, имя Glowtrail, основной язык — русский, Bundle ID `com.severgames.glowtrail`
+   (если его нет в списке — зарегистрируй в developer.apple.com → Identifiers), SKU — например `glowtrail`.
+3. Там же в приложении: «Конфиденциальность приложения» → ссылка на политику
+   `https://nikolay-inc.github.io/glowtrail/privacy.html` и ответы «Какие данные собираются»:
+   адрес электронной почты, идентификатор пользователя, игровой контент, взаимодействие с продуктом —
+   все связаны с пользователем, для функциональности (взаимодействие — ещё и аналитика), без отслеживания.
+   Это совпадает с `ios/App/App/PrivacyInfo.xcprivacy`.
+
+**Каждая сборка**
+
+```bash
+npm run cap:sync
+```
+
+```bash
+npm run ios:check
+```
+
+1. `npm run cap:sync` собирает игру (номер сборки +1) и копирует её в `ios/`. `npm run ios:check` проверяет
+   версию, номер сборки, команду и Bundle ID, privacy manifest, флаг шифрования, иконку и адрес для отзывов.
+2. Открой проект: `npm run cap:ios` (или `open ios/App/App.xcodeproj`).
+3. В Xcode вверху выбери схему **App** и устройство **Any iOS Device (arm64)**.
+4. Signing & Capabilities (цель App): Team — твоя команда (R457T4MLSR), «Automatically manage signing» включено.
+5. Меню **Product → Archive**. Через пару минут откроется окно **Organizer** с новым архивом.
+6. **Distribute App → App Store Connect → Upload** → оставь галочки по умолчанию → **Upload**.
+   Вопроса про шифрование не будет: в `Info.plist` стоит `ITSAppUsesNonExemptEncryption = NO`.
+7. Через 5–30 минут сборка появится в App Store Connect → приложение → **TestFlight** (статус «Обработка» →
+   «Готово к тестированию»). Если пришло письмо о проблеме с privacy manifest или иконкой — поправь и собери снова
+   (номер сборки уже будет новым).
+
+**Тестеры в TestFlight**
+
+- **Внутренние** (до 100 человек из твоей команды App Store Connect): TestFlight → «Внутреннее тестирование» → «+» →
+  создай группу → добавь людей (их нужно сначала пригласить в «Пользователи и доступ»). Сборка доступна сразу,
+  без проверки Apple.
+- **Внешние** (до 10 000, по почте или публичной ссылке): TestFlight → «Внешнее тестирование» → «+» → группа →
+  добавь сборку → заполни «Что тестировать» и контакт → отправь на проверку бета-версии (обычно до суток).
+  Потом добавь тестеров по почте или включи публичную ссылку.
+- Тестеры ставят приложение **TestFlight** из App Store и открывают приглашение. Отзывы — кнопкой
+  «Отправить отзыв» в профиле игры (письмо со статистикой и версией) или скриншотом в TestFlight.
+
 ### Android
 
 Нужны Android Studio (в ней есть JDK и Android SDK).

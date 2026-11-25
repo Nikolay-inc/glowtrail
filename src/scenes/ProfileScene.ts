@@ -11,7 +11,9 @@ import { getEconomy } from '../meta';
 import { ALL_RULES } from '../tutorial';
 import { addBackground, Button, createAvatarBadge, text, type IconName } from '../ui/draw';
 import { showNameDialog } from '../ui/NameDialog';
-import { addTabBar } from '../ui/meta';
+import { addTabBar, toast } from '../ui/meta';
+import { openPrivacy, sendFeedback } from '../feedback';
+import { versionLabel } from '../version';
 import { equippedLook } from '../ui/skins';
 import { Account } from '../cloud/account';
 import { openAuthDialog } from '../ui/AuthDialog';
@@ -128,7 +130,20 @@ export class ProfileScene extends Phaser.Scene {
         openAuthDialog(user ? 'account' : 'register', { onClose: () => this.scene.isActive() && this.scene.restart() });
       },
     });
-    text(this, W / 2, rowY - 115, `ID игрока: ${profile.playerId.slice(0, 8)}`, 24, C.textDim, false).setAlpha(0.4);
+    text(this, W / 2, rowY - 115, `ID игрока: ${profile.playerId.slice(0, 8)} · версия ${versionLabel()}`, 24, C.textDim, false).setAlpha(0.5);
+    // Для тестеров: отзыв на почту (со статистикой и версией) и политика конфиденциальности.
+    new Button(this, W / 2 - 200, rowY - 320, {
+      w: 380,
+      h: 96,
+      icon: 'copy',
+      label: 'Отправить отзыв',
+      fontSize: 32,
+      onClick: () => {
+        sfx.tap();
+        void sendFeedback().then((ok) => toast(this, ok ? 'Статистика скопирована — откроется письмо' : 'Адрес для отзывов не настроен', rowY - 440));
+      },
+    });
+    new Button(this, W / 2 + 200, rowY - 320, { w: 380, h: 96, icon: 'lock', label: 'Конфиденциальность', fontSize: 30, onClick: () => (sfx.tap(), openPrivacy()) });
     addTabBar(this, 'Profile', rowY + 40, (k) => this.go(k));
 
     // Вошли/вышли или облако подтянуло прогресс с другого устройства — обновляем экран.

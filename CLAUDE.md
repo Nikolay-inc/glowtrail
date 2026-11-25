@@ -134,6 +134,9 @@
 
 ## Мобильное приложение (Capacitor)
 
+- Релиз (TestFlight): версия `0.1.0` из `package.json`, номер сборки — `app-build.json`, растёт при каждом `npm run build:app` (`npm run version:bump`, `scripts/app-version.ts`: не ниже числа коммитов; пишет `MARKETING_VERSION`/`CURRENT_PROJECT_VERSION` в iOS и `versionName`/`versionCode` в Android). В игре — `src/version.ts` (`versionLabel`, Vite define), внизу профиля. Подпись: команда `R457T4MLSR`, автоматическая. `ios/App/App/PrivacyInfo.xcprivacy` (UserDefaults CA92.1; почта, ID игрока, игровой контент, взаимодействие — без трекинга), `ITSAppUsesNonExemptEncryption = NO`. `npm run ios:check` — проверка перед архивом. Пошагово — README («TestFlight»).
+- Политика конфиденциальности — `site/privacy.html` (RU/EN), плагин в `vite.config.ts` кладёт её в сборку как `privacy.html` и подставляет `%CONTACT_EMAIL%` из `VITE_CONTACT_EMAIL` (локально `.env.local`, на сайте — секрет репозитория; адреса в репозитории нет). В профиле — «Отправить отзыв» (`src/feedback.ts`: письмо с версией и началом статистики, полная статистика — в буфер) и «Конфиденциальность».
+
 - appId `com.severgames.glowtrail` (не менять), appName Glowtrail, webDir `dist`. Конфиг — `capacitor.config.ts`.
 - `ios/` — Swift Package Manager (CocoaPods не нужен). В Capacitor 7.6 у `cap add ios --packagemanager SPM` баг с проверкой CocoaPods — обходили через `CAPACITOR_COCOAPODS_PATH=/usr/bin/true`; дальше `cap sync` сам видит `CapApp-SPM`. Info.plist: только портрет, `UIRequiresFullScreen`, светлый статус-бар. Минимум iOS 15 (Xcode 27 не собирает под 14; в `project.pbxproj` поднято вручную).
 - `android/` — `screenOrientation="portrait"`, `adjustMarginsForEdgeToEdge: 'auto'` (Android 15). Статус-бар на Android не перекрывает веб-вью (`main.ts`), на iOS — перекрывает, фон игры под ним.

@@ -12,12 +12,14 @@
     "ease": "vite-node scripts/ease.ts",
     "gen": "vite-node scripts/gen.ts --",
     "pick": "vite-node scripts/pick.ts --",
-    "build:app": "tsc --noEmit && vite build --mode app",
+    "build:app": "npm run version:bump && tsc --noEmit && vite build --mode app",
     "cap:sync": "npm run build:app && cap sync",
     "cap:ios": "npm run cap:sync && cap open ios",
     "cap:android": "npm run cap:sync && cap open android",
     "icons": "vite-node scripts/make-icons.ts && capacitor-assets generate --ios --android --iconBackgroundColor '#0b0f27' --splashBackgroundColor '#0b0f27'",
-    "sim-economy": "vite-node scripts/sim-economy.ts"
+    "sim-economy": "vite-node scripts/sim-economy.ts",
+    "version:bump": "vite-node scripts/app-version.ts",
+    "ios:check": "vite-node scripts/ios-check.ts"
   },
   "dependencies": {
     "@capacitor/android": "7.6.10",
