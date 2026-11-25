@@ -1,6 +1,6 @@
 // Аватарки игрока: 8 вариантов фонарщика Lumo. Рисуются в коде (ui/draw.ts → createLumo).
 
-export type LanternShape = 'square' | 'round' | 'star' | 'diamond';
+export type LanternShape = 'square' | 'round' | 'star' | 'diamond' | 'crown';
 
 export interface Avatar {
   id: number;

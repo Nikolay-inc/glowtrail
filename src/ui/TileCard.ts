@@ -12,6 +12,8 @@ export { CARD };
 export class TileCard extends Phaser.GameObjects.Container {
   kind: TileKind | null = null;
   enabled = false;
+  /** Обычный масштаб карточки (два слота «отложить» — карточки поменьше). */
+  baseScale = 1;
   readonly homeX: number;
   readonly homeY: number;
   private bg: Phaser.GameObjects.Graphics;
@@ -24,7 +26,7 @@ export class TileCard extends Phaser.GameObjects.Container {
     scene: Phaser.Scene,
     x: number,
     y: number,
-    readonly slot: number | 'stash',
+    readonly slot: number | 'stash' | 'stash2',
   ) {
     super(scene, x, y);
     this.homeX = x;
@@ -38,7 +40,7 @@ export class TileCard extends Phaser.GameObjects.Container {
     this.shine.setAlpha(0).setBlendMode(Phaser.BlendModes.ADD);
     this.add([this.bg, this.shine, this.iconWrap]);
     this.setSize(CARD, CARD);
-    if (slot !== 'stash') {
+    if (typeof slot === 'number') {
       scene.tweens.add({
         targets: this.shine,
         alpha: { from: 0, to: 0.45 },
@@ -86,7 +88,7 @@ export class TileCard extends Phaser.GameObjects.Container {
     this.icon.clear();
     this.shine.setVisible(this.enabled && this.kind !== null);
     if (!this.kind) {
-      if (this.slot === 'stash') this.drawEmptyStash();
+      if (this.slot === 'stash' || this.slot === 'stash2') this.drawEmptyStash();
       return;
     }
     g.fillStyle(0x000000, 0.3);
@@ -143,7 +145,8 @@ export class TileCard extends Phaser.GameObjects.Container {
   }
 
   isInside(x: number, y: number, slack = 0) {
-    return Math.abs(x - this.homeX) <= CARD / 2 + slack && Math.abs(y - this.homeY) <= CARD / 2 + slack;
+    const half = (CARD * this.baseScale) / 2;
+    return Math.abs(x - this.homeX) <= half + slack && Math.abs(y - this.homeY) <= half + slack;
   }
 }
 

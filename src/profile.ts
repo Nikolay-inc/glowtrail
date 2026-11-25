@@ -1,6 +1,6 @@
 // Профиль игрока поверх SaveService: имя, аватарка, серия дней, счётчик подсказок и сводка для экрана «Профиль».
 
-import { isAvatarUnlocked } from './core/avatars';
+import { equip, grant } from './core/economy';
 import { SaveService, type Profile, type Progress } from './save/SaveService';
 
 export const DEFAULT_NAME = 'Путник';
@@ -43,10 +43,16 @@ export function levelsPassed(progress: Progress = SaveService.load().progress): 
   return Object.values(progress.stars).filter((n) => n > 0).length;
 }
 
-/** Выбирает аватарку, если она открыта. Возвращает true при успехе. */
+/**
+ * Выбор Lumo в окне знакомства: один из 4 стартовых костюмов (он становится твоим) или уже купленный.
+ * Возвращает true при успехе. Остальные костюмы — в магазине.
+ */
 export function setAvatar(id: number): boolean {
-  if (!isAvatarUnlocked(id, totalStars())) return false;
+  const skin = `costume-${id}`;
+  const owned = SaveService.load().economy.skins.owned.includes(skin);
+  if (!owned && !(id >= 0 && id <= 3)) return false;
   SaveService.update((d) => {
+    d.economy = equip(grant(d.economy, { skin }), skin);
     d.profile.avatar = id;
   });
   return true;

@@ -36,6 +36,12 @@ export interface GameState {
   deckIndex: number;
   tray: (TileKind | null)[];
   stash: TileKind | null;
+  /** Второй слот «отложить» (после прокачки; иначе всегда null). */
+  stash2: TileKind | null;
+  /** Сколько слотов «отложить» (1 или 2 — прокачка). */
+  stashSlots: number;
+  /** Заряды «Поворота плитки» на этот уровень. */
+  rotations: number;
   /** Состояние генератора случайных плиток (бесконечная колода). */
   rng: number;
   /** Сколько раз отменяли ход — от этого зависят звёзды на уровнях без лимита. */
@@ -46,11 +52,39 @@ export interface GameState {
   prev: GameState | null;
 }
 
+export type StashIndex = 0 | 1;
+
 export type Action =
   | { type: 'place'; slot: number } // плитка из лотка
-  | { type: 'placeStash' } // плитка из слота «отложить»
-  | { type: 'stash'; slot: number } // убрать плитку из лотка в пустой слот «отложить»
-  | { type: 'swap'; slot: number }; // поменять отложенную плитку с плиткой лотка
+  | { type: 'placeStash'; from?: StashIndex } // плитка из слота «отложить» (первого или второго)
+  | { type: 'stash'; slot: number; to?: StashIndex } // убрать плитку из лотка в пустой слот «отложить» (по умолчанию — первый пустой)
+  | { type: 'swap'; slot: number; with?: StashIndex } // поменять отложенную плитку с плиткой лотка
+  | { type: 'rotate'; slot: number }; // «Поворот плитки»: повернуть плитку лотка на 90° (тратит заряд)
+
+/** Способности игрока на уровень (прокачка). */
+export interface GameOptions {
+  /** Слотов «отложить»: 1 или 2. */
+  stashSlots?: number;
+  /** Зарядов «Поворота плитки». */
+  rotations?: number;
+}
+
+/** Поворот на 90° по часовой стрелке: выход «прямо» → «направо» → (назад нельзя) → «налево» → «прямо». */
+export function rotateKind(kind: TileKind): TileKind | null {
+  if (kind === 'straight') return 'right';
+  if (kind === 'right') return 'left';
+  if (kind === 'left') return 'straight';
+  return null; // «прямо x2», мост и прыжок не поворачиваются
+}
+
+export const stashAt = (s: GameState, i: StashIndex) => (i === 1 ? s.stash2 : s.stash);
+
+/** Куда положить плитку: заданный слот (если он пуст и есть) или первый пустой; -1 — некуда. */
+export function stashTarget(s: GameState, to?: StashIndex): number {
+  const ok = (i: StashIndex) => (i === 0 || s.stashSlots >= 2) && stashAt(s, i) === null;
+  if (to !== undefined) return ok(to) ? to : -1;
+  return ok(0) ? 0 : ok(1) ? 1 : -1;
+}
 
 export const isInfinite = (level: Level) => level.tileSet !== null;
 
@@ -109,7 +143,7 @@ function dealInfinite(b: Board, others: (TileKind | null)[], rng: number, fair =
 
 // ---------------------------------------------------------------------------
 
-export function createGame(level: Level, deck: TileKind[] = level.deck, seed = 1): GameState {
+export function createGame(level: Level, deck: TileKind[] = level.deck, seed = 1, opts: GameOptions = {}): GameState {
   const startIdx = level.start.y * level.width + level.start.x;
   const onRoad = new Array<boolean>(level.cells.length).fill(false);
   onRoad[startIdx] = true;
@@ -139,6 +173,9 @@ export function createGame(level: Level, deck: TileKind[] = level.deck, seed = 1
     deckIndex: Math.min(TRAY_SIZE, dealt.length),
     tray,
     stash: null,
+    stash2: null,
+    stashSlots: level.allowStash ? Math.max(1, Math.min(2, opts.stashSlots ?? 1)) : 1,
+    rotations: Math.max(0, opts.rotations ?? 0),
     rng,
     undosUsed: 0,
     moves: 0,
@@ -176,7 +213,7 @@ export function canPlace(state: GameState, kind: TileKind | null): boolean {
 
 /** Плиток осталось всего: колода + лоток + отложенная (Infinity для бесконечной колоды). */
 export function tilesLeft(state: GameState): number {
-  return deckLeft(state) + state.tray.filter((t) => t !== null).length + (state.stash ? 1 : 0);
+  return deckLeft(state) + state.tray.filter((t) => t !== null).length + (state.stash ? 1 : 0) + (state.stash2 ? 1 : 0);
 }
 
 /** Сколько плиток ещё лежит в колоде (не в лотке). */
@@ -236,9 +273,16 @@ export function hasAnyMove(state: GameState): boolean {
     return geoCanMove(state.level, state.level.tileSet!, state.head, state.dir, maskOf(state.onRoad));
   }
   if (state.tray.some((t) => canPlace(state, t))) return true;
-  if (canPlace(state, state.stash)) return true;
+  if (canPlace(state, state.stash) || canPlace(state, state.stash2)) return true;
   // Отложить имеет смысл, только если из колоды придёт новая плитка.
-  if (state.level.allowStash && state.stash === null && deckLeft(state) > 0 && state.tray.some((t) => t !== null)) return true;
+  if (state.level.allowStash && stashTarget(state) >= 0 && deckLeft(state) > 0 && state.tray.some((t) => t !== null)) return true;
+  // Поворот плитки: есть заряд и повёрнутая плитка встанет.
+  if (state.rotations > 0) {
+    for (const t of state.tray) {
+      let k = t ? rotateKind(t) : null;
+      for (let i = 0; i < 2 && k; i++, k = rotateKind(k)) if (canPlace(state, k)) return true;
+    }
+  }
   return false;
 }
 
@@ -263,11 +307,15 @@ export function isLegal(state: GameState, action: Action): boolean {
     case 'place':
       return canPlace(state, state.tray[action.slot] ?? null);
     case 'placeStash':
-      return canPlace(state, state.stash);
+      return canPlace(state, stashAt(state, action.from ?? 0));
     case 'stash':
-      return state.level.allowStash && state.stash === null && (state.tray[action.slot] ?? null) !== null;
+      return state.level.allowStash && stashTarget(state, action.to) >= 0 && (state.tray[action.slot] ?? null) !== null;
     case 'swap':
-      return state.level.allowStash && state.stash !== null && action.slot >= 0 && action.slot < state.tray.length;
+      return state.level.allowStash && stashAt(state, action.with ?? 0) !== null && action.slot >= 0 && action.slot < state.tray.length;
+    case 'rotate': {
+      const k = state.tray[action.slot] ?? null;
+      return state.rotations > 0 && k !== null && rotateKind(k) !== null;
+    }
   }
 }
 
@@ -279,26 +327,40 @@ export function applyAction(state: GameState, action: Action): GameState {
   let deckIndex = state.deckIndex;
   let rng = state.rng;
   let stash = state.stash;
+  let stash2 = state.stash2;
+  let rotations = state.rotations;
   let road = state.road;
   let onRoad = state.onRoad;
   let head = state.head;
   let dir = state.dir;
   let refillSlot = -1;
 
-  if (action.type === 'stash') {
-    stash = tray[action.slot]!;
+  if (action.type === 'rotate') {
+    tray[action.slot] = rotateKind(tray[action.slot]!);
+    rotations--;
+  } else if (action.type === 'stash') {
+    if (stashTarget(state, action.to) === 1) stash2 = tray[action.slot]!;
+    else stash = tray[action.slot]!;
     tray[action.slot] = null;
     refillSlot = action.slot;
   } else if (action.type === 'swap') {
     const kind = tray[action.slot];
-    tray[action.slot] = stash;
-    stash = kind;
+    if ((action.with ?? 0) === 1) {
+      tray[action.slot] = stash2;
+      stash2 = kind;
+    } else {
+      tray[action.slot] = stash;
+      stash = kind;
+    }
   } else {
     let kind: TileKind;
     if (action.type === 'place') {
       kind = tray[action.slot]!;
       tray[action.slot] = null;
       refillSlot = action.slot;
+    } else if ((action.from ?? 0) === 1) {
+      kind = stash2!;
+      stash2 = null;
     } else {
       kind = stash!;
       stash = null;
@@ -319,7 +381,7 @@ export function applyAction(state: GameState, action: Action): GameState {
   // Добор в освободившийся слот — уже с учётом новой дороги.
   if (refillSlot >= 0) {
     if (isInfinite(state.level)) {
-      const others = [...tray.filter((_, i) => i !== refillSlot), stash];
+      const others = [...tray.filter((_, i) => i !== refillSlot), stash, stash2];
       const [k, next] = dealInfinite({ level: state.level, onRoad, head, dir }, others, rng);
       tray[refillSlot] = k;
       deck = [...deck, k];
@@ -330,7 +392,7 @@ export function applyAction(state: GameState, action: Action): GameState {
     }
   }
 
-  const next: GameState = { ...state, tray, deck, deckIndex, rng, stash, road, onRoad, head, dir, moves: state.moves + 1, prev: state };
+  const next: GameState = { ...state, tray, deck, deckIndex, rng, stash, stash2, rotations, road, onRoad, head, dir, moves: state.moves + 1, prev: state };
   return { ...next, status: computeStatus(next) };
 }
 

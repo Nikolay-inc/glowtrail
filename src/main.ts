@@ -1,4 +1,7 @@
 import Phaser from 'phaser';
+import { VillageScene } from './scenes/VillageScene';
+import { WorkshopScene } from './scenes/WorkshopScene';
+import { ShopScene } from './scenes/ShopScene';
 import { GameScene } from './scenes/GameScene';
 import { MenuScene } from './scenes/MenuScene';
 import { StatsScene } from './scenes/StatsScene';
@@ -78,7 +81,7 @@ async function boot() {
     // DOM-элементы поверх холста — для поля ввода имени (масштабируются вместе с игрой).
     dom: { createContainer: true },
     render: { antialias: true },
-    scene: [BootScene, MenuScene, GameScene, StatsScene, ProfileScene, IntroScene, RulesScene],
+    scene: [BootScene, MenuScene, GameScene, StatsScene, ProfileScene, IntroScene, RulesScene, VillageScene, WorkshopScene, ShopScene],
   });
 
   initLifecycle(game);

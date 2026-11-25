@@ -1,15 +1,22 @@
-// Экран «Профиль»: аватарка, имя (можно сменить), сводка и выбор аватарки.
+// Экран «Профиль»: Lumo в надетом костюме, имя (можно сменить), сводка, настройки (звук, вибрация,
+// статистика, «Как играть») и выбор костюма — купленные можно надеть, остальные — в магазине.
 
 import Phaser from 'phaser';
-import { AVATARS, isAvatarUnlocked } from '../core/avatars';
 import { LEVELS } from '../levels/index';
-import { sfx } from '../audio';
-import { displayName, getProfile, levelsPassed, setAvatar, totalStars } from '../profile';
+import { isMuted, setMuted, sfx } from '../audio';
+import { isVibrationOn, setVibration } from '../haptics';
+import { displayName, getProfile, levelsPassed, totalStars } from '../profile';
+import { SKINS } from '../core/economy';
+import { equipSkin, getEconomy } from '../meta';
+import { ALL_RULES } from '../tutorial';
 import { addBackground, Button, createAvatarBadge, text } from '../ui/draw';
 import { showNameDialog } from '../ui/NameDialog';
+import { addTabBar } from '../ui/meta';
+import { equippedLook } from '../ui/skins';
 import { Account } from '../cloud/account';
 import { openAuthDialog } from '../ui/AuthDialog';
-import { C, W } from '../ui/theme';
+import { stretchLayout } from '../ui/viewport';
+import { C, H, W } from '../ui/theme';
 
 const MAX_STARS = () => LEVELS.length * 3;
 
@@ -19,87 +26,132 @@ export class ProfileScene extends Phaser.Scene {
   }
 
   create() {
+    const bounds = stretchLayout(this);
     addBackground(this);
     this.cameras.main.fadeIn(200, 11, 15, 39);
     const profile = getProfile();
     const stars = totalStars();
+    const look = equippedLook();
+    const topY = 100 + bounds.top;
 
-    new Button(this, 90, 105, { w: 130, h: 130, icon: 'back', onClick: () => this.back() });
-    text(this, W / 2, 105, 'Профиль', 70);
+    text(this, W / 2, topY, 'Профиль', 64);
 
-    // Аватарка и имя
-    createAvatarBadge(this, W / 2, 400, 170, profile.avatar, { selected: true, animate: true });
-    const name = text(this, W / 2, 640, displayName(profile), 72);
+    // Lumo в надетом костюме и имя
+    createAvatarBadge(this, W / 2, topY + 230, 130, look.avatar, { selected: true, animate: true, lantern: look.lantern });
+    const name = text(this, W / 2, topY + 410, displayName(profile), 64);
     const edit = this.add.graphics();
-    drawEditIcon(edit, 44, C.icon);
-    edit.setPosition(name.x + name.width / 2 + 50, 640);
-    const nameZone = this.add.zone(W / 2, 640, Math.max(400, name.width + 160), 120).setInteractive({ useHandCursor: true });
+    drawEditIcon(edit, 40, C.icon);
+    edit.setPosition(name.x + name.width / 2 + 45, topY + 410);
+    const nameZone = this.add.zone(W / 2, topY + 410, Math.max(400, name.width + 160), 110).setInteractive({ useHandCursor: true });
     nameZone.on('pointerup', () => {
       sfx.tap();
       showNameDialog(this, { title: 'Как тебя зовут?', withAvatars: false, secondary: 'cancel', onClose: () => this.scene.restart() });
     });
 
-    // Сводка: 4 карточки
+    // Сводка: 4 карточки в ряд
     const cards: [string, string][] = [
-      [`${stars} из ${MAX_STARS()}`, 'звёзд'],
-      [`${levelsPassed()} из ${LEVELS.length}`, 'уровней пройдено'],
+      [`${stars}/${MAX_STARS()}`, 'звёзд'],
+      [`${levelsPassed()}/${LEVELS.length}`, 'уровней'],
       [String(profile.dayStreak), dayWord(profile.dayStreak)],
       [String(profile.hintsUsed), 'подсказок'],
     ];
     const g = this.add.graphics();
     cards.forEach(([value, label], i) => {
-      const x = W / 2 + (i % 2 === 0 ? -225 : 225);
-      const y = 800 + Math.floor(i / 2) * 190;
+      const x = W / 2 + (i - 1.5) * 245;
+      const y = topY + 560;
       g.fillStyle(0x000000, 0.25);
-      g.fillRoundedRect(x - 205, y - 75 + 6, 410, 160, 36);
+      g.fillRoundedRect(x - 112, y - 65 + 6, 224, 140, 30);
       g.fillStyle(C.card, 1);
-      g.fillRoundedRect(x - 205, y - 75, 410, 160, 36);
-      text(this, x, y - 18, value, 60, i === 0 ? '#ffd36b' : C.text);
-      text(this, x, y + 45, label, 34, C.textDim, false);
+      g.fillRoundedRect(x - 112, y - 65, 224, 140, 30);
+      text(this, x, y - 15, value, 46, i === 0 ? '#ffd36b' : C.text);
+      text(this, x, y + 40, label, 26, C.textDim, false);
     });
 
-    // Выбор аватарки: 4 открыты сразу, остальные — за звёзды
-    text(this, W / 2, 1185, 'Выбери фонарщика', 44, C.textDim, false);
-    AVATARS.forEach((a, i) => {
+    // Настройки: звук, вибрация, статистика, «Как играть»
+    const sy = topY + 740;
+    const sound = new Button(this, W / 2 - 360, sy, {
+      w: 200,
+      h: 120,
+      icon: isMuted() ? 'mute' : 'sound',
+      onClick: () => {
+        setMuted(!isMuted());
+        sound.setIcon(isMuted() ? 'mute' : 'sound');
+        sfx.tap();
+      },
+    });
+    const vibro = new Button(this, W / 2 - 120, sy, {
+      w: 200,
+      h: 120,
+      icon: isVibrationOn() ? 'vibrate' : 'novibrate',
+      onClick: () => {
+        setVibration(!isVibrationOn());
+        vibro.setIcon(isVibrationOn() ? 'vibrate' : 'novibrate');
+        sfx.tap();
+      },
+    });
+    new Button(this, W / 2 + 120, sy, { w: 200, h: 120, icon: 'stats', onClick: () => this.go('Stats') });
+    new Button(this, W / 2 + 360, sy, {
+      w: 200,
+      h: 120,
+      icon: 'help',
+      onClick: () => {
+        sfx.tap();
+        this.scene.launch('Rules', { cards: [...ALL_RULES], from: 'Profile', menuMode: true });
+        this.scene.pause();
+      },
+    });
+    ['Звук', 'Вибрация', 'Статистика', 'Как играть'].forEach((l, i) => text(this, W / 2 + (i - 1.5) * 240, sy + 85, l, 26, C.textDim, false));
+
+    // Костюмы: купленные — надеть, остальные — в магазин
+    text(this, W / 2, topY + 900, 'Костюмы Lumo', 40, C.textDim, false);
+    const e = getEconomy();
+    const costumes = SKINS.filter((x) => x.kind === 'costume');
+    costumes.forEach((c, i) => {
       const x = W / 2 + ((i % 4) - 1.5) * 225;
-      const y = 1345 + Math.floor(i / 4) * 220;
-      const unlocked = isAvatarUnlocked(a.id, stars);
-      const badge = createAvatarBadge(this, x, y, 95, a.id, { locked: !unlocked, selected: a.id === profile.avatar });
-      badge.setSize(200, 200).setInteractive({ useHandCursor: true });
+      const y = topY + 1030 + Math.floor(i / 4) * 200;
+      const owned = e.skins.owned.includes(c.id);
+      const badge = createAvatarBadge(this, x, y, 82, c.avatar ?? 0, {
+        locked: !owned,
+        selected: e.skins.equipped.costume === c.id,
+        lockLabel: c.special ? 'особый' : c.source === 'village' ? 'деревня' : `${c.price}`,
+        lantern: look.lantern,
+      });
+      badge.setSize(180, 180).setInteractive({ useHandCursor: true });
       badge.on('pointerup', () => {
-        if (!unlocked) {
-          sfx.invalid();
-          this.tweens.add({ targets: badge, x: x + 10, duration: 45, yoyo: true, repeat: 3 });
+        if (!owned) {
+          sfx.tap();
+          this.scene.start('Shop', { kind: 'costume' });
           return;
         }
-        if (setAvatar(a.id)) {
-          sfx.tap();
-          this.scene.restart();
-        }
+        equipSkin(c.id);
+        sfx.tap();
+        this.scene.restart();
       });
     });
 
     // Аккаунт: гость — предложение войти; вошёл — email и управление аккаунтом.
     const user = Account.user;
     const label = user ? shortEmail(user.email) : 'Войти или зарегистрироваться';
-    new Button(this, W / 2, 1790, {
+    const rowY = 1730 + (bounds.bottom - H);
+    new Button(this, W / 2, rowY - 190, {
       w: 760,
-      h: 112,
+      h: 104,
       icon: user ? 'cloud' : 'user',
       label,
-      fontSize: user ? 36 : 38,
+      fontSize: user ? 34 : 36,
       primary: !user,
       onClick: () => {
         sfx.tap();
         openAuthDialog(user ? 'account' : 'register', { onClose: () => this.scene.isActive() && this.scene.restart() });
       },
     });
-    text(this, W / 2, 1880, `ID игрока: ${profile.playerId.slice(0, 8)}`, 26, C.textDim, false).setAlpha(0.4);
+    text(this, W / 2, rowY - 115, `ID игрока: ${profile.playerId.slice(0, 8)}`, 24, C.textDim, false).setAlpha(0.4);
+    addTabBar(this, 'Profile', rowY + 40, (k) => this.go(k));
 
     // Вошли/вышли или облако подтянуло прогресс с другого устройства — обновляем экран.
-    const off = Account.on((e) => {
-      if (e.type === 'changed' || (e.type === 'sync' && e.status === 'synced' && !this.syncedOnce)) {
-        this.syncedOnce = e.type === 'sync';
+    const off = Account.on((ev) => {
+      if (ev.type === 'changed' || (ev.type === 'sync' && ev.status === 'synced' && !this.syncedOnce)) {
+        this.syncedOnce = ev.type === 'sync';
         this.scene.restart();
       }
     });
@@ -108,9 +160,10 @@ export class ProfileScene extends Phaser.Scene {
 
   private syncedOnce = false;
 
-  private back() {
+  private go(scene: string) {
     sfx.tap();
-    this.scene.start('Menu');
+    this.cameras.main.fadeOut(150, 11, 15, 39);
+    this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start(scene));
   }
 }
 

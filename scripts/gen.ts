@@ -1,11 +1,11 @@
-// npm run gen -- --count 300 --size 5x6 --features lantern,rock,water --seed N [--reserve 2-7] [--goal fireflies]
+// npm run gen -- --count 300 --size 5x6 --features lantern,rock,water --seed N [--reserve 2-7] [--goal fireflies] [--min-roads 10] [--max-rating 3]
 // Элементы: lantern, rock, water, firefly, jump (плитка «прыжок»), turnbridge (поворотный мост), fade (гаснущий фонарь).
 // Генерирует кандидатов в уровни и сохраняет их с метриками в generated/ (в игру они не попадают).
 // Отбрасывает нерешаемые, уровни с 1 решением, «скучные» (почти любой ход годится), требующие «отложить»
 // и уровни, где не собрать всех светлячков. Из кандидатов уровни выбирает npm run pick.
 
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { GEN_FEATURES, generateOne, mulberry32, type Candidate, type GenFeature, type Reject } from '../src/core/generator';
+import { DEFAULT_FILTER, GEN_FEATURES, generateOne, mulberry32, type Candidate, type GenFeature, type Reject } from '../src/core/generator';
 import type { GoalType } from '../src/core/types';
 
 function arg(name: string, def: string): string {
@@ -20,6 +20,9 @@ const seed = Number(arg('seed', '1'));
 const maxTries = Number(arg('tries', String(count * 200)));
 const reserve = arg('reserve', '2-7').split('-').map(Number) as [number, number];
 const goal = arg('goal', 'classic') as GoalType;
+// Лёгкие уровни и уровни-знакомства: не меньше 10 решений и рейтинг не выше 3.
+const minRoads = Number(arg('min-roads', String(DEFAULT_FILTER.minRoads)));
+const maxRating = process.argv.includes('--max-rating') ? Number(arg('max-rating', '10')) : undefined;
 if (goal !== 'classic' && goal !== 'fireflies') throw new Error('Цель: classic или fireflies');
 for (const f of features) if (!GEN_FEATURES.includes(f)) throw new Error(`Неизвестный элемент «${f}», можно: ${GEN_FEATURES.join(', ')}`);
 if (!(width >= 3 && height >= 3 && width <= 8 && height <= 10)) throw new Error('Размер поля: от 3x3 до 8x10');
@@ -38,7 +41,7 @@ const t0 = performance.now();
 let tries = 0;
 while (out.length < count && tries < maxTries) {
   tries++;
-  const c = generateOne(r, { width, height, features, reserve, goal });
+  const c = generateOne(r, { width, height, features, reserve, goal }, { ...DEFAULT_FILTER, minRoads, maxRating });
   if (typeof c === 'string') {
     rejects[c] = (rejects[c] ?? 0) + 1;
     continue;

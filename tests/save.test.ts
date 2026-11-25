@@ -86,7 +86,7 @@ describe('SaveService', () => {
     };
     SaveService.setBackend(memoryBackend({ [SAVE_KEY]: JSON.stringify(v3) }));
     const d = SaveService.load();
-    expect(d.version).toBe(4);
+    expect(d.version).toBe(SAVE_VERSION);
     expect(d.profile).toMatchObject({ playerId: 'abcdefgh-1234', name: 'Аня', tipsSeen: ['rule:road'] });
     expect(d.progress.stars).toEqual({ 'valley-01': 3, 'valley-09': 2, 'valley-10': 1 });
     expect(d.progress.unlocked).toHaveLength(10);

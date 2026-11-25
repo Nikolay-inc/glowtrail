@@ -23,14 +23,21 @@ import {
   type GameState,
   expiredLantern,
   fadeLeftAt,
+  rotateKind,
+  stashAt,
   tilesPlaced,
+  type StashIndex,
 } from '../core/game';
+import { abilities, buyHint, adHint, hintsLeft, recordWinRewards, spendHint } from '../meta';
+import { equippedLook } from '../ui/skins';
+import { drawCoin, drawLight, toast } from '../ui/meta';
+import { HINT_PRICE } from '../core/economy';
 import { easeDeck, findExtraTiles, findHint, nearestSolvable } from '../core/solver';
 import type { Level, TileKind } from '../core/types';
 import { LEVELS, nextLevelOf, numberInWorld } from '../levels/index';
 import { sfx } from '../audio';
-import { logEvent, lossStreak, recordLoss, recordSkip, recordWin, startAttempt, type LogEvent } from '../storage';
-import { countHint, getProfile, markAuthPrompted, recordPlayDay, shouldPromptAuth } from '../profile';
+import { logEvent, lossStreak, recordLoss, recordSkip, startAttempt, type LogEvent } from '../storage';
+import { countHint, markAuthPrompted, recordPlayDay, shouldPromptAuth } from '../profile';
 import { Account } from '../cloud/account';
 import { openAuthDialog } from '../ui/AuthDialog';
 import { BoardView } from '../ui/BoardView';
@@ -74,7 +81,7 @@ export const STUCK = { pulseHint: 2, ease: 2, skip: 4 } as const;
 /** Сколько лишних плиток незаметно добавляет облегчение. */
 export const EASE_TILES = 2;
 
-type SlotId = number | 'stash';
+type SlotId = number | 'stash' | 'stash2';
 
 interface Press {
   slot: SlotId;
@@ -113,7 +120,13 @@ export class GameScene extends Phaser.Scene {
   private board!: BoardView;
   private cards: TileCard[] = [];
   private stashCard!: TileCard;
+  /** Второй слот «отложить» (прокачка): две карточки поменьше одна над другой. */
+  private stashCard2!: TileCard;
   private previews: MiniCard[] = [];
+  /** Кнопка «Поворот плитки» и режим поворота (следующий тап по плитке лотка поворачивает её). */
+  private rotateBtn?: Button;
+  private rotateMode = false;
+  private rotateText?: Phaser.GameObjects.Text;
   private deckG!: Phaser.GameObjects.Graphics;
   private deckText!: Phaser.GameObjects.Text;
   private undoBtn!: Button;
@@ -147,6 +160,8 @@ export class GameScene extends Phaser.Scene {
   private streak = 0;
   /** Ходов подряд без отмены (серия без ошибок). */
   private cleanRun = 0;
+  /** Награда за победу: монеты и свет (показывается в окне победы). */
+  private reward = { coins: 0, light: 0 };
   /** Раскладка нижней панели: зависит от того, есть ли на уровне слот «отложить». */
   private L: TrayLayout = trayLayout(true);
 
@@ -170,6 +185,8 @@ export class GameScene extends Phaser.Scene {
     this.hintKey = '';
     this.activeHint = null;
     this.extraUsed = false;
+    this.rotateMode = false;
+    this.rotateBtn = undefined;
   }
 
   private get level(): Level {
@@ -210,7 +227,9 @@ export class GameScene extends Phaser.Scene {
     this.restartBtn = new Button(this, 990, this.topY, { w: 130, h: 130, icon: 'restart', onClick: () => this.restart() });
 
     recordPlayDay(); // если сессия перешла через полночь
-    this.board = new BoardView(this, level, { x: 40, y: BOARD_Y - up, w: 1000, h: BOARD_H + up + down }, { avatar: getProfile().avatar, maxCell: 250, sound: true });
+    const look = equippedLook();
+    const ab = abilities();
+    this.board = new BoardView(this, level, { x: 40, y: BOARD_Y - up, w: 1000, h: BOARD_H + up + down }, { avatar: look.avatar, lantern: look.lantern, road: look.road, arch: look.arch, maxCell: 250, sound: true });
 
     // Лоток
     const slotsG = this.add.graphics();
@@ -221,18 +240,29 @@ export class GameScene extends Phaser.Scene {
       slotsG.strokeRoundedRect(x - CARD / 2, this.trayY - CARD / 2, CARD, CARD, CARD * 0.2);
     }
     this.stashGlow = this.add.graphics().setDepth(9);
-    this.stashCard = new TileCard(this, this.stashX, this.trayY, 'stash');
-    // Слот «отложить» появляется с уровня, где его учат.
+    // Слот «отложить» появляется с уровня, где его учат; после прокачки — два слота поменьше.
+    const two = level.allowStash && ab.stashSlots >= 2;
+    const half = CARD * 0.26 + 6;
+    this.stashCard = new TileCard(this, this.stashX, two ? this.trayY - half : this.trayY, 'stash');
+    this.stashCard2 = new TileCard(this, this.stashX, this.trayY + half, 'stash2');
+    for (const c of [this.stashCard, this.stashCard2]) {
+      c.baseScale = two ? 0.5 : 1;
+      c.setScale(c.baseScale);
+    }
     this.stashCard.setVisible(level.allowStash);
+    this.stashCard2.setVisible(two);
     this.cards = this.L.slotX.map((x, i) => new TileCard(this, x, this.trayY, i));
     this.deckG = this.add.graphics();
     this.deckText = text(this, this.L.deckX, this.trayY + 8, '0', 56);
-    this.previews = this.L.previewX.map((x) => new MiniCard(this, x, this.previewY, 72));
+    // «Фонарик»: сколько следующих плиток видно (2 → 3 → 4 → 5). Больше двух — ряд поменьше у колоды.
+    const n = ab.preview;
+    const px = n <= 2 ? this.L.previewX : Array.from({ length: n }, (_, i) => this.L.deckX + 42 - (n - 1 - i) * 70);
+    this.previews = px.map((x) => new MiniCard(this, x, this.previewY, n <= 2 ? 72 : 60));
 
     // Нижняя панель: подсказка и (после серии поражений) пропуск уровня
     const showSkip = this.streak >= STUCK.skip;
     const hintX = showSkip ? W / 2 - 190 : W / 2;
-    this.hintBtn = new Button(this, hintX, this.bottomY, { w: 340, h: 116, icon: 'bulb', label: 'Подсказка', fontSize: 40, onClick: () => this.onHint() });
+    this.hintBtn = new Button(this, hintX, this.bottomY, { w: 340, h: 116, icon: 'bulb', label: this.hintLabel(), fontSize: 40, onClick: () => this.onHint() });
     if (showSkip) {
       new Button(this, W / 2 + 190, this.bottomY, { w: 340, h: 116, icon: 'skip', label: 'Пропустить', fontSize: 40, onClick: () => this.skipLevel() });
     }
@@ -242,7 +272,12 @@ export class GameScene extends Phaser.Scene {
     this.hand = this.add.text(0, 0, '👆', { fontSize: '120px' }).setOrigin(0.3, 0.05).setDepth(30).setVisible(false);
 
     this.tips = new TipManager(this);
-    for (const card of [...this.cards, this.stashCard]) this.bindCard(card);
+    for (const card of [...this.cards, this.stashCard, this.stashCard2]) this.bindCard(card);
+    // «Поворот плитки» (способность из деревни): кнопка рядом с меню, на ней — сколько зарядов осталось.
+    if (ab.rotations > 0) {
+      this.rotateBtn = new Button(this, 240, this.topY, { w: 130, h: 130, icon: 'rotate', onClick: () => this.toggleRotate() });
+      this.rotateText = text(this, 290, this.topY + 50, String(ab.rotations), 34, '#ffd36b').setDepth(5);
+    }
     this.input.on('pointermove', this.onPointerMove, this);
     this.input.on('pointerup', this.onPointerUp, this);
     this.input.keyboard?.on('keydown', this.onKey, this);
@@ -285,7 +320,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     // Для бесконечной колоды — своё случайное зерно на каждую попытку.
-    this.state = createGame(level, deck, Math.floor(Math.random() * 2 ** 31));
+    this.state = createGame(level, deck, Math.floor(Math.random() * 2 ** 31), { stashSlots: ab.stashSlots, rotations: ab.rotations });
     const m = level.metrics;
     this.attempt = this.custom ? 1 : startAttempt(level.id, { ...(m ? { rating: m.rating, trap: m.trap, roads: m.roads } : {}), goal_type: level.goal });
     if (extra > 0) this.log({ ev: 'auto_ease', level: level.id, attempt: this.attempt, added: extra, streak: this.streak });
@@ -418,7 +453,14 @@ export class GameScene extends Phaser.Scene {
     });
     this.stashCard.setTile(s.stash, playing && canPlace(s, s.stash), s.dir, animate);
     this.stashCard.setVisible(s.level.allowStash);
-    const next = upcoming(s, 2);
+    this.stashCard2.setTile(s.stash2, playing && canPlace(s, s.stash2), s.dir, animate);
+    this.stashCard2.setVisible(s.level.allowStash && s.stashSlots >= 2);
+    if (this.rotateBtn) {
+      this.rotateBtn.setEnabled(playing && s.rotations > 0);
+      this.rotateText?.setText(String(s.rotations));
+      if (s.rotations === 0 && this.rotateMode) this.setRotateMode(false);
+    }
+    const next = upcoming(s, this.previews.length);
     this.previews.forEach((p, i) => p.setTile(next[i] ?? null, s.dir, animate));
     this.drawDeck();
     this.undoBtn.setEnabled(canUndo(s));
@@ -525,7 +567,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     const hint = this.activeHint ?? findHint(s);
-    const key = `${JSON.stringify(hint)}|${s.moves}|${s.deckIndex}|${s.stash}`;
+    const key = `${JSON.stringify(hint)}|${s.moves}|${s.deckIndex}|${s.stash}|${s.stash2}`;
     if (key === this.hintKey) return;
     this.hintKey = key;
     this.hideHints();
@@ -550,11 +592,13 @@ export class GameScene extends Phaser.Scene {
     if (hint.type === 'placeStash') {
       // Отложенную плитку ставят, перетащив её на поле.
       const head = this.board.center(s.head);
-      this.ring(this.stashX, this.trayY);
-      this.showHandDrag(this.stashX, this.trayY, head.x, head.y);
-      this.board.showGhost(s, previewTile(s, s.stash!), 'hint');
+      const sc = hint.from === 1 ? this.stashCard2 : this.stashCard;
+      this.ring(sc.homeX, sc.homeY);
+      this.showHandDrag(sc.homeX, sc.homeY, head.x, head.y);
+      this.board.showGhost(s, previewTile(s, (hint.from === 1 ? s.stash2 : s.stash)!), 'hint');
       return;
     }
+    if (hint.type === 'rotate') return;
     const card = this.cards[hint.slot];
     this.ring(card.homeX, card.homeY);
     this.showHandTap(card.homeX, card.homeY);
@@ -596,9 +640,23 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  /** Подсказки бесплатны на обучающих уровнях и в своём уровне из редактора. */
+  private get freeHints() {
+    return !!this.custom || isTutorialActive(this.state?.level.num ?? this.level.num) || this.level.num <= 4;
+  }
+
+  private hintLabel() {
+    return this.freeHints ? 'Подсказка' : `Подсказка · ${hintsLeft()}`;
+  }
+
   private onHint() {
     if (this.busy || this.overlay || this.state.status !== 'playing') return;
     if (this.activeHint) return; // подсказка уже показана
+    // Подсказки кончились (3 бесплатные в день + запас) — купить за монеты или «за рекламу».
+    if (!this.freeHints && hintsLeft() <= 0) {
+      this.showBuyHintPanel();
+      return;
+    }
     const hint = findHint(this.state);
     if (hint) {
       this.spendHint(0);
@@ -623,12 +681,63 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  /** Подсказки бесплатные и без ограничений — просто записываем в лог. */
+  /** Подсказка потрачена: из бесплатных на сегодня или из запаса (на обучающих уровнях — бесплатно). */
   private spendHint(rollback: number) {
     this.log({ ev: 'hint_used', level: this.state.level.id, attempt: this.attempt, rollback: rollback || undefined });
     countHint();
+    if (!this.freeHints) spendHint();
+    this.hintBtn.setLabel(this.hintLabel());
     this.stopPulse(this.hintBtn);
     sfx.tap();
+  }
+
+  /** Подсказки кончились: купить за монеты, получить «за рекламу» (пока заглушка) или закрыть. */
+  private showBuyHintPanel() {
+    const { o, top } = this.makeOverlay('rollback', 640);
+    o.add(text(this, W / 2, top + 100, 'Подсказки кончились', 60));
+    o.add(text(this, W / 2, top + 180, 'Завтра снова будет 3 бесплатных', 40, C.textDim, false));
+    const done = () => {
+      this.closeOverlay();
+      this.hintBtn.setLabel(this.hintLabel());
+      this.onHint();
+    };
+    const buy = new Button(this, W / 2, top + 320, {
+      w: 600,
+      h: 130,
+      label: `Купить за ${HINT_PRICE}`,
+      primary: true,
+      fontSize: 46,
+      onClick: () => {
+        const r = buyHint();
+        if (!r.ok) {
+          sfx.invalid();
+          toast(this, 'Не хватает монет', top + 420);
+          return;
+        }
+        sfx.star(1);
+        done();
+      },
+    });
+    const cg = this.add.graphics();
+    drawCoin(cg, W / 2 - 230, top + 320, 26);
+    o.add([buy, cg]);
+    o.add(
+      new Button(this, W / 2, top + 470, {
+        w: 600,
+        h: 110,
+        icon: 'play',
+        label: 'Бесплатно за рекламу',
+        fontSize: 38,
+        onClick: () => {
+          // Заглушка до Р4: настоящая реклама подключится позже, подсказка выдаётся сразу.
+          adHint();
+          sfx.star(0);
+          done();
+        },
+      }),
+    );
+    o.add(new Button(this, W / 2, top + 585, { w: 300, h: 90, label: 'Закрыть', fontSize: 36, onClick: () => this.closeOverlay() }));
+    o.on('primary', () => this.closeOverlay());
   }
 
   private showRollbackPanel(steps: number, onConfirm: () => void) {
@@ -657,16 +766,29 @@ export class GameScene extends Phaser.Scene {
     });
     card.on('pointerdown', (p: Phaser.Input.Pointer) => {
       if (this.busy || this.overlay || this.state.status !== 'playing') return;
-      if (!card.kind && card.slot !== 'stash') return;
+      if (!card.kind && typeof card.slot === 'number') return;
+      // Режим поворота: тап по плитке лотка поворачивает её.
+      if (this.rotateMode && typeof card.slot === 'number') {
+        this.doAction({ type: 'rotate', slot: card.slot });
+        return;
+      }
       const press: Press = { slot: card.slot, card, x0: p.worldX, y0: p.worldY, dragging: false };
       if (card.kind) press.timer = this.time.delayedCall(220, () => this.previewSlot(card.slot));
       this.press = press;
-      this.tweens.add({ targets: card, scale: 1.07, duration: 90 });
+      this.tweens.add({ targets: card, scale: card.baseScale * 1.07, duration: 90 });
     });
   }
 
   private kindAt(slot: SlotId): TileKind | null {
-    return slot === 'stash' ? this.state.stash : this.state.tray[slot];
+    return slot === 'stash' ? this.state.stash : slot === 'stash2' ? this.state.stash2 : this.state.tray[slot];
+  }
+
+  private stashIndex(slot: SlotId): StashIndex {
+    return slot === 'stash2' ? 1 : 0;
+  }
+
+  private cardOf(slot: SlotId): TileCard {
+    return slot === 'stash' ? this.stashCard : slot === 'stash2' ? this.stashCard2 : this.cards[slot];
   }
 
   private previewSlot(slot: SlotId) {
@@ -674,8 +796,14 @@ export class GameScene extends Phaser.Scene {
     this.board.showGhost(this.state, kind ? previewTile(this.state, kind) : null);
   }
 
-  private overStash(x: number, y: number) {
-    return Math.abs(x - this.stashX) < CARD * 0.75 && Math.abs(y - this.trayY) < CARD * 0.9;
+  /** Над каким слотом «отложить» точка: 0, 1 или -1. */
+  private overStash(x: number, y: number): number {
+    if (this.stashCard2.visible) {
+      if (this.stashCard.isInside(x, y, 30)) return 0;
+      if (this.stashCard2.isInside(x, y, 30)) return 1;
+      return -1;
+    }
+    return this.stashCard.visible && Math.abs(x - this.stashX) < CARD * 0.75 && Math.abs(y - this.trayY) < CARD * 0.9 ? 0 : -1;
   }
 
   private traySlotAt(x: number, y: number): number {
@@ -697,9 +825,12 @@ export class GameScene extends Phaser.Scene {
       const over = this.board.isOverDropZone(this.state, p.worldX, p.worldY);
       this.board.showDropZone(this.state, over);
       this.stashGlow.clear();
-      if (typeof pr.slot === 'number' && this.overStash(p.worldX, p.worldY)) {
+      const si = typeof pr.slot === 'number' ? this.overStash(p.worldX, p.worldY) : -1;
+      if (si >= 0) {
+        const sc = si === 1 ? this.stashCard2 : this.stashCard;
+        const sz = CARD * sc.baseScale;
         this.stashGlow.lineStyle(10, C.lanternOn, 0.9);
-        this.stashGlow.strokeRoundedRect(this.stashX - CARD / 2 - 12, this.trayY - CARD / 2 - 12, CARD + 24, CARD + 24, CARD * 0.25);
+        this.stashGlow.strokeRoundedRect(sc.homeX - sz / 2 - 12, sc.homeY - sz / 2 - 12, sz + 24, sz + 24, sz * 0.25);
       }
     }
   }
@@ -712,7 +843,7 @@ export class GameScene extends Phaser.Scene {
     this.stashGlow.clear();
     this.board.showDropZone(null);
     pr.card.setDepth(10);
-    this.tweens.add({ targets: pr.card, scale: 1, duration: 90 });
+    this.tweens.add({ targets: pr.card, scale: pr.card.baseScale, duration: 90 });
     if (!p.wasTouch && pr.card.isInside(p.worldX, p.worldY)) this.previewSlot(pr.slot);
     else this.board.showGhost(this.state, null);
 
@@ -727,8 +858,10 @@ export class GameScene extends Phaser.Scene {
       }
       if (typeof pr.slot === 'number') {
         // Плитку лотка бросили на слот «отложить»: в пустой — отложить, в занятый — обменять.
-        if (this.overStash(p.worldX, p.worldY)) {
-          this.doAction(this.state.stash === null ? { type: 'stash', slot: pr.slot } : { type: 'swap', slot: pr.slot });
+        const si = this.overStash(p.worldX, p.worldY);
+        if (si >= 0) {
+          const i = si as StashIndex;
+          this.doAction(stashAt(this.state, i) === null ? { type: 'stash', slot: pr.slot, to: i } : { type: 'swap', slot: pr.slot, with: i });
           return;
         }
         snapBack();
@@ -737,31 +870,51 @@ export class GameScene extends Phaser.Scene {
       // Отложенную плитку перетащили: на плитку лотка — обмен, вверх на поле — поставить.
       const slot = this.traySlotAt(p.worldX, p.worldY);
       if (slot >= 0 && this.state.tray[slot]) {
-        this.doAction({ type: 'swap', slot });
+        this.doAction({ type: 'swap', slot, with: this.stashIndex(pr.slot) });
         return;
       }
       if (p.worldY < this.trayY - CARD * 0.75) {
         pr.card.setPosition(pr.card.homeX, pr.card.homeY);
-        this.tryPlace('stash', 'drag');
+        this.tryPlace(pr.slot, 'drag');
         return;
       }
       snapBack();
       return;
     }
     if (!pr.card.isInside(p.worldX, p.worldY, 40)) return;
-    if (pr.slot === 'stash') this.tapStash();
+    if (pr.slot === 'stash' || pr.slot === 'stash2') this.tapStash(this.stashIndex(pr.slot));
     else this.tryPlace(pr.slot);
   }
 
   /** Тап по слоту «отложить»: пустой — убрать туда крайнюю левую плитку, занятый — поменять с ней. */
-  private tapStash() {
+  private tapStash(i: StashIndex = 0) {
     if (this.busy || this.state.status !== 'playing') return;
     const slot = leftmostTile(this.state);
-    if (this.state.stash === null) {
+    if (stashAt(this.state, i) === null) {
       if (slot < 0) return;
-      this.doAction({ type: 'stash', slot });
+      this.doAction({ type: 'stash', slot, to: i });
     } else {
-      this.doAction({ type: 'swap', slot: slot < 0 ? 0 : slot });
+      this.doAction({ type: 'swap', slot: slot < 0 ? 0 : slot, with: i });
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // «Поворот плитки»
+
+  private toggleRotate() {
+    if (this.busy || this.overlay || this.state.status !== 'playing' || this.state.rotations <= 0) return;
+    sfx.tap();
+    this.setRotateMode(!this.rotateMode);
+    if (this.rotateMode) toast(this, 'Нажми на плитку — она повернётся', this.trayY - CARD);
+  }
+
+  private setRotateMode(on: boolean) {
+    this.rotateMode = on;
+    this.rotateBtn?.setPrimary(on);
+    for (const c of this.cards) {
+      this.tweens.killTweensOf(c);
+      c.setAngle(0);
+      if (on && c.kind && rotateKind(c.kind)) this.tweens.add({ targets: c, angle: { from: -3, to: 3 }, duration: 160, yoyo: true, repeat: -1 });
     }
   }
 
@@ -788,11 +941,11 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     this.log({ ev: source === 'drag' ? 'drag_place' : 'tap_place', level: this.state.level.id, attempt: this.attempt });
-    this.doAction(slot === 'stash' ? { type: 'placeStash' } : { type: 'place', slot });
+    this.doAction(typeof slot === 'number' ? { type: 'place', slot } : { type: 'placeStash', from: this.stashIndex(slot) });
   }
 
   private invalid(slot: SlotId) {
-    const card = slot === 'stash' ? this.stashCard : this.cards[slot];
+    const card = this.cardOf(slot);
     sfx.invalid();
     const kind = this.kindAt(slot);
     if (kind) {
@@ -801,7 +954,7 @@ export class GameScene extends Phaser.Scene {
       this.explainBlock(p);
     }
     this.tweens.killTweensOf(card);
-    card.setPosition(card.homeX, card.homeY).setScale(1);
+    card.setPosition(card.homeX, card.homeY).setScale(card.baseScale);
     this.tweens.add({ targets: card, x: card.homeX + 14, duration: 45, yoyo: true, repeat: 3 });
     this.time.delayedCall(650, () => {
       if (!this.press) this.board.showGhost(this.state, null);
@@ -860,18 +1013,40 @@ export class GameScene extends Phaser.Scene {
       else if (next.status === 'lost') this.onLose();
     };
 
+    if (action.type === 'rotate') {
+      // Плитка поворачивается на глазах: карточка делает четверть оборота.
+      const card = this.cards[action.slot];
+      sfx.stash();
+      this.setRotateMode(false);
+      this.tweens.add({
+        targets: card,
+        angle: 90,
+        duration: 220,
+        ease: 'Back.in',
+        onComplete: () => {
+          card.setAngle(0).setTile(next.tray[action.slot], canPlace(next, next.tray[action.slot]), next.dir, false);
+          this.tweens.add({ targets: card, scale: { from: 1.15, to: 1 }, duration: 200, ease: 'Back.out', onComplete: finish });
+        },
+      });
+      return;
+    }
+
     if (action.type === 'stash') {
       const card = this.cards[action.slot];
+      const toTwo = prev.stash !== null || action.to === 1;
+      const sc = toTwo && next.stash2 !== null && prev.stash2 === null ? this.stashCard2 : this.stashCard;
       sfx.stash();
       this.tweens.add({
         targets: card,
-        x: this.stashX,
-        y: this.trayY,
+        x: sc.homeX,
+        y: sc.homeY,
+        scale: sc.baseScale,
         duration: 200,
         ease: 'Quad.out',
         onComplete: () => {
-          this.stashCard.setTile(next.stash, false, next.dir, false);
-          this.tweens.add({ targets: this.stashCard, scale: { from: 1.15, to: 1 }, duration: 200, ease: 'Back.out' });
+          sc.setTile(sc === this.stashCard2 ? next.stash2 : next.stash, false, next.dir, false);
+          this.tweens.add({ targets: sc, scale: { from: sc.baseScale * 1.15, to: sc.baseScale }, duration: 200, ease: 'Back.out' });
+          card.setScale(1);
           this.dealInto(card, next.tray[action.slot], finish);
         },
       });
@@ -880,19 +1055,22 @@ export class GameScene extends Phaser.Scene {
 
     if (action.type === 'swap') {
       const card = this.cards[action.slot];
+      const two = action.with === 1;
+      const sc = two ? this.stashCard2 : this.stashCard;
       sfx.stash();
-      this.tweens.add({ targets: card, x: this.stashX, y: this.trayY, duration: 220, ease: 'Quad.inOut' });
+      this.tweens.add({ targets: card, x: sc.homeX, y: sc.homeY, scale: sc.baseScale, duration: 220, ease: 'Quad.inOut' });
       this.tweens.add({
-        targets: this.stashCard,
+        targets: sc,
         x: card.homeX,
         y: card.homeY,
+        scale: 1,
         duration: 220,
         ease: 'Quad.inOut',
         onComplete: () => {
-          card.setPosition(card.homeX, card.homeY);
-          this.stashCard.setPosition(this.stashX, this.trayY);
+          card.setPosition(card.homeX, card.homeY).setScale(1);
+          sc.setPosition(sc.homeX, sc.homeY).setScale(sc.baseScale);
           card.setTile(next.tray[action.slot], false, next.dir, false);
-          this.stashCard.setTile(next.stash, false, next.dir, false);
+          sc.setTile(two ? next.stash2 : next.stash, false, next.dir, false);
           finish();
         },
       });
@@ -901,7 +1079,7 @@ export class GameScene extends Phaser.Scene {
 
     // Плитка улетает на конец дороги, дорога вырастает.
     const headPos = this.board.center(next.head);
-    const card = action.type === 'place' ? this.cards[action.slot] : this.stashCard;
+    const card = action.type === 'place' ? this.cards[action.slot] : action.from === 1 ? this.stashCard2 : this.stashCard;
     const newCells = next.road.length - prev.road.length;
     const placed = next.road[next.road.length - 1];
     if (placed.kind === 'jump') this.log({ ev: 'tile_jump_used', level: next.level.id, attempt: this.attempt, tile: placed.step });
@@ -934,7 +1112,7 @@ export class GameScene extends Phaser.Scene {
           this.dealInto(card, next.tray[action.slot], finish);
         } else {
           card.setTile(null, false, next.dir, false);
-          card.setPosition(card.homeX, card.homeY).setScale(1).setAlpha(1);
+          card.setPosition(card.homeX, card.homeY).setScale(card.baseScale).setAlpha(1);
           this.time.delayedCall(120, finish);
         }
       },
@@ -970,7 +1148,7 @@ export class GameScene extends Phaser.Scene {
 
   private resetCards() {
     this.cards.forEach((c) => c.setPosition(c.homeX, c.homeY).setScale(1).setAlpha(1));
-    this.stashCard.setPosition(this.stashX, this.trayY).setScale(1).setAlpha(1);
+    for (const sc of [this.stashCard, this.stashCard2]) sc.setPosition(sc.homeX, sc.homeY).setScale(sc.baseScale).setAlpha(1);
   }
 
   private onUndo() {
@@ -1049,10 +1227,10 @@ export class GameScene extends Phaser.Scene {
     if (s.level.fireflies.length > 0) {
       this.log({ ev: 'fireflies_collected', level: s.level.id, attempt: this.attempt, fireflies: ff, firefliesTotal: s.level.fireflies.length });
     }
-    if (!this.custom) recordWin(s.level.id, stars, nextLevelOf(s.level)?.id ?? null, ff);
+    this.reward = this.custom ? { coins: 0, light: 0 } : recordWinRewards(s.level.id, stars, ff, nextLevelOf(s.level)?.id ?? null);
     this.hideHints();
     this.stopPulse(this.hintBtn);
-    this.tweens.add({ targets: [...this.cards, this.stashCard, ...this.previews], alpha: 0.25, duration: 300 });
+    this.tweens.add({ targets: [...this.cards, this.stashCard, this.stashCard2, ...this.previews], alpha: 0.25, duration: 300 });
     this.board.walkLumo(
       s,
       (i) => sfx.step(i),
@@ -1110,12 +1288,14 @@ export class GameScene extends Phaser.Scene {
   private showWinPanel(stars: number) {
     const isLast = !this.custom && !nextLevelOf(this.level);
     const ffTotal = this.state.level.fireflies.length;
-    const ffRow = ffTotal > 0 ? 90 : 0;
+    const rewardRow = this.reward.coins > 0 || this.reward.light > 0 ? 90 : 0;
+    const ffRow = (ffTotal > 0 ? 90 : 0) + rewardRow;
     const { o, top: top0 } = this.makeOverlay('win', 910 + ffRow);
     // Строка светлячков встаёт под звёздами — кнопки ниже на её высоту.
     const top = top0;
     // Аватарка игрока — значком на верхнем краю окна.
-    o.add(createAvatarBadge(this, W / 2, top, 86, getProfile().avatar, { selected: true, animate: true }).setData('avatarBadge', true));
+    const look = equippedLook();
+    o.add(createAvatarBadge(this, W / 2, top, 86, look.avatar, { selected: true, animate: true, lantern: look.lantern }).setData('avatarBadge', true));
     o.add(text(this, W / 2, top + 130, isLast ? 'Все фонари зажжены!' : this.custom ? 'Свой уровень' : `Уровень ${numberInWorld(this.level)}`, isLast ? 56 : 46, C.textDim));
     o.add(text(this, W / 2, top + 205, 'Пройден!', 84));
     const starG = this.add.graphics();
@@ -1135,6 +1315,24 @@ export class GameScene extends Phaser.Scene {
       const fg = this.add.graphics();
       drawFireflyIcon(fg, label.x - label.width / 2 - 45, top + 520, 26, ff > 0);
       o.add([fg, label]);
+    }
+    // Награда: монеты и свет (свет — только за улучшение лучшего результата).
+    if (rewardRow) {
+      const ry = top + 520 + (ffTotal > 0 ? 90 : 0);
+      const parts: { icon: 'coin' | 'light'; n: number }[] = [];
+      if (this.reward.coins > 0) parts.push({ icon: 'coin', n: this.reward.coins });
+      if (this.reward.light > 0) parts.push({ icon: 'light', n: this.reward.light });
+      const rg = this.add.graphics();
+      o.add(rg);
+      parts.forEach((p, i) => {
+        const x = W / 2 + (i - (parts.length - 1) / 2) * 260;
+        if (p.icon === 'coin') drawCoin(rg, x - 60, ry, 26);
+        else drawLight(rg, x - 60, ry, 26);
+        const label = text(this, x - 20, ry, `+${p.n}`, 48, p.icon === 'coin' ? '#ffd45a' : '#ffc65c').setOrigin(0, 0.5);
+        o.add(label);
+        label.setScale(0);
+        this.tweens.add({ targets: label, scale: 1, duration: 300, delay: 1100 + i * 200, ease: 'Back.out' });
+      });
     }
     // Последний обучающий уровень: обучение закончено — дальше экран уровней.
     const num = this.state.level.num;

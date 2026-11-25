@@ -13,6 +13,8 @@ export interface Node {
   deckIndex: number;
   tray: TileKind[]; // порядок в лотке на логику не влияет
   stash: TileKind | null;
+  /** Второй слот «отложить» (прокачка); слоты равноправны — в ключе состояния они отсортированы. */
+  stash2: TileKind | null;
   /** Часы уровня: сколько плиток поставлено и когда зажглись гаснущие фонари. */
   time: TimeState;
 }
@@ -26,7 +28,7 @@ interface Result {
   roads: Set<string> | null;
 }
 
-export type MoveFrom = 'tray' | 'stash' | 'toStash' | 'swap';
+export type MoveFrom = 'tray' | 'stash' | 'toStash' | 'swap' | 'stash2' | 'swap2';
 
 export interface Move {
   kind: TileKind;
@@ -78,7 +80,7 @@ export class Solver {
   constructor(
     private level: Level,
     readonly deck: TileKind[],
-    private opts: { allowStash: boolean; countRoads: boolean; roadLimit?: number; maxStates?: number },
+    private opts: { allowStash: boolean; countRoads: boolean; roadLimit?: number; maxStates?: number; stashSlots?: number },
   ) {
     this.isFirefly = level.cells.map((c) => c === 'firefly');
     this.roadLimit = opts.roadLimit ?? ROAD_LIMIT;
@@ -96,7 +98,8 @@ export class Solver {
   }
 
   key(n: Node): string {
-    return `${n.head},${n.dir},${n.mask.toString(36)},${n.deckIndex},${[...n.tray].sort().join('+')},${n.stash ?? '-'}|${timeKey(this.level, n.time)}`;
+    const st = [n.stash ?? '-', n.stash2 ?? '-'].sort().join('/');
+    return `${n.head},${n.dir},${n.mask.toString(36)},${n.deckIndex},${[...n.tray].sort().join('+')},${st}|${timeKey(this.level, n.time)}`;
   }
 
   /** Цель достигнута: конец дороги в арке или собраны все светлячки. */
@@ -105,7 +108,7 @@ export class Solver {
   }
 
   leftover(n: Node): number {
-    return this.deck.length - n.deckIndex + n.tray.length + (n.stash ? 1 : 0);
+    return this.deck.length - n.deckIndex + n.tray.length + (n.stash ? 1 : 0) + (n.stash2 ? 1 : 0);
   }
 
   /**
@@ -116,8 +119,9 @@ export class Solver {
     const out: Move[] = [];
     const isOnRoad = (i: number) => ((n.mask >> BigInt(i)) & 1n) === 1n;
     const deck = this.deck;
+    const two = (this.opts.stashSlots ?? 1) >= 2;
 
-    const place = (kind: TileKind, tray: TileKind[], deckIndex: number, stash: TileKind | null, from: MoveFrom) => {
+    const place = (kind: TileKind, tray: TileKind[], deckIndex: number, stash: TileKind | null, from: MoveFrom, stash2: TileKind | null = n.stash2) => {
       const p = placeTile(this.level, isOnRoad, n.head, n.dir, kind, n.time);
       if (!p.ok) return;
       let mask = n.mask;
@@ -127,7 +131,7 @@ export class Solver {
         kind,
         from,
         cells: p.cells.map((c) => c.idx),
-        next: { head: p.cells[p.cells.length - 1].idx, dir: p.newDir, mask, deckIndex, tray, stash, time },
+        next: { head: p.cells[p.cells.length - 1].idx, dir: p.newDir, mask, deckIndex, tray, stash, stash2, time },
       });
     };
 
@@ -142,19 +146,27 @@ export class Solver {
       if (deckIndex < deck.length) tray.push(deck[deckIndex++]);
       place(kind, tray, deckIndex, n.stash, 'tray');
       if (!this.opts.allowStash) return;
-      // Отложить: имеет смысл, только если в колоде ещё есть плитки.
-      if (n.stash === null && n.deckIndex < deck.length) {
-        out.push({ kind, from: 'toStash', cells: [], next: { ...n, tray, deckIndex, stash: kind } });
+      // Отложить (в первый пустой слот): имеет смысл, только если в колоде ещё есть плитки.
+      if (n.deckIndex < deck.length) {
+        if (n.stash === null) out.push({ kind, from: 'toStash', cells: [], next: { ...n, tray, deckIndex, stash: kind } });
+        else if (two && n.stash2 === null) out.push({ kind, from: 'toStash', cells: [], next: { ...n, tray, deckIndex, stash2: kind } });
       }
       // Обмен с отложенной плиткой, сразу за ним — постановка.
       if (withSwap && n.stash !== null && n.stash !== kind) {
         const swapped: Node = { ...n, tray: [...others, n.stash], stash: kind };
         for (const m of this.moves(swapped, false)) {
-          if (m.from === 'tray' || m.from === 'stash') out.push({ ...m, kind, from: 'swap' });
+          if (m.from === 'tray' || m.from === 'stash' || m.from === 'stash2') out.push({ ...m, kind, from: 'swap' });
+        }
+      }
+      if (two && withSwap && n.stash2 !== null && n.stash2 !== kind && n.stash2 !== n.stash) {
+        const swapped: Node = { ...n, tray: [...others, n.stash2], stash2: kind };
+        for (const m of this.moves(swapped, false)) {
+          if (m.from === 'tray' || m.from === 'stash' || m.from === 'stash2') out.push({ ...m, kind, from: 'swap2' });
         }
       }
     });
     if (n.stash) place(n.stash, n.tray, n.deckIndex, null, 'stash');
+    if (n.stash2 && n.stash2 !== n.stash) place(n.stash2, n.tray, n.deckIndex, n.stash, 'stash2', null);
     return out;
   }
 
@@ -205,7 +217,7 @@ export class Solver {
         if (r.best < 0) continue;
         let ff = r.ff;
         for (const c of m.cells) if (this.isFirefly[c]) ff++;
-        const score = r.best * 1000 + ff * 10 + (m.from === 'tray' ? 2 : m.from === 'stash' ? 1 : 0);
+        const score = r.best * 1000 + ff * 10 + (m.from === 'tray' ? 2 : m.from === 'stash' || m.from === 'stash2' ? 1 : 0);
         if (!best || score > best.score) best = { m, score };
       }
       if (!best) return [];
@@ -225,6 +237,7 @@ export function startNode(level: Level, deck: TileKind[]): Node {
     deckIndex: Math.min(TRAY_SIZE, deck.length),
     tray: deck.slice(0, TRAY_SIZE),
     stash: null,
+    stash2: null,
     time: timeStart(level),
   };
 }
@@ -241,6 +254,7 @@ export function nodeOf(state: GameState): Node {
     deckIndex: state.deckIndex,
     tray: state.tray.filter((t): t is TileKind => t !== null),
     stash: state.stash,
+    stash2: state.stash2,
     time: timeOf(state),
   };
 }
@@ -284,18 +298,18 @@ export function bestFrom(state: GameState): number {
     const m = nodeOf(state).mask;
     return geoMinTiles(state.level, state.level.tileSet!, state.head, state.dir, m) >= 0 ? 0 : -1;
   }
-  return new Solver(state.level, state.deck, { allowStash: true, countRoads: false }).explore(nodeOf(state)).best;
+  return new Solver(state.level, state.deck, { allowStash: true, countRoads: false, stashSlots: state.stashSlots }).explore(nodeOf(state)).best;
 }
 
 /** Подсказка: ход, после которого ещё можно выиграть с наибольшим запасом плиток. */
 export function findHint(state: GameState): Action | null {
   if (state.status !== 'playing') return null;
   if (isInfinite(state.level)) return infiniteHint(state);
-  const solver = new Solver(state.level, state.deck, { allowStash: state.level.allowStash, countRoads: false });
+  const solver = new Solver(state.level, state.deck, { allowStash: state.level.allowStash, countRoads: false, stashSlots: state.stashSlots });
   let bestScore = -1;
   let bestMove: Move | null = null;
   // При равенстве: поставить из лотка > отложить > поставить из слота > обменять.
-  const pref: Record<MoveFrom, number> = { tray: 3, toStash: 2, stash: 1, swap: 0 };
+  const pref: Record<MoveFrom, number> = { tray: 3, toStash: 2, stash: 1, stash2: 1, swap: 0, swap2: 0 };
   for (const m of solver.moves(nodeOf(state))) {
     const r = solver.explore(m.next);
     const score = r.best * 4 + pref[m.from];
@@ -306,9 +320,11 @@ export function findHint(state: GameState): Action | null {
   }
   if (!bestMove) return null;
   if (bestMove.from === 'stash') return { type: 'placeStash' };
+  if (bestMove.from === 'stash2') return { type: 'placeStash', from: 1 };
   const slot = state.tray.indexOf(bestMove.kind);
   if (bestMove.from === 'toStash') return { type: 'stash', slot };
   if (bestMove.from === 'swap') return { type: 'swap', slot };
+  if (bestMove.from === 'swap2') return { type: 'swap', slot, with: 1 };
   return { type: 'place', slot };
 }
 

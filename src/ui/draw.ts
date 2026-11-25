@@ -1,7 +1,7 @@
 // Вся графика рисуется фигурами в коде: иконки плиток, кнопки, Lumo, свечение.
 
 import Phaser from 'phaser';
-import { AVATARS, avatarById, type Avatar } from '../core/avatars';
+import { AVATARS, avatarById, type Avatar, type LanternShape } from '../core/avatars';
 import { addDust, addFog, addVignette, createFxTextures } from './fx';
 import { keepFitted, type ViewRect } from './viewport';
 import type { TileKind } from '../core/types';
@@ -115,13 +115,24 @@ export function drawTileIcon(g: G, kind: TileKind, s: number, color: number) {
 // ---------------------------------------------------------------------------
 // Иконки интерфейса
 
-export type IconName = 'restart' | 'undo' | 'menu' | 'stats' | 'sound' | 'mute' | 'play' | 'lock' | 'copy' | 'back' | 'trash' | 'bulb' | 'skip' | 'plus' | 'cloud' | 'user' | 'help' | 'vibrate' | 'novibrate';
+export type IconName = 'rotate' | 'restart' | 'undo' | 'menu' | 'stats' | 'sound' | 'mute' | 'play' | 'lock' | 'copy' | 'back' | 'trash' | 'bulb' | 'skip' | 'plus' | 'cloud' | 'user' | 'help' | 'vibrate' | 'novibrate';
 
 export function drawIcon(g: G, name: IconName, s: number, color: number) {
   const lw = s * 0.12;
   g.lineStyle(lw, color, 1);
   g.fillStyle(color, 1);
   switch (name) {
+    case 'rotate': {
+      // Плитка и стрелка по часовой стрелке вокруг неё.
+      g.strokeRoundedRect(-s * 0.18, -s * 0.18, s * 0.36, s * 0.36, s * 0.06);
+      const r = s * 0.38;
+      g.beginPath();
+      g.arc(0, 0, r, -Math.PI * 0.9, Math.PI * 0.15, false);
+      g.strokePath();
+      const a = Math.PI * 0.15;
+      arrowHead(g, Math.cos(a) * r - s * 0.02, Math.sin(a) * r + s * 0.06, a + Math.PI * 0.55, s * 0.24);
+      break;
+    }
     case 'restart': {
       const r = s * 0.3;
       g.beginPath();
@@ -333,6 +344,18 @@ export class Button extends Phaser.GameObjects.Container {
     this.redraw();
   }
 
+  setLabel(label: string) {
+    this.labelT?.setText(label);
+    this.redraw();
+  }
+
+  /** Подсветка «режим включён» (например, «Поворот плитки»). */
+  setPrimary(v: boolean) {
+    this.opts.primary = v;
+    this.labelT?.setColor(v ? '#2a1a05' : C.text);
+    this.redraw();
+  }
+
   setEnabled(v: boolean) {
     this.enabledState = v;
     this.setAlpha(v ? 1 : 0.35);
@@ -435,13 +458,18 @@ export function drawLumo(g: G, s: number, avatar: Avatar = AVATARS[0]) {
         true,
       );
       break;
+    case 'crown':
+      g.fillRoundedRect(lx - s * 0.11, ly - s * 0.02, s * 0.22, s * 0.11, s * 0.03);
+      for (const dx of [-0.09, 0, 0.09]) g.fillTriangle(lx + (dx - 0.05) * s, ly, lx + (dx + 0.05) * s, ly, lx + dx * s, ly - s * 0.13);
+      break;
   }
   g.fillStyle(0xffffff, 0.9);
   g.fillCircle(lx, ly, s * 0.04);
 }
 
-export function createLumo(scene: Phaser.Scene, size: number, avatarId = 0, animate = true): Phaser.GameObjects.Container {
-  const avatar = avatarById(avatarId);
+/** Lumo: avatarId — костюм, lantern — форма фонаря из магазина (иначе — как у костюма). */
+export function createLumo(scene: Phaser.Scene, size: number, avatarId = 0, animate = true, lantern?: LanternShape): Phaser.GameObjects.Container {
+  const avatar = lantern ? { ...avatarById(avatarId), lantern } : avatarById(avatarId);
   const c = scene.add.container(0, 0);
   const glow = scene.add.image(size * 0.42, -size * 0.12, 'glow').setTint(C.lanternOn).setBlendMode(Phaser.BlendModes.ADD);
   glow.setScale((size * 1.4) / 128).setAlpha(0.7);
@@ -520,7 +548,7 @@ export function createAvatarBadge(
   y: number,
   r: number,
   avatarId: number,
-  opts: { locked?: boolean; selected?: boolean; animate?: boolean } = {},
+  opts: { locked?: boolean; selected?: boolean; animate?: boolean; lockLabel?: string; lantern?: LanternShape } = {},
 ): Phaser.GameObjects.Container {
   const avatar = avatarById(avatarId);
   const c = scene.add.container(x, y);
@@ -532,7 +560,7 @@ export function createAvatarBadge(
   bg.lineStyle(Math.max(4, r * 0.07), opts.selected ? C.primary : C.cardEdge, 1);
   bg.strokeCircle(0, 0, r);
   c.add(bg);
-  const lumo = createLumo(scene, r * 1.45, avatar.id, opts.animate ?? false).setPosition(-r * 0.08, r * 0.12);
+  const lumo = createLumo(scene, r * 1.45, avatar.id, opts.animate ?? false, opts.lantern).setPosition(-r * 0.08, r * 0.12);
   c.add(lumo);
   if (opts.locked) {
     lumo.setAlpha(0.25);
@@ -540,7 +568,7 @@ export function createAvatarBadge(
     drawIcon(lg, 'lock', r * 0.7, C.icon);
     lg.setPosition(0, -r * 0.12);
     c.add(lg);
-    c.add(text(scene, 0, r * 0.5, `★ ${avatar.stars}`, Math.round(r * 0.34), '#ffd36b'));
+    if (opts.lockLabel) c.add(text(scene, 0, r * 0.5, opts.lockLabel, Math.round(r * 0.3), '#ffd36b'));
   }
   return c;
 }

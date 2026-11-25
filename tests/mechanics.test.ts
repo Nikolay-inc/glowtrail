@@ -152,3 +152,52 @@ describe('цель «светлячки»', () => {
     expect(() => level(['FE.', '.S.'], ['straight'], { goal: 'fireflies' })).toThrow();
   });
 });
+
+describe('прокачка: второй слот «отложить», поворот плитки', () => {
+  it('второй слот: отложить две плитки, поставить из второго, обменять', () => {
+    const l = level(['.E.', '...', '...', '.S.'], ['left', 'right', 'straight', 'straight', 'straight', 'straight']);
+    let s = createGame(l, l.deck, 1, { stashSlots: 2 });
+    s = applyAction(s, { type: 'stash', slot: 0 }); // left → слот 1
+    s = applyAction(s, { type: 'stash', slot: 1 }); // right → слот 2
+    expect([s.stash, s.stash2]).toEqual(['left', 'right']);
+    // Третий раз отложить некуда.
+    expect(applyAction(s, { type: 'stash', slot: 2 })).toBe(s);
+    s = applyAction(s, { type: 'swap', slot: 2, with: 1 });
+    expect(s.stash2).toBe('straight');
+    s = applyAction(s, { type: 'placeStash', from: 1 });
+    expect(s.stash2).toBeNull();
+    expect(s.road).toHaveLength(2);
+  });
+
+  it('с одним слотом второй недоступен', () => {
+    const l = level(['.E.', '...', '.S.'], ['left', 'right', 'straight', 'straight']);
+    let s = createGame(l);
+    s = applyAction(s, { type: 'stash', slot: 0 });
+    expect(applyAction(s, { type: 'stash', slot: 1 })).toBe(s);
+  });
+
+  it('решатель и подсказка пользуются вторым слотом', () => {
+    // Узкий коридор: повороты некуда ставить, «прямо» лежат глубоко в колоде — с одним слотом до них не добраться.
+    const l = level(['E', '.', '.', '.', 'S'], ['left', 'right', 'left', 'right', 'straight', 'straight2', 'straight']);
+    const one = createGame(l);
+    const two = createGame(l, l.deck, 1, { stashSlots: 2 });
+    expect(findHint(one)).toBeNull();
+    let s = two;
+    for (let i = 0; i < 8 && s.status === 'playing'; i++) s = applyAction(s, findHint(s)!);
+    expect(s.status).toBe('won');
+  });
+
+  it('поворот плитки: прямо → направо → налево → прямо, тратит заряд', () => {
+    const l = level(['.E.', '.S.', '...'], ['straight', 'straight2', 'bridge']);
+    let s = createGame(l, l.deck, 1, { rotations: 2 });
+    s = applyAction(s, { type: 'rotate', slot: 0 });
+    expect(s.tray[0]).toBe('right');
+    expect(s.rotations).toBe(1);
+    s = applyAction(s, { type: 'rotate', slot: 0 });
+    expect(s.tray[0]).toBe('left');
+    expect(applyAction(s, { type: 'rotate', slot: 0 })).toBe(s); // зарядов нет
+    // «Прямо x2» не поворачивается.
+    expect(applyAction(createGame(l, l.deck, 1, { rotations: 1 }), { type: 'rotate', slot: 1 }).tray[1]).toBe('straight2');
+  });
+
+});

@@ -3,70 +3,73 @@
   "name": "Гаснущий фонарь",
   "grid": [
     "......",
-    "E.....",
     "......",
-    "....7.",
-    ".....7",
+    "S.....",
     "......",
-    "....S."
+    "......",
+    ".....E",
+    "...3.."
   ],
-  "startDir": "N",
+  "startDir": "E",
   "deck": [
-    "right",
+    "straight",
     "left",
+    "straight2",
+    "straight",
+    "right",
     "straight",
     "right",
     "left",
     "left",
-    "left",
     "straight",
-    "straight",
-    "left",
     "right",
+    "left",
     "straight2"
   ],
   "stars": {
-    "two": 1,
-    "three": 1
+    "two": 2,
+    "three": 3
   },
   "easeDecks": [
     [
+      "right",
+      "straight",
+      "left",
       "straight2",
+      "straight",
       "right",
-      "left",
       "straight",
       "right",
       "left",
       "left",
-      "left",
       "straight",
-      "straight",
-      "left",
       "right",
+      "left",
       "straight2"
     ],
     [
+      "right",
+      "straight",
+      "left",
       "straight2",
+      "straight",
       "right",
+      "straight2",
+      "straight",
+      "right",
+      "left",
       "left",
       "straight",
       "right",
       "left",
-      "right",
-      "left",
-      "left",
-      "straight",
-      "straight",
-      "left",
-      "right",
       "straight2"
     ]
   ],
   "metrics": {
-    "rating": 4.5,
-    "roads": 12,
-    "minTiles": 10,
-    "reserve": 2,
-    "trap": 0.238
+    "rating": 3,
+    "roads": 51,
+    "minTiles": 9,
+    "reserve": 4,
+    "trap": 0.212
   }
 }

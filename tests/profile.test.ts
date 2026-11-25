@@ -27,7 +27,7 @@ describe('сохранение v3: профиль', () => {
     const backend = memoryBackend();
     SaveService.setBackend(backend);
     const p = getProfile();
-    expect(SAVE_VERSION).toBe(4);
+    expect(SAVE_VERSION).toBe(5);
     expect(p.playerId).toMatch(UUID);
     expect(p).toMatchObject({ name: null, avatar: 0, nameAsked: false, hintsUsed: 0, dayStreak: 0 });
     // Сразу сохранён: после перезагрузки тот же playerId.
@@ -45,7 +45,7 @@ describe('сохранение v3: профиль', () => {
     });
     SaveService.setBackend(backend);
     const d = SaveService.load();
-    expect(d.version).toBe(4);
+    expect(d.version).toBe(SAVE_VERSION);
     expect(d.progress.stars).toEqual({ 'valley-01': 3, 'valley-02': 2, 'valley-03': 1 });
     expect(d.profile.playerId).toMatch(UUID);
     expect(d.profile.hintsUsed).toBe(2);
@@ -62,7 +62,7 @@ describe('сохранение v3: профиль', () => {
       }),
     );
     const d = SaveService.load();
-    expect(d.version).toBe(4);
+    expect(d.version).toBe(SAVE_VERSION);
     expect(d.progress.unlocked).toEqual(['valley-01', 'valley-02', 'valley-03']);
     expect(d.profile.hintsUsed).toBe(1);
   });
@@ -115,12 +115,14 @@ describe('аватарки', () => {
     expect(isAvatarUnlocked(4, 10)).toBe(true);
   });
 
-  it('закрытую аватарку выбрать нельзя, открытую — можно', () => {
+  it('в окне знакомства — один из 4 стартовых костюмов, остальные — только купленные', () => {
     expect(setAvatar(5)).toBe(false);
     expect(setAvatar(2)).toBe(true);
     expect(getProfile().avatar).toBe(2);
+    expect(SaveService.load().economy.skins.equipped.costume).toBe('costume-2');
     SaveService.update((d) => {
       for (let i = 1; i <= 7; i++) d.progress.stars[i] = 3; // 21 звезда
+      d.economy.skins.owned.push('costume-5');
     });
     expect(totalStars()).toBe(21);
     expect(levelsPassed()).toBe(7);

@@ -2,59 +2,74 @@
   "id": "valley-21",
   "name": "Поворотный мост",
   "grid": [
+    "...S.",
     ".....",
-    "#....",
     ".....",
-    "S....",
     ".....",
-    "~~|-~",
-    "#..E."
+    "~~|~~",
+    ".....",
+    "...E."
   ],
-  "startDir": "E",
+  "startDir": "S",
   "deck": [
-    "right",
+    "straight",
     "right",
     "straight",
-    "straight2",
     "straight",
     "left",
+    "left",
+    "straight",
+    "right",
+    "left",
+    "straight",
     "straight2",
-    "right"
+    "straight2",
+    "left"
   ],
   "stars": {
     "two": 2,
-    "three": 3
+    "three": 4
   },
   "easeDecks": [
     [
-      "left",
-      "right",
+      "straight",
       "right",
       "straight",
-      "straight2",
       "straight",
       "left",
+      "bridge",
+      "left",
+      "straight",
+      "right",
+      "left",
+      "straight",
       "straight2",
-      "right"
+      "straight2",
+      "left"
     ],
     [
-      "left",
-      "right",
-      "right",
       "straight",
-      "straight2",
+      "right",
       "straight",
       "straight",
       "left",
+      "right",
+      "bridge",
+      "left",
+      "straight",
+      "right",
+      "left",
+      "straight",
       "straight2",
-      "right"
+      "straight2",
+      "left"
     ]
   ],
   "metrics": {
-    "rating": 3,
-    "roads": 3,
-    "minTiles": 4,
-    "reserve": 4,
-    "trap": 0.275
+    "rating": 2.5,
+    "roads": 18,
+    "minTiles": 8,
+    "reserve": 5,
+    "trap": 0.157
   }
 }

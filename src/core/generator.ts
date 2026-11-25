@@ -52,7 +52,7 @@ const pick = <T>(r: Rand, xs: readonly T[]): T => xs[Math.floor(r() * xs.length)
 const LETTER: Record<Dir, LevelData['startDir']> = { 0: 'N', 1: 'E', 2: 'S', 3: 'W' };
 
 /** Почему кандидат отброшен (для статистики генератора). */
-export type Reject = 'layout' | 'unsolvable' | 'path' | 'oneRoad' | 'boring' | 'needsStash' | 'fireflies' | 'deck' | 'tooBig' | 'notEssential';
+export type Reject = 'layout' | 'unsolvable' | 'path' | 'oneRoad' | 'boring' | 'needsStash' | 'fireflies' | 'deck' | 'tooBig' | 'notEssential' | 'tooHard';
 
 /** Сгенерированное поле. */
 export interface GenGrid {
@@ -272,6 +272,8 @@ export interface GenFilter {
   minTrap: number;
   /** Минимум разных решений (1 решение — отбрасываем). */
   minRoads: number;
+  /** Максимальный рейтинг (уровни-знакомства и лёгкие). */
+  maxRating?: number;
 }
 
 export const DEFAULT_FILTER: GenFilter = { minTrap: 0.12, minRoads: 2 };
@@ -318,6 +320,7 @@ export function generateOne(r: Rand, p: GenParams, filter: GenFilter = DEFAULT_F
   if (rep.roads < filter.minRoads) return 'oneRoad';
   if (!rep.solvableWithoutStash) return 'needsStash';
   if (rep.metrics.trap < filter.minTrap) return 'boring';
+  if (filter.maxRating !== undefined && rep.metrics.rating > filter.maxRating) return 'tooHard';
   if (level.goal === 'classic' && level.fireflies.length && rep.maxFireflies < level.fireflies.length) return 'fireflies';
   try {
     if (p.features.includes('fade') && !essential(level, ['fade'], rep.roads)) return 'notEssential';

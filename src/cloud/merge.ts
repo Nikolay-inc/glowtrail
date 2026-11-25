@@ -2,15 +2,18 @@
 // В облако уходят профиль и прогресс; лог событий остаётся на устройстве (это аналитика плейтеста).
 
 import { normalizeProgress, SAVE_VERSION, type Profile, type Progress, type SaveData } from '../save/SaveService';
+import { economyFromProgress, mergeEconomy, normalizeEconomy, type Economy } from '../core/economy';
 
 export interface CloudPayload {
   version: number;
   profile: Profile;
   progress: Progress;
+  /** Валюты, деревня, прокачка, скины (с версии 5; у старых облачных сохранений нет). */
+  economy?: Economy;
 }
 
 export function toCloudPayload(save: SaveData): CloudPayload {
-  return { version: SAVE_VERSION, profile: { ...save.profile }, progress: { ...save.progress } };
+  return { version: SAVE_VERSION, profile: { ...save.profile }, progress: { ...save.progress }, economy: JSON.parse(JSON.stringify(save.economy)) };
 }
 
 function maxRecord(a: Record<string, number>, b: Record<string, number>): Record<string, number> {
@@ -61,7 +64,12 @@ export function mergeSaves(local: SaveData, cloud: CloudPayload | null): SaveDat
     dayStreak: later.dayStreak,
     bestDayStreak: Math.max(l.bestDayStreak, c.bestDayStreak),
   };
-  return { ...local, profile, progress };
+  // Экономика: облако старой версии без раздела — монеты за его звёзды начисляем как при миграции.
+  const cloudEconomy = cloud.economy ? normalizeEconomy(cloud.economy) : economyFromProgress(cp.stars, c.avatar);
+  const economy = mergeEconomy(normalizeEconomy(local.economy), cloudEconomy);
+  // Надетый костюм — как аватарка профиля.
+  if (economy.skins.owned.includes(`costume-${profile.avatar}`)) economy.skins.equipped.costume = `costume-${profile.avatar}`;
+  return { ...local, profile, progress, economy };
 }
 
 /** Есть ли у гостя что терять (чтобы предложить войти и не потерять прогресс). */

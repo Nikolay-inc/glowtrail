@@ -2,71 +2,77 @@
   "id": "valley-22",
   "name": "Мельница",
   "grid": [
-    "..E...",
+    "....E.",
+    "~~~--~",
     "......",
-    "~~||~~",
     "......",
     "......",
-    "..F...",
-    ".....S"
+    "......",
+    "..SF.."
   ],
   "startDir": "N",
   "deck": [
     "straight2",
     "straight2",
-    "straight",
     "left",
     "right",
-    "straight2",
-    "straight",
     "right",
+    "straight",
+    "left",
+    "left",
+    "straight",
+    "straight",
     "straight2",
     "left",
-    "right",
-    "straight2"
+    "straight2",
+    "right"
   ],
   "stars": {
-    "two": 3,
-    "three": 5
+    "two": 4,
+    "three": 7
   },
   "easeDecks": [
     [
       "straight2",
       "straight2",
-      "straight",
       "left",
       "right",
-      "left",
-      "straight2",
+      "right",
       "straight",
       "right",
+      "left",
+      "left",
+      "straight",
+      "straight",
       "straight2",
       "left",
-      "right",
-      "straight2"
+      "straight2",
+      "right"
     ],
     [
-      "straight2",
-      "straight2",
       "straight",
-      "left",
-      "right",
-      "left",
-      "right",
       "straight2",
+      "straight2",
+      "left",
+      "right",
+      "right",
       "straight",
       "right",
+      "left",
+      "left",
+      "straight",
+      "straight",
       "straight2",
       "left",
-      "right",
-      "straight2"
+      "straight2",
+      "right"
     ]
   ],
   "metrics": {
-    "rating": 2.9,
-    "roads": 6,
+    "rating": 2.4,
+    "roads": 19,
     "minTiles": 6,
-    "reserve": 6,
-    "trap": 0.245
+    "reserve": 8,
+    "trap": 0.215
   }
 }

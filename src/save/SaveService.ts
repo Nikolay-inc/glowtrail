@@ -2,7 +2,9 @@
 // Сейчас данные лежат в localStorage; чтобы перейти на облако, достаточно подменить бэкенд
 // (setBackend) на реализацию с тем же интерфейсом — остальной код игры не меняется.
 
-export const SAVE_VERSION = 4;
+import { defaultEconomy, economyFromProgress, normalizeEconomy, type Economy } from '../core/economy';
+
+export const SAVE_VERSION = 5;
 export const SAVE_KEY = 'glowtrail.save';
 /** Старый формат (до SaveService): прогресс и лог лежали в двух ключах. */
 export const LEGACY_KEYS = { progress: 'glowtrail.progress.v1', log: 'glowtrail.log.v1' } as const;
@@ -55,7 +57,7 @@ export interface Profile {
   bestDayStreak: number;
 }
 
-export type EventType = 'session' | 'start' | 'win' | 'lose' | 'abandon' | 'hint_used' | 'extra_tiles' | 'auto_ease' | 'level_skipped' | 'signup' | 'login' | 'logout' | 'auth_prompt' | 'tutorial_step' | 'tip_shown' | 'drag_place' | 'tap_place' | 'door_locked_attempt' | 'fireflies_collected' | 'tile_jump_used' | 'bridge_rotated_blocked' | 'lantern_expired';
+export type EventType = 'session' | 'start' | 'win' | 'lose' | 'abandon' | 'hint_used' | 'extra_tiles' | 'auto_ease' | 'level_skipped' | 'signup' | 'login' | 'logout' | 'auth_prompt' | 'tutorial_step' | 'tip_shown' | 'drag_place' | 'tap_place' | 'door_locked_attempt' | 'fireflies_collected' | 'tile_jump_used' | 'bridge_rotated_blocked' | 'lantern_expired' | 'currency_earn' | 'currency_spend' | 'village_restore' | 'upgrade_buy' | 'skin_buy' | 'daily_reward';
 
 export interface LogEvent {
   /** Время события, ISO. */
@@ -94,12 +96,19 @@ export interface LogEvent {
   goal_type?: string;
   /** Номер плитки на поле (bridge_rotated_blocked, lantern_expired, tile_jump_used). */
   tile?: number;
+  /** Экономика: валюта (coins / light), сколько, за что и что куплено/восстановлено. */
+  currency?: 'coins' | 'light';
+  amount?: number;
+  source?: string;
+  item?: string;
 }
 
 export interface SaveData {
   version: number;
   profile: Profile;
   progress: Progress;
+  /** Валюты, деревня, прокачка, скины, подсказки, ежедневная награда (src/core/economy.ts). */
+  economy: Economy;
   log: LogEvent[];
 }
 
@@ -207,7 +216,7 @@ export const defaultProfile = (): Profile => ({
   bestDayStreak: 0,
 });
 
-export const emptySave = (): SaveData => ({ version: SAVE_VERSION, profile: defaultProfile(), progress: defaultProgress(), log: [] });
+export const emptySave = (): SaveData => ({ version: SAVE_VERSION, profile: defaultProfile(), progress: defaultProgress(), economy: defaultEconomy(), log: [] });
 
 function parse(raw: string | null): unknown {
   if (!raw) return null;
@@ -284,7 +293,9 @@ function normalizeLog(raw: unknown): LogEvent[] {
  * v2 — один объект { version: 2, progress, log }.
  * v3 — добавлен раздел profile (playerId, имя, аватарка, серия дней, подсказки).
  * v4 — прогресс и лог по id уровня («valley-07») вместо номера; открытые уровни — список id; светлячки.
- * Шаги идут цепочкой: v1 → v2 → v3 → v4, поэтому любое старое сохранение доходит до текущей версии.
+ * v5 — раздел economy: монеты (за уже пройденные уровни — задним числом), деревня, прокачка, скины
+ *      (аватарки, открытые звёздами, остаются костюмами), подсказки, ежедневная награда.
+ * Шаги идут цепочкой: v1 → … → v5, поэтому любое старое сохранение доходит до текущей версии.
  */
 export function migrate(raw: unknown, legacy?: { progress: unknown; log: unknown }): SaveData {
   let data: Record<string, unknown> | null = null;
@@ -303,10 +314,23 @@ export function migrate(raw: unknown, legacy?: { progress: unknown; log: unknown
     // v3 → v4: номера уровней 1…10 → id первого мира «valley-01»…«valley-10» (уровни остались на местах).
     data = { ...data, version: 4, progress: normalizeProgress(data.progress), log: normalizeLog(data.log) };
   }
+  if ((data.version as number) < 5) {
+    // v4 → v5: экономика. Монеты за уже пройденные уровни начисляются задним числом, свет считается из звёзд сам.
+    const progress = normalizeProgress(data.progress);
+    const profile = normalizeProfile(data.profile);
+    data = { ...data, version: 5, economy: economyFromProgress(progress.stars, profile.avatar) };
+  }
+  const profile = normalizeProfile(data.profile);
+  const economy = normalizeEconomy(data.economy);
+  // Аватарка профиля — это надетый костюм.
+  const costume = `costume-${profile.avatar}`;
+  if (economy.skins.owned.includes(costume)) economy.skins.equipped.costume = costume;
+  else profile.avatar = Number(economy.skins.equipped.costume.slice(-1)) || 0;
   return {
     version: SAVE_VERSION,
-    profile: normalizeProfile(data.profile),
+    profile,
     progress: normalizeProgress(data.progress),
+    economy,
     log: normalizeLog(data.log),
   };
 }

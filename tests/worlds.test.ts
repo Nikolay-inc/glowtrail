@@ -7,7 +7,7 @@ import { geoMinBounded, geoMinTiles } from '../src/core/geo';
 import { solutionOf, solveLevel, TooManyStates } from '../src/core/solver';
 import type { LevelData, TileKind } from '../src/core/types';
 import { isChallenge, LEVELS, levelById, nextLevelOf, numberInWorld, WORLDS } from '../src/levels/index';
-import { BREATHER_MAX_RATING, BREATHER_MIN_ROADS, MAX_H, MAX_W, NOVELTY, VALLEY_PLAN } from '../src/levels/curve';
+import { BREATHER_MAX_RATING, BREATHER_MIN_ROADS, EASY_MAX_RATING, EASY_MIN_ROADS, mustBeEasy, MAX_H, MAX_W, NOVELTY, VALLEY_PLAN } from '../src/levels/curve';
 import { featuresOf } from '../src/core/generator';
 
 function dataOf(l: ReturnType<typeof parseLevel>): LevelData {
@@ -213,6 +213,10 @@ describe('мир «Долина»', () => {
       expect(l.goal, l.id).toBe(slot.goal ?? 'classic');
       const f = featuresOf(l);
       for (const need of slot.needs) expect(f, `${l.id} нужен ${need}`).toContain(need);
+      if (mustBeEasy(slot)) {
+        expect(l.metrics!.rating, `${l.id} лёгкий/знакомство`).toBeLessThanOrEqual(EASY_MAX_RATING);
+        expect(l.metrics!.roads, `${l.id} лёгкий/знакомство`).toBeGreaterThanOrEqual(EASY_MIN_ROADS);
+      }
       if (slot.role === 'breather') {
         expect(l.metrics!.rating, l.id).toBeLessThanOrEqual(BREATHER_MAX_RATING);
         expect(l.metrics!.roads, l.id).toBeGreaterThanOrEqual(BREATHER_MIN_ROADS);

@@ -11,7 +11,7 @@ import { featuresOf } from '../src/core/generator';
 import type { Level } from '../src/core/types';
 import { portalSides } from '../src/core/portal';
 import { TIP_TEXT } from '../src/tutorial';
-import { BREATHER_MAX_RATING, BREATHER_MIN_ROADS, FIREFLY_FROM, MAX_H, MAX_W, NOVELTY, RATING_TOLERANCE, slotOf, VALLEY_PLAN, type Role } from '../src/levels/curve';
+import { BREATHER_MAX_RATING, BREATHER_MIN_ROADS, EASY_MAX_RATING, EASY_MIN_ROADS, mustBeEasy, FIREFLY_FROM, MAX_H, MAX_W, NOVELTY, RATING_TOLERANCE, slotOf, VALLEY_PLAN, type Role } from '../src/levels/curve';
 
 /** Целевая кривая обучающих уровней 1–10. */
 interface Target {
@@ -152,9 +152,12 @@ for (const [i, level] of LEVELS.entries()) {
       if (vertical || !horizontal) warn.push('в арку должно быть можно войти только сбоку');
     }
   } else if (slot) {
-    plan = `${ROLE_RU[slot.role]} ~${slot.rating}${slot.goal === 'fireflies' ? ', светлячки' : ''}`;
+    plan = `${slot.intro ? 'знакомство' : ROLE_RU[slot.role]} ~${slot.rating}${slot.goal === 'fireflies' ? ', светлячки' : ''}`;
     if (r.roads < 2) err.push('одно решение — по плану мира таких уровней нет');
     if (level.goal !== (slot.goal ?? 'classic')) warn.push(`цель ${level.goal}, по плану ${slot.goal ?? 'classic'}`);
+    if (mustBeEasy(slot) && (m.rating > EASY_MAX_RATING || r.roads < EASY_MIN_ROADS)) {
+      err.push(`${slot.intro ? 'знакомство с механикой' : 'лёгкий'} — нужен рейтинг ≤ ${EASY_MAX_RATING} и решений ≥ ${EASY_MIN_ROADS} (сейчас ${m.rating} и ${r.roads})`);
+    }
     if (slot.role === 'breather' && (m.rating > BREATHER_MAX_RATING || r.roads < BREATHER_MIN_ROADS)) {
       warn.push(`передышка должна быть лёгкой: рейтинг ≤ ${BREATHER_MAX_RATING} и решений ≥ ${BREATHER_MIN_ROADS} (сейчас ${m.rating} и ${r.roads})`);
     }

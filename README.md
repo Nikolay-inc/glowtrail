@@ -17,6 +17,7 @@ npm run dev
 Откроется http://localhost:5173 (`?level=N` открывает уровень сразу).
 
 - `npm test` — тесты (Vitest)
+- `npm run sim-economy` — симуляция экономики первых 2 часов игры
 - `npm run verify` — таблица метрик и проверка всех уровней и кривой сложности
 - `npm run ease` — пересчитать колоды облегчения и метрики уровней (после изменения уровня)
 - `npm run gen -- --count 300 --size 5x6 --features lantern,rock,water,firefly,jump,turnbridge,fade --seed 1 [--goal fireflies]` — сгенерировать кандидатов в уровни (`generated/`)

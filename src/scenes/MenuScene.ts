@@ -1,20 +1,20 @@
 // Главное меню — карта мира: вертикальная тропинка с кружками уровней через долину (холмы, деревья, речка,
 // дома без огней — их «зажжём» позже). Пройденные уровни светятся, под ними звёзды; текущий пульсирует,
 // рядом стоит Lumo; «испытания» — кружки побольше. Карта прокручивается пальцем, колесом и стрелками;
-// при открытии — прокручена к текущему уровню. Сверху — профиль, мир и «Войти», снизу — статистика,
-// звук, «Играть», вибрация, «Как играть».
+// при открытии — прокручена к текущему уровню. Сверху — профиль, мир, валюты (монеты и свет) и «Войти»,
+// снизу — «Играть» и вкладки Карта / Деревня / Магазин / Профиль. Награда дня — окном при открытии.
 
 import Phaser from 'phaser';
+import { addTabBar, addWallet, showDailyDialog } from '../ui/meta';
+import { dailyAvailable } from '../meta';
 import { currentView, stretchLayout, type ViewRect } from '../ui/viewport';
-import { isVibrationOn, setVibration } from '../haptics';
 import { isChallenge, LEVELS, numberInWorld, WORLDS, type World } from '../levels/index';
 import type { Level } from '../core/types';
-import { isMuted, setMuted, sfx } from '../audio';
+import { sfx } from '../audio';
 import { isUnlocked, loadProgress, type Progress } from '../storage';
 import { displayName, getProfile } from '../profile';
 import { showNameDialog } from '../ui/NameDialog';
-import { ALL_RULES, canShowModal, isTutorialDone, modalClosed, modalOpened } from '../tutorial';
-import { t } from '../strings';
+import { canShowModal, isTutorialDone, modalClosed, modalOpened } from '../tutorial';
 import { Account } from '../cloud/account';
 import { openAuthDialog } from '../ui/AuthDialog';
 import { addBackground, Button, createAvatarBadge, createLumo, drawFireflyIcon, drawIcon, drawStar, text } from '../ui/draw';
@@ -72,7 +72,8 @@ export class MenuScene extends Phaser.Scene {
     const next = this.nextLevel(progress);
 
     this.hudTop = topY + 200;
-    this.hudBottom = rowY - 190;
+    // Снизу — кнопка «Играть» и панель вкладок (Карта / Деревня / Магазин / Профиль).
+    this.hudBottom = rowY - 330;
     this.buildMap(world, progress, next);
 
     // --- Верхняя панель: затемнение, профиль, мир и звёзды, вход
@@ -85,9 +86,9 @@ export class MenuScene extends Phaser.Scene {
       hud.fillGradientStyle(C.bgBottom, C.bgBottom, C.bgBottom, C.bgBottom, 0.94, 0.94, 0, 0);
       hud.fillRect(v.x, topY + 120, v.w, 110);
       hud.fillGradientStyle(C.bgBottom, C.bgBottom, C.bgBottom, C.bgBottom, 0, 0, 0.94, 0.94);
-      hud.fillRect(v.x, rowY - 190, v.w, 110);
+      hud.fillRect(v.x, rowY - 330, v.w, 110);
       hud.fillStyle(C.bgBottom, 0.94);
-      hud.fillRect(v.x, rowY - 80, v.w, v.y + v.h - (rowY - 80));
+      hud.fillRect(v.x, rowY - 220, v.w, v.y + v.h - (rowY - 220));
     };
     paintHud(currentView(this));
     // Окно изменилось (поворот планшета, браузер): камера уже подогнана (keepFitted), перерисуем панели.
@@ -109,22 +110,10 @@ export class MenuScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true });
     nameT.on('pointerup', () => this.go('Profile'));
 
-    // Название мира и звёзды под ним.
-    const stars = world.levels.reduce((s, l) => s + (progress.stars[l.id] ?? 0), 0);
-    const ff = world.levels.reduce((s, l) => s + (progress.fireflies[l.id] ?? 0), 0);
-    const ffTotal = world.levels.reduce((s, l) => s + l.fireflies.length, 0);
+    // Название мира и под ним валюты: монеты и свет.
     const title = text(this, W / 2, topY + 105, world.name, 64).setDepth(21);
     title.setShadow(0, 0, '#ffc65c', 24, true, true);
-    const sub = this.add.graphics().setDepth(21);
-    const starsT = text(this, 0, topY + 170, `${stars}/${world.levels.length * 3}`, 36, C.text).setOrigin(0, 0.5).setDepth(21);
-    const ffT = text(this, 0, topY + 170, ffTotal ? `${ff}/${ffTotal}` : '', 36, C.text).setOrigin(0, 0.5).setDepth(21);
-    const rowW = 50 + starsT.width + (ffTotal ? 70 + 50 + ffT.width : 0);
-    let x = W / 2 - rowW / 2;
-    drawStar(sub, x + 20, topY + 168, 20, C.star);
-    starsT.setX(x + 50);
-    x += 50 + starsT.width + 70;
-    if (ffTotal) drawFireflyIcon(sub, x + 18, topY + 170, 18, true);
-    ffT.setX(x + 50);
+    addWallet(this, W / 2, topY + 175);
 
     const loggedIn = !!Account.user;
     const authBtn = new Button(this, loggedIn ? W - 100 : W - 150, topY, {
@@ -142,47 +131,10 @@ export class MenuScene extends Phaser.Scene {
     const offAuth = Account.on((e) => e.type === 'changed' && this.scene.isActive() && this.scene.restart());
     this.events.once('shutdown', offAuth);
 
-    // --- Нижняя панель
-    const bottom: Phaser.GameObjects.Container[] = [];
-    bottom.push(new Button(this, W / 2 - 420, rowY, { w: 140, h: 130, icon: 'stats', onClick: () => this.go('Stats') }));
-    const sound = new Button(this, W / 2 - 260, rowY, {
-      w: 140,
-      h: 130,
-      icon: isMuted() ? 'mute' : 'sound',
-      onClick: () => {
-        setMuted(!isMuted());
-        sound.setIcon(isMuted() ? 'mute' : 'sound');
-        sfx.tap();
-      },
-    });
-    bottom.push(sound);
+    // --- Нижняя панель: «Играть» и вкладки. Звук, вибрация, статистика и «Как играть» — в профиле.
     const playNext = () => this.play(this.nodes[next].index);
-    bottom.push(new Button(this, W / 2, rowY, { w: 320, h: 150, icon: 'play', label: 'Играть', primary: true, fontSize: 56, onClick: playNext }));
-    const vibro = new Button(this, W / 2 + 260, rowY, {
-      w: 140,
-      h: 130,
-      icon: isVibrationOn() ? 'vibrate' : 'novibrate',
-      onClick: () => {
-        setVibration(!isVibrationOn());
-        vibro.setIcon(isVibrationOn() ? 'vibrate' : 'novibrate');
-        sfx.tap();
-      },
-    });
-    bottom.push(vibro);
-    bottom.push(
-      new Button(this, W / 2 + 420, rowY, {
-        w: 140,
-        h: 130,
-        icon: 'help',
-        onClick: () => {
-          sfx.tap();
-          this.scene.launch('Rules', { cards: [...ALL_RULES], from: 'Menu', menuMode: true });
-          this.scene.pause();
-        },
-      }),
-    );
-    for (const b of bottom) b.setDepth(21);
-    text(this, W / 2 + 420, rowY + 92, t('tutorial_replay'), 26, C.textDim, false).setDepth(21);
+    new Button(this, W / 2, rowY - 150, { w: 400, h: 140, icon: 'play', label: 'Играть', primary: true, fontSize: 56, onClick: playNext }).setDepth(21);
+    addTabBar(this, 'Menu', rowY + 40, (key) => this.go(key));
 
     // --- Прокрутка карты: палец, колесо, стрелки
     this.input.on('pointerdown', this.onDown, this);
@@ -207,6 +159,18 @@ export class MenuScene extends Phaser.Scene {
     this.setMapY(v.cy + 160 - cur.y);
     const p = this.mapToWorld(cur);
     irisIn(this, p.x, p.y, 750);
+
+    // Награда дня — если сегодня ещё не забрали (после обучения, не вместе с другими окнами).
+    if (isTutorialDone() && profile.nameAsked && dailyAvailable() !== null && canShowModal()) {
+      this.time.delayedCall(800, () => {
+        if (!canShowModal() || !this.scene.isActive()) return;
+        modalOpened();
+        showDailyDialog(this, () => {
+          modalClosed();
+          if (this.scene.isActive()) this.scene.restart();
+        });
+      });
+    }
 
     // Обучение пройдено — мягко знакомимся: имя и аватарка (не вместе с другими окнами).
     if (isTutorialDone() && !profile.nameAsked && canShowModal()) {

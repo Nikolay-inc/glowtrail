@@ -2,9 +2,9 @@
 // и, при первом знакомстве, выбор аватарки из открытых.
 
 import Phaser from 'phaser';
-import { AVATARS, isAvatarUnlocked } from '../core/avatars';
+import { AVATARS } from '../core/avatars';
 import { sfx } from '../audio';
-import { DEFAULT_NAME, getProfile, NAME_MAX, setAvatar, setName, skipName, totalStars } from '../profile';
+import { DEFAULT_NAME, getProfile, NAME_MAX, setAvatar, setName, skipName } from '../profile';
 import { Button, createAvatarBadge, text } from './draw';
 import { Account } from '../cloud/account';
 import { openAuthDialog } from './AuthDialog';
@@ -21,7 +21,6 @@ export interface NameDialogOptions {
 
 export function showNameDialog(scene: Phaser.Scene, opts: NameDialogOptions) {
   const profile = getProfile();
-  const stars = totalStars();
   let selected = profile.avatar;
 
   const o = scene.add.container(0, 0).setDepth(60);
@@ -70,7 +69,8 @@ export function showNameDialog(scene: Phaser.Scene, opts: NameDialogOptions) {
   const drawBadges = () => {
     badges.forEach((b) => b.c.destroy());
     badges.length = 0;
-    const open = AVATARS.filter((a) => isAvatarUnlocked(a.id, stars)).slice(0, 4);
+    // Стартовые костюмы: выбранный станет твоим (остальные — в магазине).
+    const open = AVATARS.slice(0, 4);
     const step = 190;
     const x0 = W / 2 - ((open.length - 1) * step) / 2;
     open.forEach((a, i) => {

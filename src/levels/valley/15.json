@@ -2,68 +2,65 @@
   "id": "valley-15",
   "name": "Прыжок через камень",
   "grid": [
-    ".....",
-    ".E.#.",
+    "....E",
     ".#...",
-    "....F",
+    ".....",
+    "..##.",
     ".....",
     ".....",
-    "....S"
+    ".S..."
   ],
   "startDir": "N",
   "deck": [
     "jump",
-    "jump",
-    "left",
-    "straight2",
-    "straight2",
-    "left",
-    "left",
     "right",
     "left",
+    "right",
+    "jump",
+    "straight",
+    "straight",
+    "jump",
     "jump",
     "straight2"
   ],
   "stars": {
-    "two": 3,
-    "three": 5
+    "two": 2,
+    "three": 3
   },
   "easeDecks": [
     [
+      "straight",
       "jump",
-      "jump",
-      "left",
-      "straight2",
-      "straight2",
-      "left",
-      "left",
-      "left",
       "right",
       "left",
+      "right",
+      "jump",
+      "straight",
+      "straight",
+      "jump",
       "jump",
       "straight2"
     ],
     [
-      "jump",
-      "jump",
-      "left",
-      "straight2",
       "straight",
-      "straight2",
-      "left",
-      "left",
+      "jump",
+      "right",
       "left",
       "right",
       "left",
+      "jump",
+      "straight",
+      "straight",
+      "jump",
       "jump",
       "straight2"
     ]
   ],
   "metrics": {
-    "rating": 3,
-    "roads": 3,
-    "minTiles": 5,
-    "reserve": 6,
-    "trap": 0.292
+    "rating": 2.5,
+    "roads": 30,
+    "minTiles": 6,
+    "reserve": 4,
+    "trap": 0.198
   }
 }

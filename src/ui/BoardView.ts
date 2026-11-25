@@ -11,6 +11,8 @@ import { headSide, lanternsLeft, portalSides } from '../core/portal';
 import { FONT } from './theme';
 import { raysBurst, reducedMotion } from './fx';
 import { sfx } from '../audio';
+import type { LanternShape } from '../core/avatars';
+import { ARCH_COLORS, decorateArch, ROAD_COLORS, type ArchStyle, type RoadStyle } from './skins';
 
 /** Точка дороги: центр клетки; jump — к ней дорога пришла прыжком (рисуем дугу, а не линию). */
 interface RoadPt {
@@ -70,6 +72,10 @@ export interface BoardOptions {
   sound?: boolean;
   /** Бабочки и искры над полем (в карточках правил выключены). */
   ambient?: boolean;
+  /** Скины: форма фонаря Lumo, стиль дороги и арки. */
+  lantern?: LanternShape;
+  road?: RoadStyle;
+  arch?: ArchStyle;
 }
 
 export class BoardView {
@@ -120,6 +126,8 @@ export class BoardView {
   private lumoIdx = -1;
   private lumoTween?: Phaser.Tweens.TweenChain | Phaser.Tweens.Tween;
   private lastT = -1;
+  private readonly roadStyle: RoadStyle;
+  private readonly archStyle: ArchStyle;
 
   constructor(
     private scene: Phaser.Scene,
@@ -131,6 +139,8 @@ export class BoardView {
     this.ox = area.x + (area.w - this.cell * level.width) / 2;
     this.oy = area.y + (area.h - this.cell * level.height) / 2;
     this.sound = opts.sound ?? false;
+    this.roadStyle = opts.road ?? 'glow';
+    this.archStyle = opts.arch ?? 'portal';
     this.hasExit = level.goal === 'classic';
 
     createDecorTextures(scene);
@@ -154,7 +164,7 @@ export class BoardView {
     this.drawFireflies();
 
     const startIdx = level.start.y * level.width + level.start.x;
-    this.lumo = createLumo(scene, this.cell * 0.8, opts.avatar ?? 0).setDepth(7);
+    this.lumo = createLumo(scene, this.cell * 0.8, opts.avatar ?? 0, true, opts.lantern).setDepth(7);
     this.placeLumo(startIdx, level.startDir);
 
     this.burst = scene.add
@@ -738,15 +748,17 @@ export class BoardView {
     g.clear();
     g.fillStyle(0x000000, 0.3);
     g.fillEllipse(0, s * 0.4, s * 0.7, s * 0.12);
+    const ac = ARCH_COLORS[this.archStyle];
     g.fillStyle(open ? 0x14524e : 0x221c45, 1);
     g.fillCircle(0, 0, s * 0.34);
-    g.lineStyle(s * 0.09, 0x6c6aa0, 1);
+    g.lineStyle(s * 0.09, ac.ring, 1);
     g.strokeCircle(0, 0, s * 0.34);
-    g.lineStyle(s * 0.025, open ? C.exitOpen : 0x9b7bff, 0.9);
+    g.lineStyle(s * 0.025, open ? ac.open : ac.rim, 0.9);
     g.strokeCircle(0, 0, s * 0.385);
+    decorateArch(g, this.archStyle, 0, 0, s * 0.34);
     const w = this.portalSwirl;
     w.clear();
-    const col = open ? 0xbffff0 : 0x9b7bff;
+    const col = open ? (this.archStyle === 'portal' ? 0xbffff0 : ac.open) : ac.closed;
     for (let i = 0; i < 3; i++) {
       w.lineStyle(s * 0.035, col, open ? 0.85 : 0.5);
       w.beginPath();
@@ -994,11 +1006,22 @@ export class BoardView {
       }
     });
     // Дорога — лента света: широкое мягкое сияние, тёплая полоса и яркая сердцевина.
-    this.polyline(g, pts, upTo, s * 0.8, C.roadGlow, 0.07);
-    this.polyline(g, pts, upTo, s * 0.52, C.roadGlow, 0.16);
-    this.polyline(g, pts, upTo, s * 0.3, C.road, 0.95);
-    this.polyline(g, pts, upTo, s * 0.11, C.roadCore, 0.85);
-    this.motes(g, pts, upTo);
+    const rc = this.roadColors();
+    if (this.roadStyle === 'stones' || this.roadStyle === 'planks') {
+      // Камешки и доски тоже светятся снизу — Lumo всё равно несёт свет.
+      this.polyline(g, pts, upTo, s * 0.8, C.roadGlow, 0.06);
+      this.polyline(g, pts, upTo, s * 0.46, this.roadStyle === 'stones' ? 0x8a6436 : 0x4a3020, 1, true);
+      if (this.roadStyle === 'stones') {
+        this.polyline(g, pts, upTo, s * 0.38, 0xe8c07a, 1, true);
+        this.cobbles(g, pts, upTo);
+      } else this.planks(g, pts, upTo);
+    } else {
+      this.polyline(g, pts, upTo, s * 0.8, rc.glow, 0.07);
+      this.polyline(g, pts, upTo, s * 0.52, rc.glow, 0.16);
+      this.polyline(g, pts, upTo, s * 0.3, rc.band, 0.95);
+      this.polyline(g, pts, upTo, s * 0.11, rc.core, 0.85);
+      this.motes(g, pts, upTo);
+    }
     // Пока свет растекается — на его краю горит яркий огонёк.
     const full = Math.floor(upTo);
     const frac = upTo - full;
@@ -1007,10 +1030,63 @@ export class BoardView {
       const b = pts[full + 1];
       const x = a.x + (b.x - a.x) * frac;
       const y = a.y + (b.y - a.y) * frac;
-      g.fillStyle(C.roadGlow, 0.35);
+      g.fillStyle(rc.glow, 0.35);
       g.fillCircle(x, y, s * 0.26);
-      g.fillStyle(C.roadCore, 1);
+      g.fillStyle(rc.core, 1);
       g.fillCircle(x, y, s * 0.11);
+    }
+  }
+
+  /** Цвета светящейся дороги по скину (камешки и доски — тёплый свет по умолчанию). */
+  private roadColors() {
+    const st = this.roadStyle;
+    return ROAD_COLORS[st === 'stones' || st === 'planks' ? 'glow' : st];
+  }
+
+  /** Скин «Камешки»: по 5 пар камешков на отрезок, у края выкладки — «падают». */
+  private cobbles(g: Phaser.GameObjects.Graphics, pts: RoadPt[], upTo: number) {
+    const s = this.cell;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const b = pts[i + 1];
+      if (b.jump || i >= upTo) continue;
+      const a = pts[i];
+      const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+      const nx = -(b.y - a.y) / len;
+      const ny = (b.x - a.x) / len;
+      for (let k = 0; k < 5; k++) {
+        const t = (k + 0.5) / 5;
+        if (i + t > upTo) break;
+        const d = upTo - i - t;
+        const drop = d < 0.4 ? 1 + ((0.4 - d) / 0.4) * 0.7 : 1;
+        for (const side of [-1, 1]) {
+          const h1 = hash(i * 7 + k, side);
+          const off = side * s * (0.075 + h1 * 0.04);
+          const r = s * (0.055 + hash(k, i * 3 + side) * 0.025) * drop;
+          g.fillStyle(h1 < 0.5 ? 0xf3d89c : 0xc49a5a, 1 / drop);
+          g.fillEllipse(a.x + (b.x - a.x) * t + nx * off, a.y + (b.y - a.y) * t + ny * off, r * 2, r * 1.5);
+        }
+      }
+    }
+  }
+
+  /** Скин «Доски»: поперечные доски вдоль дороги. */
+  private planks(g: Phaser.GameObjects.Graphics, pts: RoadPt[], upTo: number) {
+    const s = this.cell;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const b = pts[i + 1];
+      if (b.jump || i >= upTo) continue;
+      const a = pts[i];
+      const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+      const ux = (b.x - a.x) / len;
+      const uy = (b.y - a.y) / len;
+      for (let k = 0; k < 4; k++) {
+        const t = (k + 0.5) / 4;
+        if (i + t > upTo) break;
+        const cx = a.x + (b.x - a.x) * t;
+        const cy = a.y + (b.y - a.y) * t;
+        g.lineStyle(s * 0.13, hash(i, k) < 0.5 ? 0x9a6a3e : 0x8a5a33, 1);
+        g.lineBetween(cx - uy * s * 0.2, cy + ux * s * 0.2, cx + uy * s * 0.2, cy - ux * s * 0.2);
+      }
     }
   }
 
@@ -1028,7 +1104,7 @@ export class BoardView {
         const t = (k + hash(i, k)) / 4;
         if (i + t > upTo) break;
         const off = (hash(k, i * 5) - 0.5) * s * 0.5;
-        g.fillStyle(C.roadCore, 0.35 + hash(i * 3, k) * 0.5);
+        g.fillStyle(this.roadColors().core, 0.35 + hash(i * 3, k) * 0.5);
         g.fillCircle(a.x + (b.x - a.x) * t + nx * off, a.y + (b.y - a.y) * t + ny * off, s * (0.015 + hash(i, k * 7) * 0.02));
       }
     }
