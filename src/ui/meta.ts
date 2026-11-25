@@ -5,7 +5,7 @@ import Phaser from 'phaser';
 import { sfx } from '../audio';
 import { DAILY, nextVillageObject, skinById, type DailyReward } from '../core/economy';
 import { claimDaily, dailyAvailable, getEconomy, wallet } from '../meta';
-import { Button, drawIcon, text } from './draw';
+import { Button, createLumo, drawIcon, text } from './draw';
 import { C, FONT, W, H } from './theme';
 
 type G = Phaser.GameObjects.Graphics;
@@ -189,16 +189,17 @@ export function showDailyDialog(scene: Phaser.Scene, onClose: () => void) {
     cg.fillRoundedRect(x - cw / 2, y - 105, cw, 210, 30);
     cg.lineStyle(now ? 8 : 3, now ? C.primary : C.cardEdge, now ? 1 : 0.6);
     cg.strokeRoundedRect(x - cw / 2, y - 105, cw, 210, 30);
+    // Сначала фон клетки, потом картинка награды (иначе фон её закрывает).
+    o.add(cg);
     if ('coins' in r) drawCoin(cg, x, y - 25, 34);
     else if ('hints' in r) {
-      cg.setPosition(0, 0);
       const ig = scene.add.graphics().setPosition(x, y - 25);
       drawIcon(ig, 'bulb', 80, C.icon);
       o.add(ig);
     } else {
-      drawLight(cg, x, y - 25, 34);
+      // Костюм — сам Lumo в этом костюме.
+      o.add(createLumo(scene, 96, skinById(r.skin)?.avatar ?? 0, false).setPosition(x - 8, y - 12));
     }
-    o.add(cg);
     o.add(text(scene, x, y - 85, `День ${i + 1}`, 26, C.textDim, false));
     o.add(text(scene, x, y + 55, 'coins' in r ? `${r.coins}` : 'hints' in r ? `×${r.hints}` : 'костюм', 34, done ? C.textDim : C.text));
     if (done) {
