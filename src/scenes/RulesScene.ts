@@ -64,7 +64,7 @@ export class RulesScene extends Phaser.Scene {
     g.fillRoundedRect(W / 2 - PANEL_W / 2, top, PANEL_W, PANEL_H, 60);
     g.lineStyle(6, C.primary, 0.9);
     g.strokeRoundedRect(W / 2 - PANEL_W / 2, top, PANEL_W, PANEL_H, 60);
-    text(this, W / 2, top + 85, t(rule.title), 64);
+    text(this, W / 2, top + 72, t(rule.title), 64);
 
     // Мини-поле: то же, что в игре, но без темноты — чтобы всё было хорошо видно.
     this.board = new BoardView(this, demoLevel(ph), { x: W / 2 - 390, y: top + 140, w: 780, h: 530 }, { avatar: getProfile().avatar, dark: false, ambient: false });
@@ -97,6 +97,9 @@ export class RulesScene extends Phaser.Scene {
       });
     }
     this.input.keyboard?.once('keydown-ENTER', next);
+    // Крестик: выйти сразу, не листая все карточки (все считаются показанными).
+    new Button(this, W / 2 + PANEL_W / 2 - 82, top + 78, { w: 96, h: 96, icon: 'close', onClick: () => this.close() });
+    this.input.keyboard?.once('keydown-ESC', () => this.close());
 
     void this.runPhase(ph);
   }

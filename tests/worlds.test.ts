@@ -121,6 +121,7 @@ describe('генератор', () => {
       expect(rep.solvableWithoutStash).toBe(true);
       expect(rep.roads).toBeGreaterThanOrEqual(2);
       expect(rep.maxFireflies).toBe(l.fireflies.length);
+      expect(rep.firefliesWithoutStash).toBe(l.fireflies.length);
       expect(c.metrics).toEqual(rep.metrics);
     }
     expect(found).toBeGreaterThan(0);
@@ -180,6 +181,14 @@ describe('мир «Долина»', () => {
       expect(l.height, l.id).toBeLessThanOrEqual(Math.min(slot.maxH, MAX_H));
       expect(l.night, l.id).toBe(!!slot.night);
       expect(l.metrics!.roads, l.id).toBeGreaterThanOrEqual(2);
+    }
+  });
+
+  it('все светлячки уровня собираются за одну победу без «отложить» (уровень 11 раньше требовал его)', () => {
+    for (const l of LEVELS) {
+      if (!l.fireflies.length || l.tileSet) continue;
+      const r = solveLevel(l, { deck: l.deck, allowStash: false, countRoads: false });
+      expect(r.solvable && r.maxFireflies, l.id).toBe(l.fireflies.length);
     }
   });
 

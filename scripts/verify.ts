@@ -101,6 +101,8 @@ for (const [i, level] of LEVELS.entries()) {
   if (level.tip && !(level.tip in TIP_TEXT)) err.push(`неизвестная подсказка tip: "${level.tip}"`);
   if (level.goal === 'classic' && level.fireflies.length && r.maxFireflies < level.fireflies.length) {
     err.push(`светлячков ${level.fireflies.length}, а собрать за одну победу можно только ${r.maxFireflies}`);
+  } else if (level.fireflies.length && !infinite && r.firefliesWithoutStash < level.fireflies.length) {
+    err.push(`всех светлячков (${level.fireflies.length}) можно собрать только с «отложить» — без него ${r.firefliesWithoutStash}`);
   }
   const jm = level.metrics;
   if (!jm) err.push('нет метрик сложности — запусти npm run ease');

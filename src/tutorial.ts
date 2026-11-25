@@ -74,6 +74,22 @@ export function markRulesSeen(ids: readonly RuleId[]) {
   });
 }
 
+/** Знакомство с монетами и светом: один раз, на карте после обучения (и после «Пройти обучение заново»). */
+const CURRENCY_INTRO = 'intro:currency';
+
+export function currencyIntroDue(): boolean {
+  const d = SaveService.load();
+  return d.profile.tutorialDone && !d.profile.tipsSeen.includes(CURRENCY_INTRO);
+}
+
+export function markCurrencyIntroSeen() {
+  if (!currencyIntroDue()) return;
+  SaveService.update((d) => {
+    d.profile.tipsSeen.push(CURRENCY_INTRO);
+    d.log.push({ t: new Date().toISOString(), ev: 'tutorial_step', step: 'currency' });
+  });
+}
+
 /** Последний обучающий уровень: после него — экран уровней и окно «Как тебя зовут?». */
 export const TUTORIAL_LAST_LEVEL = 3;
 /** После какого уровня предлагаем войти в аккаунт. */

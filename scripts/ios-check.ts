@@ -1,4 +1,5 @@
 // npm run ios:check — проверка iOS-проекта перед архивом для TestFlight: версия и номер сборки, команда и Bundle ID,
+// имя под иконкой,
 // автоматическая подпись, privacy manifest в ресурсах, ITSAppUsesNonExemptEncryption, иконка 1024×1024 без
 // прозрачности, адрес для отзывов задан.
 
@@ -17,6 +18,10 @@ ok(pbx.includes('CODE_SIGN_STYLE = Automatic;'), 'автоматическая �
 ok(pbx.includes('PRODUCT_BUNDLE_IDENTIFIER = com.severgames.glowtrail;'), 'Bundle ID com.severgames.glowtrail');
 ok(pbx.includes('PrivacyInfo.xcprivacy in Resources') && existsSync('ios/App/App/PrivacyInfo.xcprivacy'), 'PrivacyInfo.xcprivacy в ресурсах');
 const plist = readFileSync('ios/App/App/Info.plist', 'utf8');
+// Под иконкой — «Glowtrail» (название в App Store «Glowtrail: Light the Path» задаётся в App Store Connect).
+ok(/<key>CFBundleDisplayName<\/key>\s*<string>Glowtrail<\/string>/.test(plist), 'имя под иконкой: Glowtrail (CFBundleDisplayName)');
+const cap = readFileSync('capacitor.config.ts', 'utf8');
+ok(cap.includes("appId: 'com.severgames.glowtrail'") && cap.includes("appName: 'Glowtrail'"), 'capacitor.config: appId и appName');
 ok(/<key>ITSAppUsesNonExemptEncryption<\/key>\s*<false\/>/.test(plist), 'ITSAppUsesNonExemptEncryption = NO');
 // PNG: ширина и высота — байты 16–23, тип цвета — байт 25 (2 — RGB без альфы, 6 — RGBA).
 const icon = readFileSync('ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png');

@@ -5,6 +5,8 @@ import {
   authPromptDue,
   canShowModal,
   completeTutorial,
+  currencyIntroDue,
+  markCurrencyIntroSeen,
   DAILY_GAP_MS,
   dailyPrompt,
   markRulesSeen,
@@ -192,5 +194,22 @@ describe('баги после Р3а', () => {
     expect(canShowModal(1000 + DAILY_GAP_MS - 1, DAILY_GAP_MS)).toBe(false);
     expect(canShowModal(1000 + DAILY_GAP_MS, DAILY_GAP_MS)).toBe(true);
     expect(canShowModal(1000 + DAILY_GAP_MS)).toBe(false);
+  });
+});
+
+describe('знакомство с монетами и светом', () => {
+  beforeEach(() => SaveService.setBackend(memoryBackend()));
+  it('только после обучения и один раз; «Пройти обучение заново» показывает снова', () => {
+    expect(currencyIntroDue()).toBe(false);
+    completeTutorial();
+    expect(currencyIntroDue()).toBe(true);
+    markCurrencyIntroSeen();
+    expect(currencyIntroDue()).toBe(false);
+    restartTutorial();
+    completeTutorial();
+    expect(currencyIntroDue()).toBe(true);
+  });
+  it('тексты знакомства есть', () => {
+    for (const k of ['currency_title', 'currency_coin', 'currency_light', 'currency_note'] as const) expect(t(k).length).toBeGreaterThan(3);
   });
 });

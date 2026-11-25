@@ -5,20 +5,20 @@
 // снизу — «Играть» и вкладки Карта / Деревня / Магазин / Профиль. Награда дня — окном при открытии.
 
 import Phaser from 'phaser';
-import { addTabBar, addWallet, showDailyDialog } from '../ui/meta';
+import { addTabBar, addWallet, showCurrencyIntro, showDailyDialog } from '../ui/meta';
 import { dailyAvailable } from '../meta';
-import { currentView, stretchLayout, type ViewRect } from '../ui/viewport';
+import { currentView, edgeRows, stretchLayout, type ViewRect } from '../ui/viewport';
 import { isChallenge, LEVELS, numberInWorld, WORLDS, type World } from '../levels/index';
 import type { Level } from '../core/types';
 import { sfx } from '../audio';
 import { isUnlocked, loadProgress, type Progress } from '../storage';
 import { displayName, getProfile } from '../profile';
 import { showNameDialog } from '../ui/NameDialog';
-import { canShowModal, DAILY_GAP_MS, dailyPrompt, isTutorialDone, modalClosed, modalOpened } from '../tutorial';
+import { canShowModal, currencyIntroDue, DAILY_GAP_MS, dailyPrompt, isTutorialDone, markCurrencyIntroSeen, modalClosed, modalOpened } from '../tutorial';
 import { Account } from '../cloud/account';
 import { openAuthDialog } from '../ui/AuthDialog';
-import { addBackground, Button, createAvatarBadge, createLumo, drawFireflyIcon, drawIcon, drawStar, text } from '../ui/draw';
-import { C, FONT, H, W } from '../ui/theme';
+import { addBackground, Button, createAvatarBadge, createLumo, drawFireflyIcon, drawIcon, drawShinyStar, text } from '../ui/draw';
+import { C, FONT, W } from '../ui/theme';
 import { irisIn, reducedMotion } from '../ui/fx';
 
 /** Шаг между уровнями на карте и размах «змейки» тропинки. */
@@ -64,8 +64,7 @@ export class MenuScene extends Phaser.Scene {
   create() {
     // Высокий экран: профиль и «Войти» — к верху безопасной зоны, нижний ряд кнопок — к низу.
     const bounds = stretchLayout(this);
-    const topY = 100 + bounds.top;
-    const rowY = 1730 + (bounds.bottom - H);
+    const { topY, rowY } = edgeRows(bounds);
     addBackground(this, { dust: false });
     const progress = loadProgress();
     const world = WORLDS[0];
@@ -190,8 +189,19 @@ export class MenuScene extends Phaser.Scene {
       this.events.once('shutdown', () => retry.remove());
     }
 
-    // Обучение пройдено — мягко знакомимся: имя и аватарка (не вместе с другими окнами).
-    if (isTutorialDone() && !profile.nameAsked && canShowModal()) {
+    // Обучение пройдено — сначала знакомство с валютами (монеты и свет, дальше — только значками),
+    // в следующий раз — имя и аватарка (не вместе с другими окнами).
+    if (currencyIntroDue() && canShowModal()) {
+      this.time.delayedCall(600, () => {
+        if (!canShowModal() || !this.scene.isActive()) return;
+        modalOpened();
+        markCurrencyIntroSeen();
+        showCurrencyIntro(this, () => {
+          modalClosed();
+          if (this.scene.isActive()) this.scene.restart();
+        });
+      });
+    } else if (isTutorialDone() && !profile.nameAsked && canShowModal()) {
       this.time.delayedCall(1100, () => {
         if (!canShowModal() || !this.scene.isActive()) return;
         modalOpened();
@@ -467,7 +477,7 @@ export class MenuScene extends Phaser.Scene {
     // Под кружком: звёзды (или значок пропуска); светлячки — маленькими огоньками.
     const sg = this.add.graphics();
     if (skipped) drawIcon(sg, 'skip', 36, 0xd98a1f);
-    else if (unlocked) for (let k = 0; k < 3; k++) drawStar(sg, (k - 1) * 40, 0, k === 1 ? 20 : 17, k < stars ? C.star : C.starEmpty, k < stars ? 1 : 0.7);
+    else if (unlocked) for (let k = 0; k < 3; k++) drawShinyStar(sg, (k - 1) * 40, 0, k === 1 ? 21 : 18, k >= stars, k < stars ? 1 : 0.7);
     sg.setPosition(0, r + 30 - (unlocked && !skipped ? 0 : 0));
     c.add(sg);
     if (level.fireflies.length && unlocked) {

@@ -133,3 +133,12 @@ export function keepFitted(scene: Phaser.Scene, onChange?: (v: ViewRect) => void
   scene.events.once('shutdown', () => scene.scale.off('resize', handler));
   return view;
 }
+
+/**
+ * Опорные линии экранов с вкладками: topY — заголовок у верха безопасной зоны, rowY — ряд над нижней
+ * панелью вкладок (сама панель — rowY + 40), чтобы панель стояла вплотную к низу безопасной зоны
+ * (под ней — только полоска «домой», закрытая фоном панели).
+ */
+export function edgeRows(bounds: LayoutBounds): { topY: number; rowY: number } {
+  return { topY: bounds.top + 85, rowY: bounds.bottom - 135 };
+}

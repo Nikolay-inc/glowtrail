@@ -84,7 +84,8 @@ appId: `com.severgames.glowtrail`. Его нельзя менять после �
    - для сайта — секрет репозитория `VITE_CONTACT_EMAIL` (GitHub → Settings → Secrets and variables → Actions →
      New repository secret). Страница появится по адресу https://nikolay-inc.github.io/glowtrail/privacy.html.
 2. В [App Store Connect](https://appstoreconnect.apple.com) → «Приложения» → «+» → «Новое приложение»:
-   платформа iOS, имя Glowtrail, основной язык — русский, Bundle ID `com.severgames.glowtrail`
+   платформа iOS, имя **«Glowtrail: Light the Path»** (название в App Store; под иконкой на телефоне будет
+   просто «Glowtrail» — это `CFBundleDisplayName` и `appName`), основной язык — русский, Bundle ID `com.severgames.glowtrail`
    (если его нет в списке — зарегистрируй в developer.apple.com → Identifiers), SKU — например `glowtrail`.
 3. Там же в приложении: «Конфиденциальность приложения» → ссылка на политику
    `https://nikolay-inc.github.io/glowtrail/privacy.html` и ответы «Какие данные собираются»:

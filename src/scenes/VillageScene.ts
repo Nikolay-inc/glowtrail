@@ -8,9 +8,9 @@ import { setMusicMood, sfx } from '../audio';
 import { nextVillageObject, skinById, VILLAGE, type Reward, type VillageObject } from '../core/economy';
 import { getEconomy, restoreVillage, wallet } from '../meta';
 import { addBackground, Button, text } from '../ui/draw';
-import { addTabBar, addWallet, drawCoin, drawLight, toast } from '../ui/meta';
+import { addTabBar, addWallet, buttonRichLabel, COIN, drawLight, LIGHT, richText, toast } from '../ui/meta';
 import { drawBuilding } from '../ui/village';
-import { stretchLayout } from '../ui/viewport';
+import { edgeRows, stretchLayout } from '../ui/viewport';
 import { C, FONT, H, W } from '../ui/theme';
 
 /** Где стоит постройка: x, доля высоты свободной области (0 — верх, 1 — низ), масштаб. */
@@ -50,11 +50,10 @@ export class VillageScene extends Phaser.Scene {
     this.cameras.main.fadeIn(200, 11, 15, 39);
     this.views.clear();
     this.plaque = undefined;
-    const topY = 100 + bounds.top;
-    const rowY = 1730 + (bounds.bottom - H);
+    const { topY, rowY } = edgeRows(bounds);
     // Постройки занимают всё место между шапкой (заголовок, валюты, цель) и кнопкой «Мастерская».
     this.yTop = topY + 360;
-    this.yBot = rowY - 300;
+    this.yBot = rowY - 330;
     this.drawGround();
     const e = getEconomy();
     for (const v of VILLAGE) this.views.set(v.id, this.drawObject(v, e.village.includes(v.id)));
@@ -212,14 +211,14 @@ export class VillageScene extends Phaser.Scene {
     }
     const light = wallet().light;
     if (light >= next.cost) {
-      this.goal.add(new Button(this, W / 2, y + 6, { w: 720, h: 100, label: `Восстановить: ${next.name} (${next.cost})`, primary: true, fontSize: 38, onClick: () => this.restore(next) }));
+      this.goal.add(buttonRichLabel(new Button(this, W / 2, y + 6, { w: 720, h: 100, primary: true, onClick: () => this.restore(next) }), `Восстановить: ${next.name} · ${next.cost} ${LIGHT}`, 38));
       return;
     }
     const g = this.add.graphics();
     g.fillStyle(0x000000, 0.35);
     g.fillRoundedRect(W / 2 - 380, y - 38, 760, 76, 38);
     this.goal.add(g);
-    this.goal.add(text(this, W / 2, y, `${next.name} — ещё ${next.cost - light} света`, 38));
+    this.goal.add(richText(this, W / 2, y, `${next.name} — ещё ${next.cost - light} ${LIGHT}`, 38, C.text, true, 720));
   }
 
   /** Тап по постройке: восстановленная — что она дала; невосстановленная — плашка «Название · награда · цена». */
@@ -244,7 +243,7 @@ export class VillageScene extends Phaser.Scene {
     const next = nextVillageObject(getEconomy());
     const light = wallet().light;
     const can = next?.id === v.id && light >= v.cost;
-    const second = next && next.id !== v.id ? `Сначала: ${next.name}` : !can ? `Ещё ${v.cost - light} света — проходи уровни и собирай светлячков` : '';
+    const second = next && next.id !== v.id ? `Сначала: ${next.name}` : !can ? `Ещё ${v.cost - light} ${LIGHT} — проходи уровни и собирай светлячков` : '';
     const w = 820;
     const h = can ? 220 : 160;
     // Плашка над постройкой, но в пределах экрана и не на шапке
@@ -258,9 +257,9 @@ export class VillageScene extends Phaser.Scene {
     g.lineStyle(4, can ? C.primary : C.cardEdge, 1);
     g.strokeRoundedRect(-w / 2, -h / 2, w, h, 30);
     p.add(g);
-    const title = `${v.name} · ${rewardText(v.reward)} · ${v.cost} света`;
-    p.add(this.add.text(0, -h / 2 + 48, title, { fontFamily: FONT, fontSize: '32px', color: C.text, fontStyle: 'bold', align: 'center', wordWrap: { width: w - 60 } }).setOrigin(0.5));
-    if (second) p.add(text(this, 0, -h / 2 + 108, second, 26, C.textDim, false).setWordWrapWidth(w - 60));
+    const title = `${v.name} · ${rewardText(v.reward)} · ${v.cost} ${LIGHT}`;
+    p.add(richText(this, 0, -h / 2 + 48, title, 32, C.text, true, w - 60));
+    if (second) p.add(richText(this, 0, -h / 2 + 108, second, 26, C.textDim, false, w - 60));
     if (can) p.add(new Button(this, 0, h / 2 - 55, { w: 420, h: 80, label: 'Восстановить', primary: true, fontSize: 36, onClick: () => this.restore(v) }));
     p.setAlpha(0);
     this.tweens.add({ targets: p, alpha: 1, duration: 160 });
@@ -272,7 +271,7 @@ export class VillageScene extends Phaser.Scene {
     const res = restoreVillage(v.id);
     if (!res.ok) {
       sfx.invalid();
-      toast(this, `Ещё ${v.cost - wallet().light} света — проходи уровни и собирай светлячков`, this.goalY + 120);
+      toast(this, `Ещё ${v.cost - wallet().light} ${LIGHT} — проходи уровни и собирай светлячков`, this.goalY + 120);
       return;
     }
     this.celebrate(v, res.value);
@@ -324,9 +323,9 @@ export class VillageScene extends Phaser.Scene {
     g.fillRoundedRect(W / 2 - 400, 700, 800, 480, 50);
     g.lineStyle(6, C.primary, 1);
     g.strokeRoundedRect(W / 2 - 400, 700, 800, 480, 50);
-    if ('coins' in r) drawCoin(g, W / 2, 900, 46);
-    else drawLight(g, W / 2, 900, 46);
-    o.add([dim, g, text(this, W / 2, 790, `${v.name}: снова горит свет!`, 46), text(this, W / 2, 990, rewardText(r), 44, '#ffd36b')]);
+    // Монеты — значок уже в строке награды; другое — огонёк-украшение.
+    if (!('coins' in r)) drawLight(g, W / 2, 900, 46);
+    o.add([dim, g, text(this, W / 2, 790, `${v.name}: снова горит свет!`, 46), richText(this, W / 2, 990, rewardText(r), 44, '#ffd36b', true, 720)]);
     o.add(new Button(this, W / 2, 1100, { w: 360, h: 110, label: 'Ура!', primary: true, onClick: () => o.destroy() }));
     o.setAlpha(0);
     this.tweens.add({ targets: o, alpha: 1, duration: 250 });
@@ -339,7 +338,7 @@ export class VillageScene extends Phaser.Scene {
 }
 
 export function rewardText(r: Reward): string {
-  if ('coins' in r) return `+${r.coins} монет`;
+  if ('coins' in r) return `+${r.coins} ${COIN}`;
   if ('ability' in r) return 'способность «Поворот плитки»';
   const s = skinById(r.skin);
   const kind = s?.kind === 'costume' ? 'костюм' : s?.kind === 'road' ? 'дорога' : s?.kind === 'arch' ? 'арка' : 'фонарь';

@@ -321,7 +321,7 @@ export function generateOne(r: Rand, p: GenParams, filter: GenFilter = DEFAULT_F
   if (!rep.solvableWithoutStash) return 'needsStash';
   if (rep.metrics.trap < filter.minTrap) return 'boring';
   if (filter.maxRating !== undefined && rep.metrics.rating > filter.maxRating) return 'tooHard';
-  if (level.goal === 'classic' && level.fireflies.length && rep.maxFireflies < level.fireflies.length) return 'fireflies';
+  if (level.goal === 'classic' && level.fireflies.length && rep.firefliesWithoutStash < level.fireflies.length) return 'fireflies';
   try {
     if (p.features.includes('fade') && !essential(level, ['fade'], rep.roads)) return 'notEssential';
   } catch (e) {

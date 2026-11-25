@@ -1,6 +1,6 @@
 // Приложение (Capacitor): раскладка в безопасной зоне, сохранение в Preferences, вибрация.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { computeView, stretchBounds } from '../src/ui/viewport';
+import { computeView, edgeRows, stretchBounds } from '../src/ui/viewport';
 import { createPreferencesBackend, type PrefsApi } from '../src/save/preferencesBackend';
 import { memoryBackend, SAVE_KEY, SaveService } from '../src/save/SaveService';
 import { haptics, isVibrationOn, setVibration, WEB_PATTERNS } from '../src/haptics';
@@ -180,5 +180,25 @@ describe('Вибрация', () => {
     const len = (p: number | number[]) => (Array.isArray(p) ? p.reduce((a, b) => a + b, 0) : p);
     expect(len(WEB_PATTERNS.place)).toBeLessThan(len(WEB_PATTERNS.error));
     expect(len(WEB_PATTERNS.error)).toBeLessThan(len(WEB_PATTERNS.win));
+  });
+});
+
+describe('edgeRows — экраны с вкладками прижаты к краям безопасной зоны', () => {
+  it('высокий экран (iPhone 16 Pro Max): нижняя панель у низа безопасной зоны, заголовок у верха', () => {
+    // 440×956 pt, вырез 62, полоска «домой» 34 → в пикселях игры ×(1080/440)
+    const k = 1080 / 440;
+    const v = computeView(1080, 956 * k, { top: 62 * k, right: 0, bottom: 34 * k, left: 0 });
+    const b = stretchBounds(v, 320);
+    const { topY, rowY } = edgeRows(b);
+    const tabY = rowY + 40;
+    // Плашки вкладок (±72 от центра) заканчиваются у самого низа безопасной зоны — пустоты под ними нет.
+    expect(v.safeBottom - (tabY + 72)).toBeGreaterThanOrEqual(0);
+    expect(v.safeBottom - (tabY + 72)).toBeLessThan(40);
+    expect(topY - v.safeTop).toBeLessThan(100);
+  });
+  it('обычный экран 9:16 — те же отступы от краев раскладки', () => {
+    const { topY, rowY } = edgeRows({ top: 0, bottom: 1920 });
+    expect(topY).toBe(85);
+    expect(rowY + 40 + 72).toBeLessThanOrEqual(1920);
   });
 });

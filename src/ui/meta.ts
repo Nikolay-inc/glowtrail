@@ -7,6 +7,7 @@ import { DAILY, nextVillageObject, skinById, type DailyReward } from '../core/ec
 import { claimDaily, dailyAvailable, getEconomy, wallet } from '../meta';
 import { Button, createLumo, drawIcon, text } from './draw';
 import { C, FONT, W, H } from './theme';
+import { t } from '../strings';
 
 type G = Phaser.GameObjects.Graphics;
 
@@ -138,20 +139,118 @@ export function addTabBar(scene: Phaser.Scene, active: Tab, y: number, go: (key:
   return bar;
 }
 
-/** Короткое сообщение внизу экрана (купил, не хватает монет…). */
+/** Значки валют в тексте: везде пишем числом и значком, без слов «монет» / «света». */
+export const COIN = '{coin}';
+export const LIGHT = '{light}';
+
+/**
+ * Строка текста со значками валют: «+30 {coin} · 10 {light}» → текст и нарисованные монета/огонёк.
+ * Контейнер с центром в (x, y); шире maxWidth — уменьшается целиком.
+ */
+export function richText(scene: Phaser.Scene, x: number, y: number, str: string, size: number, color: string = C.text, bold = true, maxWidth = 0, iconBacking = false) {
+  const c = scene.add.container(x, y);
+  const r = size * 0.4;
+  let cx = 0;
+  const items: { obj: Phaser.GameObjects.Text | G; w: number; icon: boolean }[] = [];
+  for (const part of str.split(/(\{coin\}|\{light\})/).filter(Boolean)) {
+    if (part === COIN || part === LIGHT) {
+      const g = scene.add.graphics();
+      // На светлой (оранжевой) кнопке значок теряется — тёмная подложка-кружок.
+      if (iconBacking) {
+        g.fillStyle(0x2a1a05, 0.85);
+        g.fillCircle(r, 0, r * 1.3);
+      }
+      (part === COIN ? drawCoin : drawLight)(g, r, 0, r);
+      items.push({ obj: g, w: r * 2 + size * 0.06, icon: true });
+    } else {
+      const t = scene.add.text(0, 0, part, { fontFamily: FONT, fontSize: `${size}px`, color, fontStyle: bold ? 'bold' : 'normal' }).setOrigin(0, 0.5);
+      items.push({ obj: t, w: t.width, icon: false });
+    }
+  }
+  for (const it of items) {
+    it.obj.setX(cx);
+    cx += it.w;
+  }
+  for (const it of items) it.obj.setX(it.obj.x - cx / 2);
+  c.add(items.map((i) => i.obj));
+  c.setSize(cx, size * 1.3);
+  if (maxWidth && cx > maxWidth) c.setScale(maxWidth / cx);
+  return c;
+}
+
+/** Подпись кнопки со значками валют (кнопку создаём без label). */
+export function buttonRichLabel(btn: Button, str: string, size: number, primary = true) {
+  const label = richText(btn.scene, 0, 0, str, size, primary ? '#2a1a05' : C.text, true, 0, primary);
+  btn.add(label);
+  return btn.fitContent(label.width);
+}
+
+/** Короткое сообщение внизу экрана (купил, не хватает {coin}…). Понимает значки валют. */
 export function toast(scene: Phaser.Scene, msg: string, y = 1560) {
-  const t = scene.add
-    .text(W / 2, y, msg, { fontFamily: FONT, fontSize: '40px', color: C.text, fontStyle: 'bold', backgroundColor: '#0b0f27e0', padding: { x: 30, y: 18 }, align: 'center', wordWrap: { width: 900 } })
-    .setOrigin(0.5)
-    .setDepth(60)
-    .setAlpha(0);
+  const t = richText(scene, W / 2, y, msg, 40, C.text, true, 900).setDepth(60).setAlpha(0);
+  const w = t.width * t.scaleX + 60;
+  const bg = scene.add.graphics();
+  bg.fillStyle(0x0b0f27, 0.88);
+  bg.fillRoundedRect(-w / 2, -40, w, 80, 24);
+  t.addAt(bg.setScale(1 / t.scaleX), 0);
   scene.tweens.add({ targets: t, alpha: 1, y: y - 20, duration: 200 });
   scene.tweens.add({ targets: t, alpha: 0, delay: 1800, duration: 400, onComplete: () => t.destroy() });
 }
 
+/**
+ * Знакомство с валютами: большой значок монеты и света с пояснением. После него валюты в игре
+ * обозначаются только значками ({coin} / {light}), без слов.
+ */
+export function showCurrencyIntro(scene: Phaser.Scene, onClose: () => void) {
+  const o = scene.add.container(0, 0).setDepth(60);
+  const dim = scene.add.rectangle(W / 2, H / 2, W * 4, H * 4, 0x060818, 0.7).setInteractive();
+  const pw = 900;
+  const ph = 860;
+  const top = H / 2 - ph / 2;
+  const panel = scene.add.graphics();
+  panel.fillStyle(0x000000, 0.35);
+  panel.fillRoundedRect(W / 2 - pw / 2, top + 14, pw, ph, 60);
+  panel.fillStyle(C.panel, 1);
+  panel.fillRoundedRect(W / 2 - pw / 2, top, pw, ph, 60);
+  panel.lineStyle(6, C.primary, 1);
+  panel.strokeRoundedRect(W / 2 - pw / 2, top, pw, ph, 60);
+  o.add([dim, panel, text(scene, W / 2, top + 100, t('currency_title'), 64)]);
+  const rows: [typeof drawCoin, string][] = [
+    [drawCoin, t('currency_coin')],
+    [drawLight, t('currency_light')],
+  ];
+  rows.forEach(([draw, str], i) => {
+    const y = top + 285 + i * 200;
+    const ig = scene.add.graphics().setPosition(W / 2 - 320, y);
+    draw(ig, 0, 0, 58);
+    scene.tweens.add({ targets: ig, y: y - 8, duration: 900 + i * 150, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+    const label = scene.add
+      .text(W / 2 - 220, y, str, { fontFamily: FONT, fontSize: '38px', color: C.text, fontStyle: 'bold', wordWrap: { width: 600 } })
+      .setOrigin(0, 0.5)
+      .setLineSpacing(6);
+    o.add([ig, label]);
+  });
+  o.add(richText(scene, W / 2, top + 660, `${t('currency_note')} ${COIN} и ${LIGHT}`, 34, C.textDim, false));
+  o.add(
+    new Button(scene, W / 2, top + 770, {
+      w: 460,
+      h: 120,
+      label: t('rule_ok'),
+      primary: true,
+      onClick: () => {
+        sfx.tap();
+        o.destroy();
+        onClose();
+      },
+    }),
+  );
+  o.setAlpha(0);
+  scene.tweens.add({ targets: o, alpha: 1, duration: 220 });
+}
+
 /** Текст награды календаря. */
 export function dailyLabel(r: DailyReward): string {
-  if ('coins' in r) return `${r.coins} монет`;
+  if ('coins' in r) return `${r.coins} ${COIN}`;
   if ('hints' in r) return `${r.hints} ${r.hints === 1 ? 'подсказка' : r.hints < 5 ? 'подсказки' : 'подсказок'}`;
   return `Костюм «${skinById(r.skin)?.name ?? ''}»`;
 }
@@ -213,7 +312,7 @@ export function showDailyDialog(scene: Phaser.Scene, onClose: () => void) {
       o.add(ck);
     }
   });
-  const label = text(scene, W / 2, top + 760, `Сегодня: ${dailyLabel(DAILY[day - 1])}`, 44, '#ffd36b');
+  const label = richText(scene, W / 2, top + 760, `Сегодня: ${dailyLabel(DAILY[day - 1])}`, 44, '#ffd36b', true, 760);
   o.add(label);
   const close = () => {
     o.destroy();
@@ -228,7 +327,7 @@ export function showDailyDialog(scene: Phaser.Scene, onClose: () => void) {
       onClick: () => {
         const res = claimDaily();
         sfx.win();
-        if (res && 'skin' in res.reward && !res.gotSkin) toast(scene, `Костюм уже есть — ${res.reward.orCoins} монет`);
+        if (res && 'skin' in res.reward && !res.gotSkin) toast(scene, `Костюм уже есть — ${res.reward.orCoins} ${COIN}`);
         close();
       },
     }),

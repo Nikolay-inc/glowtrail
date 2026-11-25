@@ -9,7 +9,7 @@ import { displayName, getProfile, levelsPassed, totalStars } from '../profile';
 import { SKINS } from '../core/economy';
 import { getEconomy } from '../meta';
 import { ALL_RULES } from '../tutorial';
-import { addBackground, Button, createAvatarBadge, text, type IconName } from '../ui/draw';
+import { addBackground, Button, createAvatarBadge, layoutRow, text, type IconName } from '../ui/draw';
 import { showNameDialog } from '../ui/NameDialog';
 import { addTabBar, toast } from '../ui/meta';
 import { openPrivacy, sendFeedback } from '../feedback';
@@ -17,8 +17,8 @@ import { versionLabel } from '../version';
 import { equippedLook } from '../ui/skins';
 import { Account } from '../cloud/account';
 import { openAuthDialog } from '../ui/AuthDialog';
-import { stretchLayout } from '../ui/viewport';
-import { C, H, W } from '../ui/theme';
+import { edgeRows, stretchLayout } from '../ui/viewport';
+import { C, W } from '../ui/theme';
 
 const MAX_STARS = () => LEVELS.length * 3;
 
@@ -34,7 +34,7 @@ export class ProfileScene extends Phaser.Scene {
     const profile = getProfile();
     const stars = totalStars();
     const look = equippedLook();
-    const topY = 100 + bounds.top;
+    const { topY, rowY } = edgeRows(bounds);
 
     text(this, W / 2, topY, 'Профиль', 64);
 
@@ -117,7 +117,6 @@ export class ProfileScene extends Phaser.Scene {
     // Аккаунт: гость — предложение войти; вошёл — email и управление аккаунтом.
     const user = Account.user;
     const label = user ? shortEmail(user.email) : 'Войти или зарегистрироваться';
-    const rowY = 1730 + (bounds.bottom - H);
     new Button(this, W / 2, rowY - 190, {
       w: 760,
       h: 104,
@@ -132,7 +131,7 @@ export class ProfileScene extends Phaser.Scene {
     });
     text(this, W / 2, rowY - 115, `ID игрока: ${profile.playerId.slice(0, 8)} · версия ${versionLabel()}`, 24, C.textDim, false).setAlpha(0.5);
     // Для тестеров: отзыв на почту (со статистикой и версией) и политика конфиденциальности.
-    new Button(this, W / 2 - 200, rowY - 320, {
+    const feedbackBtn = new Button(this, W / 2 - 200, rowY - 320, {
       w: 380,
       h: 96,
       icon: 'copy',
@@ -143,7 +142,8 @@ export class ProfileScene extends Phaser.Scene {
         void sendFeedback().then((ok) => toast(this, ok ? 'Статистика скопирована — откроется письмо' : 'Адрес для отзывов не настроен', rowY - 440));
       },
     });
-    new Button(this, W / 2 + 200, rowY - 320, { w: 380, h: 96, icon: 'lock', label: 'Конфиденциальность', fontSize: 30, onClick: () => (sfx.tap(), openPrivacy()) });
+    const privacyBtn = new Button(this, W / 2 + 200, rowY - 320, { w: 380, h: 96, icon: 'lock', label: 'Конфиденциальность', fontSize: 30, onClick: () => (sfx.tap(), openPrivacy()) });
+    layoutRow([feedbackBtn, privacyBtn], W / 2, 24);
     addTabBar(this, 'Profile', rowY + 40, (k) => this.go(k));
 
     // Вошли/вышли или облако подтянуло прогресс с другого устройства — обновляем экран.

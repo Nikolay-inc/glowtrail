@@ -6,10 +6,10 @@ import Phaser from 'phaser';
 import { setMusicMood, sfx } from '../audio';
 import { FREE_HINTS_PER_DAY, freeHintsLeft, HINT_PRICE, upgradePrice, UPGRADES, type UpgradeId } from '../core/economy';
 import { adHint, buyHint, buyUpgrade, getEconomy, today } from '../meta';
-import { addBackground, Button, drawIcon, text, type IconName } from '../ui/draw';
-import { addTabBar, addWallet, drawCoin, toast } from '../ui/meta';
-import { stretchLayout } from '../ui/viewport';
-import { C, FONT, H, W } from '../ui/theme';
+import { addBackground, Button, drawIcon, layoutRow, text, type IconName } from '../ui/draw';
+import { addTabBar, addWallet, buttonRichLabel, COIN, drawCoin, toast } from '../ui/meta';
+import { edgeRows, stretchLayout } from '../ui/viewport';
+import { C, FONT, W } from '../ui/theme';
 
 const DESCR: Record<UpgradeId, string> = {
   stash: 'Держи в запасе больше плиток: второй слот «отложить»',
@@ -38,7 +38,7 @@ export class WorkshopScene extends Phaser.Scene {
     this.events.once('shutdown', () => setMusicMood('night'));
     addBackground(this, { evening: true });
     this.cameras.main.fadeIn(200, 11, 15, 39);
-    const topY = 100 + bounds.top;
+    const { topY, rowY } = edgeRows(bounds);
     new Button(this, 90, topY, { w: 130, h: 130, icon: 'back', onClick: () => this.go('Village') });
     text(this, W / 2, topY, 'Мастерская', 64);
     const wallet = addWallet(this, W / 2, topY + 100);
@@ -96,11 +96,9 @@ export class WorkshopScene extends Phaser.Scene {
     drawIcon(bulb, 'bulb', 110, C.icon);
     const free = freeHintsLeft(e, today());
     textBlock(hy - 30, `Подсказки: ${free + e.hints.bank}`, `Бесплатных сегодня ${free} из ${FREE_HINTS_PER_DAY}, в запасе ${e.hints.bank}`);
-    new Button(this, 360, hy + 85, {
+    const buyBtn = new Button(this, 360, hy + 85, {
       w: 380,
       h: 96,
-      label: `Купить за ${HINT_PRICE}`,
-      fontSize: 34,
       onClick: () => {
         const r = buyHint();
         if (r.ok) {
@@ -109,11 +107,12 @@ export class WorkshopScene extends Phaser.Scene {
           this.scene.restart();
         } else {
           sfx.invalid();
-          toast(this, 'Не хватает монет');
+          toast(this, `Не хватает ${COIN}`);
         }
       },
     });
-    new Button(this, 770, hy + 85, {
+    buttonRichLabel(buyBtn, `Купить за ${HINT_PRICE} ${COIN}`, 34, false);
+    const adBtn = new Button(this, 770, hy + 85, {
       w: 400,
       h: 96,
       icon: 'play',
@@ -127,9 +126,8 @@ export class WorkshopScene extends Phaser.Scene {
         this.time.delayedCall(900, () => this.scene.restart());
       },
     });
+    layoutRow([buyBtn, adBtn], 570, 24, 880);
     wallet.refresh();
-
-    const rowY = 1730 + (bounds.bottom - H);
     addTabBar(this, 'Village', rowY + 40, (k) => this.go(k));
   }
 
@@ -137,7 +135,7 @@ export class WorkshopScene extends Phaser.Scene {
     const r = buyUpgrade(id);
     if (!r.ok) {
       sfx.invalid();
-      toast(this, r.error === 'notEnoughCoins' ? 'Не хватает монет — проходи уровни' : 'Пока недоступно');
+      toast(this, r.error === 'notEnoughCoins' ? `Не хватает ${COIN} — проходи уровни` : 'Пока недоступно');
       return;
     }
     sfx.win();

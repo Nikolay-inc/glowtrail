@@ -51,6 +51,26 @@ function arrowHead(g: G, tipX: number, tipY: number, angle: number, size: number
 }
 
 /**
+ * Дуга со стрелкой на конце: наконечник сидит ровно на окружности — его кончик в точке угла `to`,
+ * основание тоже на окружности, направление — по хорде между ними (на круге наконечник не «уезжает»
+ * ни внутрь, ни наружу). clockwise — по часовой (углы растут, экран y вниз).
+ */
+function arcArrow(g: G, cx: number, cy: number, r: number, from: number, to: number, clockwise: boolean, head: number) {
+  const sign = clockwise ? 1 : -1;
+  const back = (head * 0.77) / r; // длина основания наконечника по дуге
+  const baseA = to - sign * back;
+  g.beginPath();
+  // Линия заходит под наконечник, чтобы не было щели.
+  g.arc(cx, cy, r, from, to - sign * back * 0.6, !clockwise);
+  g.strokePath();
+  const tipX = cx + Math.cos(to) * r;
+  const tipY = cy + Math.sin(to) * r;
+  const baseX = cx + Math.cos(baseA) * r;
+  const baseY = cy + Math.sin(baseA) * r;
+  arrowHead(g, tipX, tipY, Math.atan2(tipY - baseY, tipX - baseX), head);
+}
+
+/**
  * Иконки плиток: у всех одна толщина линии, линия начинается в одной точке снизу (y = 0.38), наконечник одного
  * размера и сидит точно на конце линии по её направлению. В лотке иконку поворачивают по направлению дороги
  * (кратно 90°), поэтому всё симметрично относительно вертикальной оси.
@@ -141,7 +161,7 @@ export function drawTileIcon(g: G, kind: TileKind, s: number, color: number) {
 // ---------------------------------------------------------------------------
 // Иконки интерфейса
 
-export type IconName = 'music' | 'nomusic' | 'stashbox' | 'lantern' | 'gift' | 'rotate' | 'restart' | 'undo' | 'menu' | 'stats' | 'sound' | 'mute' | 'play' | 'lock' | 'copy' | 'back' | 'trash' | 'bulb' | 'skip' | 'plus' | 'cloud' | 'user' | 'help' | 'vibrate' | 'novibrate';
+export type IconName = 'music' | 'nomusic' | 'stashbox' | 'lantern' | 'gift' | 'rotate' | 'restart' | 'undo' | 'menu' | 'stats' | 'sound' | 'mute' | 'play' | 'lock' | 'copy' | 'back' | 'trash' | 'bulb' | 'skip' | 'plus' | 'cloud' | 'user' | 'help' | 'vibrate' | 'novibrate' | 'close';
 
 export function drawIcon(g: G, name: IconName, s: number, color: number) {
   const lw = s * 0.12;
@@ -198,30 +218,27 @@ export function drawIcon(g: G, name: IconName, s: number, color: number) {
     case 'rotate': {
       // Плитка и стрелка по часовой стрелке вокруг неё.
       g.strokeRoundedRect(-s * 0.18, -s * 0.18, s * 0.36, s * 0.36, s * 0.06);
-      const r = s * 0.38;
-      g.beginPath();
-      g.arc(0, 0, r, -Math.PI * 0.9, Math.PI * 0.15, false);
-      g.strokePath();
-      const a = Math.PI * 0.15;
-      arrowHead(g, Math.cos(a) * r - s * 0.02, Math.sin(a) * r + s * 0.06, a + Math.PI * 0.55, s * 0.24);
+      arcArrow(g, 0, 0, s * 0.35, -Math.PI * 0.95, Math.PI * 0.25, true, s * 0.24);
       break;
     }
     case 'restart': {
-      const r = s * 0.3;
-      g.beginPath();
-      g.arc(0, 0, r, -Math.PI * 0.35, Math.PI * 1.35, false);
-      g.strokePath();
-      const a = -Math.PI * 0.35;
-      arrowHead(g, Math.cos(a) * r + s * 0.06, Math.sin(a) * r + s * 0.02, a + Math.PI * 0.55, s * 0.26);
+      // Почти полный круг по часовой, наконечник наверху смотрит вправо — на начало круга.
+      arcArrow(g, 0, s * 0.02, s * 0.3, -Math.PI * 0.15, Math.PI * 1.45, true, s * 0.24);
       break;
     }
     case 'undo': {
-      const r = s * 0.24;
+      // «Назад»: хвост снизу, дуга справа вверх, наверху прямой участок и наконечник влево.
+      const r = s * 0.22;
+      const cx = s * 0.08;
+      const cy = s * 0.04;
+      const head = s * 0.28;
+      g.lineBetween(-s * 0.2, cy + r, cx, cy + r);
       g.beginPath();
-      g.arc(s * 0.02, s * 0.04, r, Math.PI, Math.PI * 2.5, false);
+      g.arc(cx, cy, r, Math.PI / 2, -Math.PI / 2, true);
       g.strokePath();
-      g.lineBetween(s * 0.02, s * 0.04 + r, -s * 0.14, s * 0.04 + r);
-      arrowHead(g, -r + s * 0.02, s * 0.04 - s * 0.16, -Math.PI / 2, s * 0.26);
+      const tipX = -s * 0.32;
+      g.lineBetween(cx, cy - r, tipX + head * 0.5, cy - r);
+      arrowHead(g, tipX, cy - r, Math.PI, head);
       break;
     }
     case 'menu': {
@@ -332,6 +349,11 @@ export function drawIcon(g: G, name: IconName, s: number, color: number) {
       g.fillCircle(0, -s * 0.12, s * 0.17);
       g.fillRoundedRect(-s * 0.3, s * 0.1, s * 0.6, s * 0.26, { tl: s * 0.2, tr: s * 0.2, bl: s * 0.04, br: s * 0.04 });
       break;
+    case 'close':
+      g.lineStyle(s * 0.13, color, 1);
+      g.lineBetween(-s * 0.26, -s * 0.26, s * 0.26, s * 0.26);
+      g.lineBetween(-s * 0.26, s * 0.26, s * 0.26, -s * 0.26);
+      break;
     case 'trash':
       g.fillRoundedRect(-s * 0.22, -s * 0.16, s * 0.44, s * 0.48, s * 0.06);
       g.fillRect(-s * 0.32, -s * 0.28, s * 0.64, s * 0.08);
@@ -358,6 +380,51 @@ export function drawStar(g: G, x: number, y: number, r: number, color: number, a
   );
 }
 
+const lerpColor = (a: number, b: number, k: number) => {
+  const c = Phaser.Display.Color.Interpolate.ColorWithColor(Phaser.Display.Color.ValueToColor(a), Phaser.Display.Color.ValueToColor(b), 100, Math.round(k * 100));
+  return Phaser.Display.Color.GetColor(c.r, c.g, c.b);
+};
+
+/**
+ * Звезда «с объёмом»: тень, тёмно-золотой ободок, гранёные лучи (свет сверху слева — одна половина
+ * луча светлее, другая темнее) и блик. empty — «пустая» звезда-лунка тех же форм.
+ */
+export function drawShinyStar(g: G, x: number, y: number, r: number, empty = false, alpha = 1) {
+  const at = (pts: Phaser.Math.Vector2[], dx = 0, dy = 0) => pts.map((p) => new Phaser.Math.Vector2(p.x + x + dx, p.y + y + dy));
+  const outer = starPoints(r, 0.5);
+  if (empty) {
+    g.fillStyle(0x000000, 0.3 * alpha);
+    g.fillPoints(at(outer), true);
+    g.fillStyle(C.starEmpty, alpha);
+    g.fillPoints(at(starPoints(r * 0.9, 0.5), 0, r * 0.05), true);
+    return;
+  }
+  g.fillStyle(0x000000, 0.28 * alpha);
+  g.fillPoints(at(outer, 0, r * 0.1), true);
+  g.fillStyle(0xc98512, alpha);
+  g.fillPoints(at(outer), true);
+  // Грани: треугольник «центр — вершина луча — впадина»; яркость — по нормали грани к свету.
+  const inner = starPoints(r * 0.86, 0.5);
+  const cy = y - r * 0.03;
+  const L = new Phaser.Math.Vector2(-0.5, -0.86).normalize();
+  for (let i = 0; i < 10; i++) {
+    const a = inner[i];
+    const b = inner[(i + 1) % 10];
+    const tip = i % 2 === 0 ? a : b;
+    const dip = i % 2 === 0 ? b : a;
+    const axis = tip.clone().normalize();
+    const n = dip.clone().subtract(axis.clone().scale(dip.dot(axis))).normalize();
+    const k = Phaser.Math.Clamp(0.5 + 0.5 * n.dot(L), 0, 1);
+    g.fillStyle(lerpColor(0xf0a828, 0xffe58a, k), alpha);
+    g.fillTriangle(x, cy, a.x + x, a.y + cy, b.x + x, b.y + cy);
+  }
+  // Блик на верхнем левом луче и искорка в центре.
+  g.fillStyle(0xffffff, 0.6 * alpha);
+  g.fillEllipse(x - r * 0.2, cy - r * 0.36, r * 0.16, r * 0.3);
+  g.fillStyle(0xfff6d8, 0.8 * alpha);
+  g.fillCircle(x, cy, r * 0.07);
+}
+
 // ---------------------------------------------------------------------------
 // Кнопка с иконкой и/или подписью
 
@@ -376,6 +443,10 @@ export class Button extends Phaser.GameObjects.Container {
   private iconG: G;
   private labelT?: Phaser.GameObjects.Text;
   private enabledState = true;
+  /** Ширина, заданная при создании: кнопка не бывает уже, но растёт под содержимое (длинный текст, другой язык). */
+  private minW: number;
+  /** Ширина внешнего содержимого (подпись со значками — buttonRichLabel). */
+  private extraW = 0;
 
   constructor(
     scene: Phaser.Scene,
@@ -384,6 +455,7 @@ export class Button extends Phaser.GameObjects.Container {
     private opts: ButtonOpts,
   ) {
     super(scene, x, y);
+    this.minW = opts.w;
     this.bg = scene.add.graphics();
     this.iconG = scene.add.graphics();
     this.add([this.bg, this.iconG]);
@@ -429,6 +501,18 @@ export class Button extends Phaser.GameObjects.Container {
     this.redraw();
   }
 
+  /** Растянуть кнопку под внешнее содержимое шириной contentW (например, подпись со значками). */
+  fitContent(contentW: number) {
+    this.extraW = contentW;
+    this.redraw();
+    return this;
+  }
+
+  /** Текущая ширина кнопки (с учётом растяжения под содержимое). */
+  get buttonWidth() {
+    return this.opts.w;
+  }
+
   setEnabled(v: boolean) {
     this.enabledState = v;
     this.setAlpha(v ? 1 : 0.35);
@@ -436,7 +520,19 @@ export class Button extends Phaser.GameObjects.Container {
   }
 
   private redraw() {
-    const { w, h, primary, icon } = this.opts;
+    const { h, primary, icon } = this.opts;
+    // Ширина по содержимому: иконка + промежуток + подпись и поля по краям (не меньше заданной).
+    const iconW = h * 0.5;
+    const gap = h * 0.16;
+    const labelW = this.labelT?.width ?? 0;
+    const content = Math.max(this.extraW, this.labelT ? (icon ? iconW + gap : 0) + labelW : 0);
+    const w = Math.max(this.minW, Math.ceil(content + h * 0.6));
+    if (w !== this.opts.w) {
+      this.opts.w = w;
+      this.setSize(w, h);
+      const area = this.input?.hitArea as Phaser.Geom.Rectangle | undefined;
+      area?.setTo(0, 0, w, h);
+    }
     const g = this.bg;
     g.clear();
     if (primary) {
@@ -462,16 +558,27 @@ export class Button extends Phaser.GameObjects.Container {
     }
     if (this.labelT && icon) {
       // Иконка и подпись — одной группой по центру кнопки.
-      const iconW = h * 0.5;
-      const gap = h * 0.16;
-      const labelW = this.labelT.width;
-      const group = iconW + gap + labelW;
-      const left = -Math.min(group, w - h * 0.3) / 2;
+      const left = -(iconW + gap + labelW) / 2;
       this.iconG.setX(left + iconW / 2);
       this.labelT.setX(left + iconW + gap + labelW / 2);
     } else if (this.labelT) {
       this.labelT.setX(0);
     }
+  }
+}
+
+/**
+ * Ряд кнопок по центру cx — по их фактической ширине (кнопки растут под текст на любом языке).
+ * Если ряд шире maxW, все кнопки ряда уменьшаются одинаково.
+ */
+export function layoutRow(buttons: Button[], cx: number, gap = 30, maxW = W - 60) {
+  const total = buttons.reduce((s, b) => s + b.buttonWidth, 0) + gap * (buttons.length - 1);
+  const k = Math.min(1, maxW / total);
+  let x = cx - (total * k) / 2;
+  for (const b of buttons) {
+    b.setScale(k);
+    b.setX(x + (b.buttonWidth * k) / 2);
+    x += (b.buttonWidth + gap) * k;
   }
 }
 

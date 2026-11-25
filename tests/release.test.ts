@@ -17,6 +17,17 @@ describe('подготовка к TestFlight', () => {
     expect(pbx).toContain('PrivacyInfo.xcprivacy in Resources');
   });
 
+  it('имя под иконкой — «Glowtrail», Bundle ID не меняется (название в App Store — «Glowtrail: Light the Path»)', () => {
+    const plist = readFileSync('ios/App/App/Info.plist', 'utf8');
+    expect(plist).toMatch(/<key>CFBundleDisplayName<\/key>\s*<string>Glowtrail<\/string>/);
+    const cap = readFileSync('capacitor.config.ts', 'utf8');
+    expect(cap).toContain("appId: 'com.severgames.glowtrail'");
+    expect(cap).toContain("appName: 'Glowtrail'");
+    const strings = readFileSync('android/app/src/main/res/values/strings.xml', 'utf8');
+    expect(strings).toContain('<string name="app_name">Glowtrail</string>');
+    expect(readFileSync('android/app/build.gradle', 'utf8')).toContain('applicationId "com.severgames.glowtrail"');
+  });
+
   it('Info.plist без вопроса о шифровании, privacy manifest на месте', () => {
     const plist = readFileSync('ios/App/App/Info.plist', 'utf8');
     expect(plist).toMatch(/<key>ITSAppUsesNonExemptEncryption<\/key>\s*<false\/>/);

@@ -11,15 +11,15 @@
   ],
   "startDir": "N",
   "deck": [
+    "straight",
     "left",
     "straight",
     "straight",
     "right",
-    "straight",
-    "right",
-    "straight2",
     "straight2",
     "left",
+    "straight2",
+    "right",
     "right",
     "straight2"
   ],
@@ -29,40 +29,40 @@
   },
   "easeDecks": [
     [
+      "right",
+      "straight",
       "left",
       "straight",
       "straight",
       "right",
-      "straight",
+      "straight2",
+      "left",
+      "straight2",
       "right",
-      "left",
-      "straight2",
-      "straight2",
-      "left",
       "right",
       "straight2"
     ],
     [
       "right",
+      "straight",
       "left",
       "straight",
       "straight",
       "right",
-      "straight",
+      "left",
+      "straight2",
+      "left",
+      "straight2",
       "right",
-      "left",
-      "straight2",
-      "straight2",
-      "left",
       "right",
       "straight2"
     ]
   ],
   "metrics": {
-    "rating": 2,
+    "rating": 1.8,
     "roads": 25,
     "minTiles": 5,
     "reserve": 6,
-    "trap": 0.198
+    "trap": 0.177
   }
 }

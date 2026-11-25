@@ -7,10 +7,10 @@ import { coins, SKINS, type Skin, type SkinKind } from '../core/economy';
 import type { LanternShape } from '../core/avatars';
 import { buySkin, equipSkin, getEconomy } from '../meta';
 import { addBackground, Button, createAvatarBadge, createLumo, drawIcon, text } from '../ui/draw';
-import { addTabBar, addWallet, drawCoin, toast } from '../ui/meta';
+import { addTabBar, addWallet, COIN, drawCoin, toast } from '../ui/meta';
 import { drawArchSample, drawRoadSample, equippedLook, type ArchStyle, type RoadStyle } from '../ui/skins';
-import { stretchLayout } from '../ui/viewport';
-import { C, H, W } from '../ui/theme';
+import { edgeRows, stretchLayout } from '../ui/viewport';
+import { C, W } from '../ui/theme';
 
 const KINDS: { kind: SkinKind; label: string }[] = [
   { kind: 'costume', label: 'Костюмы' },
@@ -34,7 +34,7 @@ export class ShopScene extends Phaser.Scene {
     const bounds = stretchLayout(this);
     addBackground(this, { evening: true });
     this.cameras.main.fadeIn(150, 11, 15, 39);
-    const topY = 100 + bounds.top;
+    const { topY, rowY } = edgeRows(bounds);
     text(this, W / 2, topY, 'Магазин', 64);
     addWallet(this, W / 2, topY + 95);
 
@@ -65,8 +65,6 @@ export class ShopScene extends Phaser.Scene {
       const y = topY + 470 + row * 430;
       this.drawItem(s, x, y, e.skins.owned.includes(s.id), e.skins.equipped[s.kind] === s.id, look.avatar, coins(e));
     });
-
-    const rowY = 1730 + (bounds.bottom - H);
     addTabBar(this, 'Shop', rowY + 40, (k) => {
       this.cameras.main.fadeOut(150, 11, 15, 39);
       this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start(k));
@@ -122,7 +120,7 @@ export class ShopScene extends Phaser.Scene {
     const r = buySkin(s.id);
     if (!r.ok) {
       sfx.invalid();
-      toast(this, r.error === 'notEnoughCoins' ? 'Не хватает монет — проходи уровни' : 'Пока недоступно');
+      toast(this, r.error === 'notEnoughCoins' ? `Не хватает ${COIN} — проходи уровни` : 'Пока недоступно');
       return;
     }
     sfx.win();

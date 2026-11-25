@@ -30,7 +30,7 @@ import {
 } from '../core/game';
 import { abilities, buyHint, adHint, hintsLeft, recordWinRewards, spendHint } from '../meta';
 import { equippedLook } from '../ui/skins';
-import { drawCoin, drawLight, toast } from '../ui/meta';
+import { buttonRichLabel, COIN, drawCoin, drawLight, toast } from '../ui/meta';
 import { HINT_PRICE } from '../core/economy';
 import { easeDeck, findExtraTiles, findHint, nearestSolvable } from '../core/solver';
 import type { Level, TileKind } from '../core/types';
@@ -41,7 +41,7 @@ import { countHint, markAuthPrompted, recordPlayDay, shouldPromptAuth } from '..
 import { Account } from '../cloud/account';
 import { openAuthDialog } from '../ui/AuthDialog';
 import { BoardView } from '../ui/BoardView';
-import { addBackground, Button, createAvatarBadge, drawFireflyIcon, drawPortalIcon, drawStar, text } from '../ui/draw';
+import { addBackground, Button, createAvatarBadge, drawFireflyIcon, drawPortalIcon, drawShinyStar, layoutRow, text } from '../ui/draw';
 import { lanternsLeft } from '../core/portal';
 import { DX, DY } from '../core/types';
 import { t } from '../strings';
@@ -62,7 +62,7 @@ import {
   type TipId,
 } from '../tutorial';
 import { RULES_CLOSED } from './RulesScene';
-import { C, H, W } from '../ui/theme';
+import { C, FONT, H, W } from '../ui/theme';
 import { CARD, MiniCard, TileCard } from '../ui/TileCard';
 import { trayLayout, type TrayLayout } from '../ui/layout';
 import { irisIn } from '../ui/fx';
@@ -266,7 +266,9 @@ export class GameScene extends Phaser.Scene {
     const hintX = showSkip ? W / 2 - 190 : W / 2;
     this.hintBtn = new Button(this, hintX, this.bottomY, { w: 340, h: 116, icon: 'bulb', label: this.hintLabel(), fontSize: 40, onClick: () => this.onHint() });
     if (showSkip) {
-      new Button(this, W / 2 + 190, this.bottomY, { w: 340, h: 116, icon: 'skip', label: 'Пропустить', fontSize: 40, onClick: () => this.skipLevel() });
+      const skip = new Button(this, W / 2 + 190, this.bottomY, { w: 340, h: 116, icon: 'skip', label: 'Пропустить', fontSize: 40, onClick: () => this.skipLevel() });
+      // Кнопки растут под текст — ставим их рядом по фактической ширине.
+      layoutRow([this.hintBtn, skip], W / 2, 30);
     }
 
     this.hintRing = this.add.graphics().setDepth(9);
@@ -337,16 +339,12 @@ export class GameScene extends Phaser.Scene {
     const rules = this.custom ? [] : pendingRules(level);
     if (rules.length) {
       this.time.delayedCall(650, () => {
-        this.game.events.once(RULES_CLOSED, () => {
-          this.showGoalCard();
-          this.time.delayedCall(1950, () => this.startTips());
-        });
+        this.game.events.once(RULES_CLOSED, () => this.showGoalCard(() => this.startTips()));
         this.scene.launch('Rules', { cards: rules, from: 'Game' });
         this.scene.pause();
       });
     } else {
-      this.time.delayedCall(650, () => this.showGoalCard());
-      this.time.delayedCall(2600, () => this.startTips());
+      this.time.delayedCall(650, () => this.showGoalCard(() => this.startTips()));
     }
     this.resetIdle();
     this.input.on('pointerdown', this.resetIdle, this);
@@ -357,13 +355,19 @@ export class GameScene extends Phaser.Scene {
   // -------------------------------------------------------------------------
   // Цель уровня и подсказки Lumo
 
-  /** Карточка цели на 1,5 с: «Доведи Lumo до двери», «Зажги все фонари: N». Тап закрывает раньше. */
-  private showGoalCard() {
+  /**
+   * Карточка цели перед уровнем: «Доведи Lumo до двери», «Зажги все фонари: N», светлячки и пояснения к
+   * хитрым элементам уровня (гаснущий фонарь, поворотный мост). Не исчезает сама — закрывается кнопкой
+   * «Старт» (или Enter/пробел), чтобы успеть прочитать. onStart — после закрытия (подсказки Lumo).
+   */
+  private showGoalCard(onStart?: () => void) {
     if (this.state.status !== 'playing') return;
-    const n = this.state.level.lanterns.length;
-    const ff = this.state.level.fireflies.length;
-    const rows: { icon: 'portal' | 'lantern' | 'firefly'; label: string }[] = [];
-    if (this.state.level.goal === 'fireflies') {
+    const level = this.state.level;
+    const n = level.lanterns.length;
+    const ff = level.fireflies.length;
+    type Row = { icon: 'portal' | 'lantern' | 'firefly' | 'fade' | 'bridge'; label: string; note?: string };
+    const rows: Row[] = [];
+    if (level.goal === 'fireflies') {
       // Цель «светлячки»: двери нет, нужно собрать всех.
       rows.push({ icon: 'firefly', label: t('goal_all_fireflies', { n: ff }) });
     } else {
@@ -371,35 +375,129 @@ export class GameScene extends Phaser.Scene {
       if (n > 0) rows.push({ icon: 'lantern', label: t('goal_lanterns', { n }) });
       if (ff > 0) rows.push({ icon: 'firefly', label: t('goal_fireflies', { n: ff }) });
     }
-    const h = 90 + rows.length * 110;
-    const c = this.add.container(W / 2, 780).setDepth(35);
+    // Хитрые элементы — объясняем на каждом уровне, где они есть (не только при первой встрече).
+    const fadeN = level.fades.length ? level.fade[level.fades[0]] : 0;
+    if (fadeN) rows.push({ icon: 'fade', label: t('goal_fade_title'), note: t('goal_fade_text') });
+    if (level.turnBridges.length) rows.push({ icon: 'bridge', label: t('goal_bridge_title'), note: t('goal_bridge_text') });
+
+    const ICON = 80;
+    const GAP = 40;
+    const PAD = 64;
+    const maxW = W - 60;
+    const labels = rows.map((r) => text(this, 0, 0, r.label, 52).setOrigin(0, 0));
+    const longest = Math.max(...labels.map((l) => l.width));
+    const textMax = maxW - PAD * 2 - ICON - GAP;
+    const fit = Math.min(1, textMax / longest);
+    // Пояснения переносятся по словам; ширина окна — по самой длинной строке, не шире экрана.
+    const hasNotes = rows.some((r) => r.note);
+    const textW = hasNotes ? textMax : longest * fit;
+    const notes = rows.map((r) =>
+      r.note
+        ? this.add
+            .text(0, 0, r.note, { fontFamily: FONT, fontSize: '40px', color: C.textDim, wordWrap: { width: textW } })
+            .setOrigin(0, 0)
+            .setLineSpacing(4)
+        : null,
+    );
+    const contentW = ICON + GAP + textW;
+    const pw = Math.max(800, contentW + PAD * 2);
+    const rowH = rows.map((_, i) => Math.max(ICON, labels[i].height * fit + (notes[i] ? notes[i]!.height + 8 : 0)));
+    const ROW_GAP = 34;
+    const BTN = 130;
+    const ph = PAD + rowH.reduce((a, b) => a + b, 0) + ROW_GAP * (rows.length - 1) + 50 + BTN + 44;
+
+    const c = this.add.container(W / 2, H / 2 - 40).setDepth(35);
+    // Затемнение и окно: до «Старт» по полю не нажать.
+    const dim = this.add.rectangle(0, 0, W * 4, H * 4, 0x04061a, 0.55).setInteractive();
     const g = this.add.graphics();
     g.fillStyle(0x000000, 0.35);
-    g.fillRoundedRect(-400, -h / 2 + 10, 800, h, 50);
-    g.fillStyle(C.panel, 0.96);
-    g.fillRoundedRect(-400, -h / 2, 800, h, 50);
+    g.fillRoundedRect(-pw / 2, -ph / 2 + 10, pw, ph, 50);
+    g.fillStyle(C.panel, 0.98);
+    g.fillRoundedRect(-pw / 2, -ph / 2, pw, ph, 50);
     g.lineStyle(6, C.primary, 0.9);
-    g.strokeRoundedRect(-400, -h / 2, 800, h, 50);
-    c.add(g);
+    g.strokeRoundedRect(-pw / 2, -ph / 2, pw, ph, 50);
+    c.add([dim, g]);
+    const left = -contentW / 2;
+    const ix = left + ICON / 2;
+    const tx = left + ICON + GAP;
+    let y = -ph / 2 + PAD;
     rows.forEach((r, i) => {
-      const y = -h / 2 + 100 + i * 110;
+      const cy = y + rowH[i] / 2;
       const ig = this.add.graphics();
-      if (r.icon === 'portal') drawPortalIcon(ig, -300, y, 32, false);
-      else if (r.icon === 'firefly') drawFireflyIcon(ig, -300, y, 30, true);
-      else this.drawLanternIcon(ig, -300, y + 4, true, 1.5);
+      const iy = notes[i] ? y + 30 : cy;
+      if (r.icon === 'portal') drawPortalIcon(ig, ix, iy, 32, false);
+      else if (r.icon === 'firefly') drawFireflyIcon(ig, ix, iy, 30, true);
+      else if (r.icon === 'lantern') this.drawLanternIcon(ig, ix, iy + 4, true, 1.5);
+      else if (r.icon === 'fade') this.drawFadeIcon(ig, ix, iy + 10, fadeN);
+      else this.drawTurnBridgeIcon(ig, ix, iy + 10);
       c.add(ig);
-      c.add(text(this, -230, y, r.label, 52).setOrigin(0, 0.5));
+      const label = labels[i].setScale(fit);
+      if (notes[i]) {
+        label.setPosition(tx, y);
+        c.add([label, notes[i]!.setPosition(tx, y + label.height * fit + 8)]);
+      } else {
+        c.add(label.setPosition(tx, cy - (label.height * fit) / 2));
+      }
+      if (r.icon === 'fade') {
+        // Число на табличке — как на поле.
+        const badge = text(this, ix + 26, iy - 18, String(fadeN), 30, '#fff1cc');
+        c.add(badge);
+      }
+      y += rowH[i] + ROW_GAP;
     });
-    c.setAlpha(0).setScale(0.8);
+    const shownAt = Date.now();
+    let done = false;
+    const start = () => {
+      if (done) return;
+      done = true;
+      sfx.tap();
+      this.goalCard = undefined;
+      this.input.keyboard?.off('keydown-ENTER', start);
+      this.input.keyboard?.off('keydown-SPACE', start);
+      // Время уровня считаем с «Старт» — чтение правил не в счёт.
+      this.t0 += Date.now() - shownAt;
+      this.tweens.add({ targets: c, alpha: 0, scale: 0.95, duration: 220, onComplete: () => c.destroy() });
+      this.resetIdle();
+      if (onStart) this.time.delayedCall(350, onStart);
+    };
+    c.add(new Button(this, 0, ph / 2 - 44 - BTN / 2, { w: 420, h: BTN, icon: 'play', label: t('goal_start'), primary: true, fontSize: 52, onClick: start }));
+    this.input.keyboard?.on('keydown-ENTER', start);
+    this.input.keyboard?.on('keydown-SPACE', start);
+    this.events.once('shutdown', () => {
+      this.input.keyboard?.off('keydown-ENTER', start);
+      this.input.keyboard?.off('keydown-SPACE', start);
+    });
+    c.setAlpha(0).setScale(0.85);
     this.goalCard = c;
     this.tweens.add({ targets: c, alpha: 1, scale: 1, duration: 280, ease: 'Back.out' });
-    const hide = () => {
-      if (this.goalCard !== c) return;
-      this.goalCard = undefined;
-      this.tweens.add({ targets: c, alpha: 0, scale: 0.9, y: 740, duration: 300, onComplete: () => c.destroy() });
+  }
+
+  /** Гаснущий фонарь в карточке цели: фонарь на постаменте и табличка с числом (число рисуется текстом). */
+  private drawFadeIcon(g: Phaser.GameObjects.Graphics, x: number, y: number, _n: number) {
+    this.drawLanternIcon(g, x - 6, y, true, 1.4);
+    g.fillStyle(0x1a2150, 1);
+    g.fillCircle(x + 26, y - 28, 22);
+    g.lineStyle(4, C.primary, 1);
+    g.strokeCircle(x + 26, y - 28, 22);
+  }
+
+  /** Поворотный мост в карточке цели: мост сейчас и полупрозрачный — каким станет после плитки. */
+  private drawTurnBridgeIcon(g: Phaser.GameObjects.Graphics, x: number, y: number) {
+    const plank = (alpha: number, vertical: boolean) => {
+      const w = vertical ? 30 : 70;
+      const h = vertical ? 70 : 30;
+      g.fillStyle(0x8a5a32, alpha);
+      g.fillRoundedRect(x - w / 2, y - h / 2, w, h, 6);
+      g.lineStyle(3, 0x5a3a1e, alpha);
+      for (let k = -1; k <= 1; k++) {
+        if (vertical) g.lineBetween(x - w / 2 + 4, y + k * 18, x + w / 2 - 4, y + k * 18);
+        else g.lineBetween(x + k * 18, y - h / 2 + 4, x + k * 18, y + h / 2 - 4);
+      }
     };
-    this.time.delayedCall(1800, hide);
-    this.input.once('pointerdown', hide);
+    g.fillStyle(0x24508a, 0.9);
+    g.fillRoundedRect(x - 40, y - 40, 80, 80, 14);
+    plank(0.35, true);
+    plank(1, false);
   }
 
   /** Подсказки в начале уровня (каждая — один раз за игру). */
@@ -434,7 +532,7 @@ export class GameScene extends Phaser.Scene {
     this.idleTimer?.remove();
     if (hasSeenTip('hint')) return;
     this.idleTimer = this.time.delayedCall(IDLE_HINT_SECONDS * 1000, () => {
-      if (this.state.status === 'playing' && !this.overlay && !this.busy) this.tip('hint', { x: this.hintBtn.x, y: this.bottomY - 58 }, 'above');
+      if (this.state.status === 'playing' && !this.overlay && !this.busy && !this.goalCard) this.tip('hint', { x: this.hintBtn.x, y: this.bottomY - 58 }, 'above');
     });
   }
 
@@ -706,23 +804,21 @@ export class GameScene extends Phaser.Scene {
     const buy = new Button(this, W / 2, top + 320, {
       w: 600,
       h: 130,
-      label: `Купить за ${HINT_PRICE}`,
       primary: true,
       fontSize: 46,
       onClick: () => {
         const r = buyHint();
         if (!r.ok) {
           sfx.invalid();
-          toast(this, 'Не хватает монет', top + 420);
+          toast(this, `Не хватает ${COIN}`, top + 420);
           return;
         }
         sfx.star(1);
         done();
       },
     });
-    const cg = this.add.graphics();
-    drawCoin(cg, W / 2 - 230, top + 320, 26);
-    o.add([buy, cg]);
+    buttonRichLabel(buy, `Купить за ${HINT_PRICE} ${COIN}`, 46);
+    o.add(buy);
     o.add(
       new Button(this, W / 2, top + 470, {
         w: 600,
@@ -926,6 +1022,7 @@ export class GameScene extends Phaser.Scene {
       if (e.key === 'Enter' || e.key === ' ') this.overlay.emit('primary');
       return;
     }
+    if (this.goalCard) return; // карточка цели: сначала «Старт»
     if (['1', '2', '3'].includes(e.key)) this.tryPlace(Number(e.key) - 1);
     else if (e.key === '0') this.tryPlace('stash');
     else if (e.key === 's' || e.key === 'ы') this.tapStash();
@@ -1305,10 +1402,10 @@ export class GameScene extends Phaser.Scene {
     o.add(starG);
     const xs = [W / 2 - 190, W / 2, W / 2 + 190];
     const ys = [top + 400, top + 360, top + 400];
-    xs.forEach((x, i) => drawStar(starG, x, ys[i], 82, C.starEmpty));
+    xs.forEach((x, i) => drawShinyStar(starG, x, ys[i], 82, true));
     for (let i = 0; i < stars; i++) {
       const sg = this.add.graphics().setPosition(xs[i], ys[i]).setScale(0);
-      drawStar(sg, 0, 0, 86, C.star);
+      drawShinyStar(sg, 0, 0, 86);
       o.add(sg);
       this.tweens.add({ targets: sg, scale: 1, duration: 380, delay: 300 + i * 260, ease: 'Back.out', onStart: () => sfx.star(i) });
     }

@@ -10,6 +10,8 @@ export interface DifficultyReport extends SolveReport {
   metrics: LevelMetrics;
   /** Решается ли без слота «отложить». */
   solvableWithoutStash: boolean;
+  /** Сколько светлячков можно собрать за победу без «отложить» (светлячки не должны требовать хитростей). */
+  firefliesWithoutStash: number;
 }
 
 /** mulberry32 — детерминированная выборка: у одного и того же уровня всегда одни и те же метрики. */
@@ -120,10 +122,11 @@ export function ratingOf(m: { trap: number; roads: number; reserve: number; minT
  */
 export function analyzeLevel(level: Level, deck: TileKind[] = level.deck, maxStates?: number): DifficultyReport {
   const r = solveLevel(level, { deck: level.tileSet ? undefined : deck, maxStates });
-  const noStash = level.allowStash && !level.tileSet ? solveLevel(level, { deck, allowStash: false, countRoads: false, maxStates }).solvable : r.solvable;
+  const ns = level.allowStash && !level.tileSet ? solveLevel(level, { deck, allowStash: false, countRoads: false, maxStates }) : r;
+  const noStash = ns.solvable;
   const reserve = level.tileSet ? -1 : r.solvable ? deck.length - r.minTiles : 0;
   const trap = r.solvable ? Math.round(trapRate(level, deck, TRAP_SAMPLES, maxStates) * 1000) / 1000 : 1;
   const metrics: LevelMetrics = { rating: 0, roads: r.roads, minTiles: r.minTiles, reserve, trap };
   metrics.rating = ratingOf(metrics);
-  return { ...r, metrics, solvableWithoutStash: noStash };
+  return { ...r, metrics, solvableWithoutStash: noStash, firefliesWithoutStash: noStash ? ns.maxFireflies : 0 };
 }
