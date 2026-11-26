@@ -1,9 +1,11 @@
 // Профиль игрока поверх SaveService: имя, аватарка, серия дней, счётчик подсказок и сводка для экрана «Профиль».
 
-import { equip, grant } from './core/economy';
+import { t } from './i18n';
+import { equip } from './core/economy';
 import { SaveService, type Profile, type Progress } from './save/SaveService';
 
-export const DEFAULT_NAME = 'Путник';
+/** Имя по умолчанию («Путник») — по языку интерфейса. */
+export const defaultName = () => t('default_name');
 export const NAME_MAX = 16;
 /** После прохождения какого уровня спрашиваем имя. */
 export const ASK_NAME_AFTER_LEVEL = 3;
@@ -13,7 +15,7 @@ export function getProfile(): Profile {
 }
 
 export function displayName(p: Profile = getProfile()): string {
-  return p.name ?? DEFAULT_NAME;
+  return p.name ?? defaultName();
 }
 
 /** Обрезает пробелы и управляющие символы, ограничивает длину. Пустое имя → null («Путник»). */
@@ -48,11 +50,10 @@ export function levelsPassed(progress: Progress = SaveService.load().progress): 
  * Возвращает true при успехе. Остальные костюмы — в магазине.
  */
 export function setAvatar(id: number): boolean {
-  const skin = `costume-${id}`;
-  const owned = SaveService.load().economy.skins.owned.includes(skin);
-  if (!owned && !(id >= 0 && id <= 3)) return false;
+  // Стартовые костюмы — 4 цвета обычного плаща.
+  if (!(id >= 0 && id <= 3)) return false;
   SaveService.update((d) => {
-    d.economy = equip(grant(d.economy, { skin }), skin);
+    d.economy = equip(d.economy, 'outfit-cloak', id);
     d.profile.avatar = id;
   });
   return true;

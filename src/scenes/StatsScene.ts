@@ -1,5 +1,7 @@
 // Экран «Статистика»: сводка по уровням и кнопка «Скопировать» для плейтеста.
 
+import { t } from '../i18n';
+import { setFitted } from '../ui/UIText';
 import Phaser from 'phaser';
 import { LEVELS } from '../levels/index';
 import { sfx } from '../audio';
@@ -21,7 +23,7 @@ export class StatsScene extends Phaser.Scene {
     this.cameras.main.fadeIn(200, 11, 15, 39);
 
     new Button(this, 90, 105, { w: 130, h: 130, icon: 'back', onClick: () => this.back() });
-    text(this, W / 2, 105, 'Статистика', 70);
+    text(this, W / 2, 105, t('set_stats'), 70, C.text, true, { w: W - 340 });
 
     const log = loadLog();
     const all = summarize(log, LEVELS);
@@ -32,33 +34,36 @@ export class StatsScene extends Phaser.Scene {
     const totalMs = all.reduce((s, r) => s + r.timeMs, 0);
     const attempts = all.reduce((s, r) => s + r.attempts, 0);
 
-    text(this, W / 2, 260, `Пройдено: ${passedAll} из ${LEVELS.length}`, 56);
-    text(this, W / 2, 335, `Попыток: ${attempts}   Время: ${fmtTime(totalMs)}`, 40, C.textDim, false);
+    text(this, W / 2, 260, t('stats_passed', { n: passedAll, total: LEVELS.length }), 56, C.text, true, { w: W - 80 });
+    text(this, W / 2, 335, t('stats_attempts_time', { n: attempts, time: fmtTime(totalMs) }), 40, C.textDim, false, { w: W - 80 });
 
-    const header = 'Ур Попыт Побед Звёзды  Время Помощь';
+    const header = t('stats_header');
     const lines = rows.map((r) => {
-      const stars = r.wins ? '★'.repeat(r.bestStars) + '·'.repeat(3 - r.bestStars) : r.skipped ? 'проп.' : '···';
+      const stars = r.wins ? '★'.repeat(r.bestStars) + '·'.repeat(3 - r.bestStars) : r.skipped ? t('stats_skipped') : '···';
       const help = r.hints + r.extras + r.eased;
       return `${String(r.num).padStart(2)} ${String(r.attempts).padStart(5)} ${String(r.wins).padStart(5)} ${stars.padStart(6)} ${fmtTime(r.timeMs).padStart(6)} ${String(help || '·').padStart(6)}`;
     });
-    if (played.length > rows.length) lines.unshift(`   … ещё ${played.length - rows.length} выше`);
-    this.add.text(W / 2, 430, [header, ...lines].join('\n'), {
+    if (played.length > rows.length) lines.unshift(t('stats_more_above', { n: played.length - rows.length }));
+    const table = this.add.text(W / 2, 430, [header, ...lines].join('\n'), {
       fontFamily: MONO,
       fontSize: '40px',
       color: C.text,
       lineSpacing: 22,
     }).setOrigin(0.5, 0);
+    // Таблица не шире экрана (длинные заголовки на других языках).
+    if (table.width > W - 60) table.setScale((W - 60) / table.width);
 
     const status = text(this, W / 2, 1560, '', 40, C.textDim, false);
+    const setStatus = (str: string) => setFitted(status, str, { w: W - 80, lines: 2, size: 40, bold: false });
     new Button(this, W / 2, 1420, {
       w: 640,
       h: 150,
       icon: 'copy',
-      label: 'Скопировать',
+      label: t('copy'),
       primary: true,
       onClick: async () => {
         const ok = await copyText(statsText(LEVELS));
-        status.setText(ok ? 'Скопировано — отправь в чат плейтеста' : 'Не получилось — выдели текст и скопируй вручную');
+        setStatus(ok ? t('copied') : t('copy_failed'));
         if (!ok) showTextFallback(statsText(LEVELS));
         sfx.tap();
       },
@@ -68,12 +73,12 @@ export class StatsScene extends Phaser.Scene {
       w: 520,
       h: 110,
       icon: 'trash',
-      label: 'Сбросить всё',
+      label: t('reset_all'),
       fontSize: 38,
       onClick: () => {
         if (!this.confirmReset) {
           this.confirmReset = true;
-          status.setText('Нажми ещё раз, чтобы стереть прогресс и статистику');
+          setStatus(t('reset_confirm'));
           return;
         }
         resetAll();
@@ -119,7 +124,7 @@ function showTextFallback(str: string) {
   ta.readOnly = true;
   ta.style.cssText = 'flex:1;font:12px monospace;background:#1a2150;color:#fff1cc;border:0;border-radius:12px;padding:12px;';
   const btn = document.createElement('button');
-  btn.textContent = 'Закрыть';
+  btn.textContent = t('close');
   btn.style.cssText = 'font:bold 18px sans-serif;padding:14px;border:0;border-radius:12px;background:#ffb84d;';
   btn.onclick = () => wrap.remove();
   wrap.append(ta, btn);

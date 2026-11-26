@@ -1,11 +1,11 @@
 // Карточки правил поверх игры: заголовок, живая анимация на мини-поле (настоящая логика игры) и одна фраза.
 // Запускается поверх уровня (перед первым знакомством с элементом) или из меню («Как играть» — все карточки).
 
+import { currentLook } from '../ui/skins';
 import Phaser from 'phaser';
 import { canPlace, createGame, previewTile, type GameState } from '../core/game';
 import type { TileKind } from '../core/types';
 import { sfx } from '../audio';
-import { getProfile } from '../profile';
 import { demoLevel, demoPlace, RULE_CARDS, type DemoPhase } from '../rules';
 import { t } from '../strings';
 import { markRulesSeen, restartTutorial, type RuleId } from '../tutorial';
@@ -67,7 +67,7 @@ export class RulesScene extends Phaser.Scene {
     text(this, W / 2, top + 72, t(rule.title), 64);
 
     // Мини-поле: то же, что в игре, но без темноты — чтобы всё было хорошо видно.
-    this.board = new BoardView(this, demoLevel(ph), { x: W / 2 - 390, y: top + 140, w: 780, h: 530 }, { avatar: getProfile().avatar, dark: false, ambient: false });
+    this.board = new BoardView(this, demoLevel(ph), { x: W / 2 - 390, y: top + 140, w: 780, h: 530 }, { look: currentLook(), dark: false, ambient: false });
     this.card = new TileCard(this, W / 2, top + 770, 0);
     this.card.disableInteractive();
     this.card.setScale(0.8);

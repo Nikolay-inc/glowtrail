@@ -1,6 +1,7 @@
 // Облачное сохранение и слияние с локальным. Без сети и Supabase — чистые функции, покрыты тестами.
 // В облако уходят профиль и прогресс; лог событий остаётся на устройстве (это аналитика плейтеста).
 
+import { avatarIndex } from '../core/wardrobe';
 import { normalizeProgress, SAVE_VERSION, type Profile, type Progress, type SaveData } from '../save/SaveService';
 import { economyFromProgress, mergeEconomy, normalizeEconomy, type Economy } from '../core/economy';
 
@@ -46,6 +47,7 @@ export function mergeSaves(local: SaveData, cloud: CloudPayload | null): SaveDat
     muted: lp.muted, // звук — настройка устройства
     music: lp.music, // музыка — тоже
     vibration: lp.vibration, // вибрация — тоже
+    language: lp.language, // язык — тоже
   };
 
   const l = local.profile;
@@ -68,8 +70,10 @@ export function mergeSaves(local: SaveData, cloud: CloudPayload | null): SaveDat
   // Экономика: облако старой версии без раздела — монеты за его звёзды начисляем как при миграции.
   const cloudEconomy = cloud.economy ? normalizeEconomy(cloud.economy) : economyFromProgress(cp.stars, c.avatar);
   const economy = mergeEconomy(normalizeEconomy(local.economy), cloudEconomy);
-  // Надетый костюм — как аватарка профиля.
-  if (economy.skins.owned.includes(`costume-${profile.avatar}`)) economy.skins.equipped.costume = `costume-${profile.avatar}`;
+  // Аватарка профиля (личность аккаунта) — цвет обычного плаща; иначе — по надетому образу.
+  const look = economy.wardrobe.look;
+  if (look.outfit === 'outfit-cloak' && profile.avatar >= 0 && profile.avatar <= 3) economy.wardrobe = { ...economy.wardrobe, look: { ...look, color: profile.avatar } };
+  else profile.avatar = avatarIndex(look);
   return { ...local, profile, progress, economy };
 }
 

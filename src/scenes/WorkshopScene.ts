@@ -4,18 +4,16 @@
 
 import Phaser from 'phaser';
 import { setMusicMood, sfx } from '../audio';
-import { FREE_HINTS_PER_DAY, freeHintsLeft, HINT_PRICE, upgradePrice, UPGRADES, type UpgradeId } from '../core/economy';
+import { coins, freeHintsLeft, freeHintsPerDay, HINT_PRICE, upgradePrice, UPGRADES, type UpgradeId } from '../core/economy';
+import { fmt, t, tk } from '../i18n';
 import { adHint, buyHint, buyUpgrade, getEconomy, today } from '../meta';
 import { addBackground, Button, drawIcon, layoutRow, text, type IconName } from '../ui/draw';
-import { addTabBar, addWallet, buttonRichLabel, COIN, drawCoin, toast } from '../ui/meta';
+import { addTabBar, addWallet, buttonRichLabel, drawCoin, toast } from '../ui/meta';
+import { showNotEnough } from '../ui/notEnough';
+import { uiText } from '../ui/UIText';
 import { edgeRows, stretchLayout } from '../ui/viewport';
-import { C, FONT, W } from '../ui/theme';
+import { C, W } from '../ui/theme';
 
-const DESCR: Record<UpgradeId, string> = {
-  stash: 'Держи в запасе больше плиток: второй слот «отложить»',
-  rotate: 'Поверни плитку в лотке на 90° — заряды на каждый уровень',
-  lantern: 'Видно больше следующих плиток колоды',
-};
 const ICON: Record<UpgradeId, IconName> = { stash: 'stashbox', rotate: 'rotate', lantern: 'lantern' };
 
 /** Карточка: иконка слева, справа — заголовок и описание одним блоком по левому краю, под ними уровни, цена справа. */
@@ -40,7 +38,7 @@ export class WorkshopScene extends Phaser.Scene {
     this.cameras.main.fadeIn(200, 11, 15, 39);
     const { topY, rowY } = edgeRows(bounds);
     new Button(this, 90, topY, { w: 130, h: 130, icon: 'back', onClick: () => this.go('Village') });
-    text(this, W / 2, topY, 'Мастерская', 64);
+    text(this, W / 2, topY, t('village_workshop'), 64, C.text, true, { w: W - 340 });
     const wallet = addWallet(this, W / 2, topY + 100);
     const e = getEconomy();
 
@@ -54,9 +52,8 @@ export class WorkshopScene extends Phaser.Scene {
     };
     /** Заголовок и описание одним блоком по левому краю; длинное описание переносится и при нужде уменьшается. */
     const textBlock = (y: number, title: string, descr: string) => {
-      text(this, TEXT_X, y - 62, title, 46).setOrigin(0, 0.5);
-      const d = this.add.text(TEXT_X, y - 32, descr, { fontFamily: FONT, fontSize: '28px', color: C.textDim, wordWrap: { width: TEXT_W } }).setOrigin(0, 0);
-      if (d.height > 76) d.setFontSize(24);
+      uiText(this, TEXT_X, y - 62, title, { w: TEXT_W, size: 46, originX: 0, align: 'left' });
+      uiText(this, TEXT_X, y - 32, descr, { w: TEXT_W, h: 84, lines: 2, size: 28, color: C.textDim, bold: false, originX: 0, originY: 0, align: 'left' });
     };
 
     const ids: UpgradeId[] = ['stash', 'rotate', 'lantern'];
@@ -67,7 +64,7 @@ export class WorkshopScene extends Phaser.Scene {
       card(y, 240);
       const ig = this.add.graphics().setPosition(ICON_X, y);
       drawIcon(ig, ICON[id], 110, C.icon);
-      textBlock(y, def.name, DESCR[id]);
+      textBlock(y, tk(`upgrade.${id}.name`), tk(`upgrade.${id}.descr`));
       // Уровни — точками под текстом
       const dots = this.add.graphics();
       for (let k = 1; k < def.values.length; k++) {
@@ -75,15 +72,15 @@ export class WorkshopScene extends Phaser.Scene {
         dots.fillCircle(TEXT_X + 14 + (k - 1) * 40, y + 78, 13);
       }
       const now = def.values[lvl];
-      text(this, TEXT_X + (def.values.length - 1) * 40 + 10, y + 78, id === 'rotate' && lvl === 0 ? 'нет' : `${now} ${unit(id, now)}`, 30, C.text, false).setOrigin(0, 0.5);
+      const dotsW = (def.values.length - 1) * 40 + 10;
+      uiText(this, TEXT_X + dotsW, y + 78, id === 'rotate' && lvl === 0 ? t('upgrade_none') : tk(`upgrade.${id}.value`, { n: now }), { w: TEXT_W - dotsW, size: 30, bold: false, originX: 0, align: 'left' });
       const price = upgradePrice(e, id);
       const maxed = lvl >= def.values.length - 1;
-      if (maxed) text(this, BTN_X, y, 'Максимум', 36, '#8ef0c8');
+      if (maxed) text(this, BTN_X, y, t('upgrade_max'), 36, '#8ef0c8', true, { w: 240, lines: 2 });
       else if (price === null) {
-        text(this, BTN_X, y - 18, 'Откроется', 30, C.textDim, false);
-        text(this, BTN_X, y + 18, 'в деревне', 30, C.textDim, false);
+        text(this, BTN_X, y, t('upgrade_in_village'), 30, C.textDim, false, { w: 240, lines: 3 });
       } else {
-        new Button(this, BTN_X, y, { w: 210, h: 100, label: `${price}`, fontSize: 42, primary: true, onClick: () => this.buy(id) }).setDepth(1);
+        new Button(this, BTN_X, y, { w: 210, h: 100, label: fmt(price), fontSize: 42, primary: true, onClick: () => this.buy(id) }).setDepth(1);
         const cg = this.add.graphics().setDepth(2);
         drawCoin(cg, BTN_X - 62, y, 21);
       }
@@ -95,7 +92,7 @@ export class WorkshopScene extends Phaser.Scene {
     const bulb = this.add.graphics().setPosition(ICON_X, hy - 40);
     drawIcon(bulb, 'bulb', 110, C.icon);
     const free = freeHintsLeft(e, today());
-    textBlock(hy - 30, `Подсказки: ${free + e.hints.bank}`, `Бесплатных сегодня ${free} из ${FREE_HINTS_PER_DAY}, в запасе ${e.hints.bank}`);
+    textBlock(hy - 30, t('hints_title', { n: free + e.hints.bank }), t('hints_descr', { free, total: freeHintsPerDay(e), bank: e.hints.bank }));
     const buyBtn = new Button(this, 360, hy + 85, {
       w: 380,
       h: 96,
@@ -103,26 +100,23 @@ export class WorkshopScene extends Phaser.Scene {
         const r = buyHint();
         if (r.ok) {
           sfx.star(1);
-          toast(this, 'Подсказка куплена');
+          toast(this, t('hint_bought'));
           this.scene.restart();
-        } else {
-          sfx.invalid();
-          toast(this, `Не хватает ${COIN}`);
-        }
+        } else showNotEnough(this, 'coins', HINT_PRICE - coins(getEconomy()));
       },
     });
-    buttonRichLabel(buyBtn, `Купить за ${HINT_PRICE} ${COIN}`, 34, false);
+    buttonRichLabel(buyBtn, t('buy_for', { n: HINT_PRICE }), 34, false);
     const adBtn = new Button(this, 770, hy + 85, {
       w: 400,
       h: 96,
       icon: 'play',
-      label: 'За рекламу',
+      label: t('for_ad'),
       fontSize: 34,
       onClick: () => {
         // Заглушка до Р4: настоящая реклама подключится позже, подсказка выдаётся сразу.
         adHint();
         sfx.star(0);
-        toast(this, 'Реклама появится позже — подсказка уже твоя');
+        toast(this, t('ad_stub_hint'));
         this.time.delayedCall(900, () => this.scene.restart());
       },
     });
@@ -134,12 +128,15 @@ export class WorkshopScene extends Phaser.Scene {
   private buy(id: UpgradeId) {
     const r = buyUpgrade(id);
     if (!r.ok) {
-      sfx.invalid();
-      toast(this, r.error === 'notEnoughCoins' ? `Не хватает ${COIN} — проходи уровни` : 'Пока недоступно');
+      if (r.error === 'notEnoughCoins') showNotEnough(this, 'coins', (upgradePrice(getEconomy(), id) ?? 0) - coins(getEconomy()));
+      else {
+        sfx.invalid();
+        toast(this, t('unavailable'));
+      }
       return;
     }
     sfx.win();
-    toast(this, `${UPGRADES[id].name}: уровень ${r.value}`);
+    toast(this, t('upgrade_bought', { name: tk(`upgrade.${id}.name`), n: r.value }));
     this.time.delayedCall(600, () => this.scene.restart());
   }
 
@@ -148,10 +145,4 @@ export class WorkshopScene extends Phaser.Scene {
     this.cameras.main.fadeOut(180, 11, 15, 39);
     this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start(scene));
   }
-}
-
-function unit(id: UpgradeId, n: number) {
-  if (id === 'stash') return n === 1 ? 'слот' : 'слота';
-  if (id === 'rotate') return n === 1 ? 'заряд' : 'заряда';
-  return 'плитки';
 }

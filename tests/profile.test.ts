@@ -3,7 +3,7 @@ import { AVATARS, isAvatarUnlocked } from '../src/core/avatars';
 import { LEGACY_KEYS, memoryBackend, SAVE_KEY, SAVE_VERSION, SaveService } from '../src/save/SaveService';
 import {
   countHint,
-  DEFAULT_NAME,
+  defaultName,
   displayName,
   getProfile,
   levelsPassed,
@@ -27,7 +27,7 @@ describe('сохранение v3: профиль', () => {
     const backend = memoryBackend();
     SaveService.setBackend(backend);
     const p = getProfile();
-    expect(SAVE_VERSION).toBe(5);
+    expect(SAVE_VERSION).toBe(7);
     expect(p.playerId).toMatch(UUID);
     expect(p).toMatchObject({ name: null, avatar: 0, nameAsked: false, hintsUsed: 0, dayStreak: 0 });
     // Сразу сохранён: после перезагрузки тот же playerId.
@@ -90,7 +90,7 @@ describe('имя и знакомство', () => {
     expect(sanitizeName('абвгдеёжзийклмнопрст')).toHaveLength(16);
     expect([...sanitizeName('🙂'.repeat(20))!]).toHaveLength(16);
     expect(sanitizeName('   ')).toBeNull();
-    expect(displayName()).toBe(DEFAULT_NAME);
+    expect(displayName()).toBe(defaultName());
     setName('Оля');
     expect(displayName()).toBe('Оля');
   });
@@ -100,7 +100,7 @@ describe('имя и знакомство', () => {
     expect(shouldAskName(3)).toBe(true);
     skipName();
     expect(shouldAskName(3)).toBe(false);
-    expect(displayName()).toBe(DEFAULT_NAME);
+    expect(displayName()).toBe(defaultName());
   });
 });
 
@@ -119,14 +119,12 @@ describe('аватарки', () => {
     expect(setAvatar(5)).toBe(false);
     expect(setAvatar(2)).toBe(true);
     expect(getProfile().avatar).toBe(2);
-    expect(SaveService.load().economy.skins.equipped.costume).toBe('costume-2');
+    expect(SaveService.load().economy.wardrobe.look).toMatchObject({ outfit: 'outfit-cloak', color: 2 });
     SaveService.update((d) => {
       for (let i = 1; i <= 7; i++) d.progress.stars[i] = 3; // 21 звезда
-      d.economy.skins.owned.push('costume-5');
     });
     expect(totalStars()).toBe(21);
     expect(levelsPassed()).toBe(7);
-    expect(setAvatar(5)).toBe(true);
     expect(setAvatar(6)).toBe(false);
   });
 });

@@ -41,6 +41,8 @@ export default defineConfig(({ command, mode }) => ({
   build: {
     chunkSizeWarningLimit: 2000,
   },
+  // npm run i18n-check: без перезагрузки страницы при правке файлов во время проверки.
+  server: process.env.GLOW_NO_HMR ? { hmr: false, watch: { ignored: ['**/*'] } } : undefined,
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
     __APP_BUILD__: JSON.stringify(appBuild),

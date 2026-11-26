@@ -1,6 +1,7 @@
 // Окна аккаунта поверх игры: вход, регистрация, «забыли пароль», новый пароль, управление аккаунтом.
 // Это обычные HTML-формы (не Phaser): так работают менеджеры паролей, автозаполнение и клавиатура телефона.
 
+import { t } from '../i18n';
 import { Account, AccountError } from '../cloud/account';
 import { PASSWORD_MIN, validateEmail, validatePassword, validatePasswordPair } from '../cloud/validate';
 import { isolateFromGame } from './domIsolation';
@@ -64,11 +65,11 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, props: Partial<HTMLEl
 
 function passwordField(id: string, label: string, autocomplete: string) {
   const input = el('input', { id, type: 'password', autocomplete: autocomplete as AutoFill, required: true, minLength: PASSWORD_MIN, maxLength: 72 });
-  const show = el('button', { type: 'button', class: 'gt-auth__show', textContent: 'Показать' });
+  const show = el('button', { type: 'button', class: 'gt-auth__show', textContent: t('pw_show') });
   show.addEventListener('click', () => {
     const hidden = input.type === 'password';
     input.type = hidden ? 'text' : 'password';
-    show.textContent = hidden ? 'Скрыть' : 'Показать';
+    show.textContent = hidden ? t('pw_hide') : t('pw_show');
   });
   return { input, node: el('div', {}, el('label', { htmlFor: id, textContent: label }), el('div', { class: 'gt-auth__pw' }, input, show)) };
 }
@@ -118,7 +119,7 @@ export function openAuthDialog(
 
   const render = (m: AuthMode, email = opts.email ?? '', message?: { text: string; ok?: boolean }) => {
     card.replaceChildren();
-    card.append(el('button', { type: 'button', class: 'gt-auth__close', 'aria-label': 'Закрыть', textContent: '×', onclick: close }));
+    card.append(el('button', { type: 'button', class: 'gt-auth__close', 'aria-label': t('close'), textContent: '×', onclick: close }));
     const msg = el('div', { class: 'gt-auth__msg', role: 'status' });
     const say = (text: string, ok = false) => {
       msg.textContent = text;
@@ -128,9 +129,9 @@ export function openAuthDialog(
 
     if (!Account.configured) {
       card.append(
-        el('h2', { textContent: 'Аккаунт' }),
-        el('p', { textContent: 'Вход и облачное сохранение появятся, как только мы подключим сервер. Пока прогресс хранится на этом устройстве.' }),
-        el('button', { type: 'button', class: 'gt-auth__btn gt-auth__btn--ghost', textContent: 'Понятно', onclick: close }),
+        el('h2', { textContent: t('account') }),
+        el('p', { textContent: t('auth_no_server') }),
+        el('button', { type: 'button', class: 'gt-auth__btn gt-auth__btn--ghost', textContent: t('rule_ok'), onclick: close }),
       );
       return;
     }
@@ -142,7 +143,7 @@ export function openAuthDialog(
       try {
         await fn();
       } catch (e) {
-        say(e instanceof AccountError ? e.message : 'Что-то пошло не так — попробуй ещё раз');
+        say(e instanceof AccountError ? e.message : t('e_generic'));
       } finally {
         btn.disabled = false;
       }
@@ -152,15 +153,15 @@ export function openAuthDialog(
       const tabs = el(
         'div',
         { class: 'gt-auth__tabs', role: 'tablist' },
-        el('button', { type: 'button', role: 'tab', 'aria-selected': String(m === 'login'), textContent: 'Вход', onclick: () => render('login', emailIn.value) }),
-        el('button', { type: 'button', role: 'tab', 'aria-selected': String(m === 'register'), textContent: 'Регистрация', onclick: () => render('register', emailIn.value) }),
+        el('button', { type: 'button', role: 'tab', 'aria-selected': String(m === 'login'), textContent: t('auth_login_tab'), onclick: () => render('login', emailIn.value) }),
+        el('button', { type: 'button', role: 'tab', 'aria-selected': String(m === 'register'), textContent: t('auth_register_tab'), onclick: () => render('register', emailIn.value) }),
       );
       const emailIn = el('input', { id: 'gt-email', type: 'email', autocomplete: 'email', inputmode: 'email', required: true, value: email, maxLength: 254 });
-      const pw = passwordField('gt-pw', 'Пароль', m === 'login' ? 'current-password' : 'new-password');
-      const pw2 = m === 'register' ? passwordField('gt-pw2', 'Пароль ещё раз', 'new-password') : null;
-      const submit = el('button', { type: 'submit', class: 'gt-auth__btn', textContent: m === 'login' ? 'Войти' : 'Зарегистрироваться' });
+      const pw = passwordField('gt-pw', t('auth_password'), m === 'login' ? 'current-password' : 'new-password');
+      const pw2 = m === 'register' ? passwordField('gt-pw2', t('auth_password_again'), 'new-password') : null;
+      const submit = el('button', { type: 'submit', class: 'gt-auth__btn', textContent: m === 'login' ? t('login') : t('auth_register') });
       const form = el('form', { noValidate: true }, el('label', { htmlFor: 'gt-email', textContent: 'Email' }), emailIn, pw.node);
-      if (pw2) form.append(pw2.node, el('div', { class: 'gt-auth__hint', textContent: `Не короче ${PASSWORD_MIN} символов` }));
+      if (pw2) form.append(pw2.node, el('div', { class: 'gt-auth__hint', textContent: t('auth_pw_min', { n: PASSWORD_MIN }) }));
       form.append(submit, msg);
       form.addEventListener('submit', (e) => {
         e.preventDefault();
@@ -173,25 +174,25 @@ export function openAuthDialog(
           } else {
             const res = await Account.signUp(emailIn.value, pw.input.value);
             if (res === 'signed_in') close();
-            else render('login', emailIn.value, { text: `Письмо отправлено на ${emailIn.value.trim()}. Открой его, нажми ссылку — и войди здесь.`, ok: true });
+            else render('login', emailIn.value, { text: t('auth_mail_sent', { email: emailIn.value.trim() }), ok: true });
           }
         });
       });
       if (opts.intro) card.append(el('h2', { textContent: opts.intro.title }), el('p', { textContent: opts.intro.text }));
       else {
-        card.append(el('h2', { textContent: m === 'login' ? 'Вход' : 'Регистрация' }));
-        if (m === 'register') card.append(el('p', { textContent: 'Прогресс сохранится в облаке — можно играть на любом устройстве.' }));
+        card.append(el('h2', { textContent: m === 'login' ? t('auth_login_tab') : t('auth_register_tab') }));
+        if (m === 'register') card.append(el('p', { textContent: t('auth_register_note') }));
       }
       card.append(tabs, form);
-      if (m === 'login') card.append(el('button', { type: 'button', class: 'gt-auth__link', textContent: 'Забыли пароль?', onclick: () => render('forgot', emailIn.value) }));
-      if (opts.later) card.append(el('button', { type: 'button', class: 'gt-auth__link', textContent: 'Позже', onclick: close }));
+      if (m === 'login') card.append(el('button', { type: 'button', class: 'gt-auth__link', textContent: t('auth_forgot'), onclick: () => render('forgot', emailIn.value) }));
+      if (opts.later) card.append(el('button', { type: 'button', class: 'gt-auth__link', textContent: t('later'), onclick: close }));
       setTimeout(() => (emailIn.value ? pw.input : emailIn).focus(), 50);
       return;
     }
 
     if (m === 'forgot') {
       const emailIn = el('input', { id: 'gt-email', type: 'email', autocomplete: 'email', inputmode: 'email', required: true, value: email });
-      const submit = el('button', { type: 'submit', class: 'gt-auth__btn', textContent: 'Прислать ссылку' });
+      const submit = el('button', { type: 'submit', class: 'gt-auth__btn', textContent: t('auth_send_link') });
       const form = el('form', { noValidate: true }, el('label', { htmlFor: 'gt-email', textContent: 'Email' }), emailIn, submit, msg);
       form.addEventListener('submit', (e) => {
         e.preventDefault();
@@ -199,36 +200,36 @@ export function openAuthDialog(
         if (err) return say(err);
         void run(submit, async () => {
           await Account.requestPasswordReset(emailIn.value);
-          say('Если такой аккаунт есть, мы отправили письмо со ссылкой для нового пароля.', true);
+          say(t('auth_reset_sent'), true);
         });
       });
       card.append(
-        el('h2', { textContent: 'Новый пароль' }),
-        el('p', { textContent: 'Пришлём на почту ссылку — по ней можно задать новый пароль.' }),
+        el('h2', { textContent: t('auth_new_password') }),
+        el('p', { textContent: t('auth_reset_note') }),
         form,
-        el('button', { type: 'button', class: 'gt-auth__link', textContent: 'Назад ко входу', onclick: () => render('login', emailIn.value) }),
+        el('button', { type: 'button', class: 'gt-auth__link', textContent: t('auth_back_login'), onclick: () => render('login', emailIn.value) }),
       );
       setTimeout(() => emailIn.focus(), 50);
       return;
     }
 
     if (m === 'recovery' || m === 'change') {
-      const pw = passwordField('gt-pw', 'Новый пароль', 'new-password');
-      const pw2 = passwordField('gt-pw2', 'Ещё раз', 'new-password');
-      const submit = el('button', { type: 'submit', class: 'gt-auth__btn', textContent: 'Сохранить пароль' });
+      const pw = passwordField('gt-pw', t('auth_new_password'), 'new-password');
+      const pw2 = passwordField('gt-pw2', t('auth_again'), 'new-password');
+      const submit = el('button', { type: 'submit', class: 'gt-auth__btn', textContent: t('auth_save_password') });
       // Скрытое поле email помогает менеджеру паролей понять, к какому аккаунту пароль.
       const hiddenEmail = el('input', { type: 'email', autocomplete: 'username', value: Account.user?.email ?? '', hidden: true });
-      const form = el('form', { noValidate: true }, hiddenEmail, pw.node, pw2.node, el('div', { class: 'gt-auth__hint', textContent: `Не короче ${PASSWORD_MIN} символов` }), submit, msg);
+      const form = el('form', { noValidate: true }, hiddenEmail, pw.node, pw2.node, el('div', { class: 'gt-auth__hint', textContent: t('auth_pw_min', { n: PASSWORD_MIN }) }), submit, msg);
       form.addEventListener('submit', (e) => {
         e.preventDefault();
         const err = validatePasswordPair(pw.input.value, pw2.input.value);
         if (err) return say(err);
         void run(submit, async () => {
           await Account.updatePassword(pw.input.value);
-          render('account', '', { text: 'Пароль обновлён', ok: true });
+          render('account', '', { text: t('auth_pw_updated'), ok: true });
         });
       });
-      card.append(el('h2', { textContent: m === 'recovery' ? 'Задай новый пароль' : 'Сменить пароль' }), form);
+      card.append(el('h2', { textContent: m === 'recovery' ? t('auth_set_new_password') : t('auth_change_password') }), form);
       setTimeout(() => pw.input.focus(), 50);
       return;
     }
@@ -236,12 +237,12 @@ export function openAuthDialog(
     // m === 'account'
     if (!Account.user) return render('login');
     const status: Record<string, string> = {
-      synced: 'Прогресс сохранён в облаке',
-      syncing: 'Сохраняем в облако…',
-      offline: 'Нет связи — сохраним, когда появится интернет',
+      synced: t('sync_synced'),
+      syncing: t('sync_syncing'),
+      offline: t('sync_offline'),
       off: '',
     };
-    const logout = el('button', { type: 'button', class: 'gt-auth__btn gt-auth__btn--ghost', textContent: 'Выйти' });
+    const logout = el('button', { type: 'button', class: 'gt-auth__btn gt-auth__btn--ghost', textContent: t('auth_logout') });
     logout.addEventListener('click', () =>
       void run(logout, async () => {
         await Account.signOut();
@@ -249,12 +250,12 @@ export function openAuthDialog(
       }),
     );
     card.append(
-      el('h2', { textContent: 'Аккаунт' }),
-      el('p', { textContent: `Вы вошли как ${Account.user.email ?? 'игрок'}` }),
+      el('h2', { textContent: t('account') }),
+      el('p', { textContent: t('auth_logged_as', { email: Account.user.email ?? t('auth_player') }) }),
       ...(status[Account.syncStatus] ? [el('p', { textContent: status[Account.syncStatus] })] : []),
-      el('button', { type: 'button', class: 'gt-auth__btn gt-auth__btn--ghost', textContent: 'Сменить пароль', onclick: () => render('change') }),
+      el('button', { type: 'button', class: 'gt-auth__btn gt-auth__btn--ghost', textContent: t('auth_change_password'), onclick: () => render('change') }),
       logout,
-      el('button', { type: 'button', class: 'gt-auth__link', textContent: 'Удалить аккаунт', onclick: () => renderDelete() }),
+      el('button', { type: 'button', class: 'gt-auth__link', textContent: t('auth_delete'), onclick: () => renderDelete() }),
       msg,
     );
   };
@@ -262,23 +263,23 @@ export function openAuthDialog(
   const renderDelete = () => {
     card.replaceChildren();
     const msg = el('div', { class: 'gt-auth__msg gt-auth__msg--error', role: 'status' });
-    const confirmBtn = el('button', { type: 'button', class: 'gt-auth__btn gt-auth__btn--danger', textContent: 'Удалить навсегда' });
+    const confirmBtn = el('button', { type: 'button', class: 'gt-auth__btn gt-auth__btn--danger', textContent: t('auth_delete_forever') });
     confirmBtn.addEventListener('click', async () => {
       confirmBtn.disabled = true;
       try {
         await Account.deleteAccount();
         close();
       } catch (e) {
-        msg.textContent = e instanceof AccountError ? e.message : 'Не получилось удалить — попробуй ещё раз';
+        msg.textContent = e instanceof AccountError ? e.message : t('auth_delete_failed');
         confirmBtn.disabled = false;
       }
     });
     card.append(
-      el('button', { type: 'button', class: 'gt-auth__close', 'aria-label': 'Закрыть', textContent: '×', onclick: close }),
-      el('h2', { textContent: 'Удалить аккаунт?' }),
-      el('p', { textContent: `Аккаунт ${Account.user?.email ?? ''} и облачное сохранение будут удалены. Это нельзя отменить. На этом устройстве игра начнётся заново.` }),
+      el('button', { type: 'button', class: 'gt-auth__close', 'aria-label': t('close'), textContent: '×', onclick: close }),
+      el('h2', { textContent: t('auth_delete_q') }),
+      el('p', { textContent: t('auth_delete_text', { email: Account.user?.email ?? '' }) }),
       confirmBtn,
-      el('button', { type: 'button', class: 'gt-auth__btn gt-auth__btn--ghost', textContent: 'Не удалять', onclick: () => render('account') }),
+      el('button', { type: 'button', class: 'gt-auth__btn gt-auth__btn--ghost', textContent: t('auth_keep'), onclick: () => render('account') }),
       msg,
     );
   };

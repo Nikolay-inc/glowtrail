@@ -24,6 +24,15 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run verify
+      - run: npm run sim-economy
+      # Переводы и вёрстка на псевдо-языке (Playwright, Chromium).
+      - run: npx playwright install --with-deps chromium-headless-shell
+      - run: npm run i18n-check
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: i18n-screens
+          path: artifacts/i18n
       - run: npm run build -- --base=/${{ github.event.repository.name }}/
         env:
           # Адрес для отзывов и контакта в политике конфиденциальности (секрет репозитория, в коде его нет).

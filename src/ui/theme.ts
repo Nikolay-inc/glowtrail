@@ -3,7 +3,8 @@
 export const W = 1080;
 export const H = 1920;
 
-export const FONT = '"Trebuchet MS", "Avenir Next", "Segoe UI", system-ui, -apple-system, Roboto, sans-serif';
+/** Noto Sans со всеми европейскими языками, кириллицей и греческим; грузинский и армянский — запасные (src/assets/fonts.css). */
+export const FONT = '"Noto Sans", "Noto Sans Georgian", "Noto Sans Armenian", system-ui, -apple-system, Roboto, sans-serif';
 export const MONO = 'Menlo, Consolas, "Roboto Mono", monospace';
 
 export const C = {

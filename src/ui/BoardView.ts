@@ -7,11 +7,12 @@ import { bridgeHorizontal } from '../core/tiles';
 import { DX, DY, type Dir, type Level } from '../core/types';
 import { C } from './theme';
 import { createLumo, drawFireflyIcon, drawPadlock } from './draw';
+import { createPet, drawFieldLamp, emitTrail, ensureTrailTextures, followOffset, lampGlowOf } from './lumo';
 import { headSide, lanternsLeft, portalSides } from '../core/portal';
 import { FONT } from './theme';
 import { raysBurst, reducedMotion } from './fx';
 import { sfx } from '../audio';
-import type { LanternShape } from '../core/avatars';
+import { DEFAULT_LOOK, type Look } from '../core/wardrobe';
 import { ARCH_COLORS, decorateArch, ROAD_COLORS, type ArchStyle, type RoadStyle } from './skins';
 
 /** Точка дороги: центр клетки; jump — к ней дорога пришла прыжком (рисуем дугу, а не линию). */
@@ -64,16 +65,20 @@ interface BridgeView {
 }
 
 export interface BoardOptions {
-  avatar?: number;
+  /** Образ Lumo (части гардероба, питомец, след) и стили поля. */
+  look?: Look;
   /** Ночная темнота над полем (по умолчанию — только у ночных уровней). */
   dark?: boolean;
+  /** Обсерватория: ночные уровни светлее (ступень 0–3). */
+  nightLight?: number;
   maxCell?: number;
   /** Звуки шагов и камешков (в игре да, в карточках правил нет). */
   sound?: boolean;
   /** Бабочки и искры над полем (в карточках правил выключены). */
   ambient?: boolean;
-  /** Скины: форма фонаря Lumo, стиль дороги и арки. */
-  lantern?: LanternShape;
+  /** Сад деревни: светлячки ярче (ступень 0–3). */
+  brightFireflies?: number;
+  /** Стиль дороги и арки (из образа). */
   road?: RoadStyle;
   arch?: ArchStyle;
 }
@@ -103,6 +108,9 @@ export class BoardView {
   private coneErase!: Phaser.GameObjects.Image;
   private dropG!: Phaser.GameObjects.Graphics;
   readonly lumo: Phaser.GameObjects.Container;
+  private look: Look = DEFAULT_LOOK;
+  private pet?: Phaser.GameObjects.Container;
+  private brightFireflies = 0;
   private burst: Phaser.GameObjects.Particles.ParticleEmitter;
   private roadAnim?: Phaser.Tweens.Tween;
   // Темнота над полем и источники света
@@ -128,6 +136,7 @@ export class BoardView {
   private lastT = -1;
   private readonly roadStyle: RoadStyle;
   private readonly archStyle: ArchStyle;
+  private readonly nightLight: number;
 
   constructor(
     private scene: Phaser.Scene,
@@ -139,6 +148,9 @@ export class BoardView {
     this.ox = area.x + (area.w - this.cell * level.width) / 2;
     this.oy = area.y + (area.h - this.cell * level.height) / 2;
     this.sound = opts.sound ?? false;
+    this.look = opts.look ?? DEFAULT_LOOK;
+    this.brightFireflies = opts.brightFireflies ?? 0;
+    this.nightLight = opts.nightLight ?? 0;
     this.roadStyle = opts.road ?? 'glow';
     this.archStyle = opts.arch ?? 'portal';
     this.hasExit = level.goal === 'classic';
@@ -164,7 +176,10 @@ export class BoardView {
     this.drawFireflies();
 
     const startIdx = level.start.y * level.width + level.start.x;
-    this.lumo = createLumo(scene, this.cell * 0.8, opts.avatar ?? 0, true, opts.lantern).setDepth(7);
+    this.lumo = createLumo(scene, this.cell * 0.8, this.look, true).setDepth(7);
+    // Питомец-спутник идёт следом за Lumo.
+    if (this.look.pet !== 'pet-none') this.pet = createPet(scene, this.cell * 0.8, this.look.pet).setDepth(6.95);
+    ensureTrailTextures(scene);
     this.placeLumo(startIdx, level.startDir);
 
     this.burst = scene.add
@@ -420,7 +435,7 @@ export class BoardView {
       .renderTexture(this.darkX, this.darkY, w, h)
       .setOrigin(0)
       .setDepth(6.5)
-      .setAlpha(level.night ? 0.74 : 0.52);
+      .setAlpha(level.night ? 0.74 - 0.06 * this.nightLight : 0.52);
     this.darkShape = this.scene.make.graphics({}, false);
     this.darkShape.fillStyle(0x03040f, 1);
     this.darkShape.fillRoundedRect(0, 0, w, h, cell * 0.25);
@@ -442,6 +457,13 @@ export class BoardView {
       const c = this.center(f.idx);
       const k = time * 0.001 + i * 1.7;
       f.view.setPosition(c.x + Math.sin(k * 0.9) * this.cell * 0.2 + Math.sin(k * 2.3) * this.cell * 0.04, c.y + Math.cos(k * 1.3) * this.cell * 0.14 - this.cell * 0.05);
+    }
+    // Питомец догоняет Lumo (сзади-сбоку), на финале исчезает вместе с ним.
+    if (this.pet) {
+      const o = followOffset(this.cell * 0.8, this.lumo.scaleX < 0 ? -1 : 1);
+      this.pet.x += (this.lumo.x + o.x - this.pet.x) * 0.12;
+      this.pet.y += (this.lumo.y + o.y - this.pet.y) * 0.12;
+      this.pet.setAlpha(this.lumo.alpha);
     }
     if (!this.dark) return;
     const { cell } = this;
@@ -606,7 +628,7 @@ export class BoardView {
       const c = this.center(idx);
       const glow = scene.add
         .image(c.x, c.y - cell * 0.18, 'glow')
-        .setTint(C.lanternOn)
+        .setTint(this.look.lamp === 'lamp-classic' ? C.lanternOn : lampGlowOf(this.look.lamp))
         .setBlendMode(Phaser.BlendModes.ADD)
         .setScale((cell * 1.6) / 128)
         .setAlpha(0)
@@ -669,7 +691,9 @@ export class BoardView {
     const { level, cell, scene } = this;
     level.fireflies.forEach((idx, i) => {
       const c = this.center(idx);
-      const glow = scene.add.image(0, 0, 'glow').setTint(C.fireflyGlow).setBlendMode(Phaser.BlendModes.ADD).setScale((cell * 0.9) / 128).setAlpha(0.55);
+      // Сад деревни: светлячки ярче и крупнее свечение.
+      const bright = this.brightFireflies;
+      const glow = scene.add.image(0, 0, 'glow').setTint(C.fireflyGlow).setBlendMode(Phaser.BlendModes.ADD).setScale((cell * (0.9 + bright * 0.25)) / 128).setAlpha(Math.min(0.95, 0.55 + bright * 0.15));
       const g = scene.add.graphics();
       drawFireflyIcon(g, 0, 0, cell * 0.16, true);
       const view = scene.add.container(c.x, c.y, [glow, g]).setDepth(6.85);
@@ -825,6 +849,11 @@ export class BoardView {
   private drawLamp(g: Phaser.GameObjects.Graphics, on: boolean) {
     const s = this.cell;
     g.clear();
+    // Стиль фонарей из гардероба (классический — как раньше, ниже).
+    if (this.look.lamp !== 'lamp-classic') {
+      drawFieldLamp(g, this.look.lamp, s, on);
+      return;
+    }
     // Постамент: тёмный диск поверх дороги, при зажжённом фонаре — с оранжевым ободком.
     g.fillStyle(0x15112b, 0.92);
     g.fillCircle(0, s * 0.02, s * 0.36);
@@ -910,6 +939,10 @@ export class BoardView {
     this.lumo.setPosition(p.x, p.y);
     this.lumoIdx = idx;
     this.face(dir);
+    if (this.pet) {
+      const o = followOffset(this.cell * 0.8, this.lumo.scaleX < 0 ? -1 : 1);
+      this.pet.setPosition(p.x + o.x, p.y + o.y);
+    }
   }
 
   /** Без шагов: отмена хода, откат подсказкой — Lumo быстро скользит на конец дороги. */
@@ -964,6 +997,8 @@ export class BoardView {
             sfx.thump();
             sfx.footstep(i);
           }
+          // След при ходьбе (гардероб).
+          if (this.look.trail !== 'trail-none') emitTrail(this.scene, c.x, c.y + s * 0.18, this.look.trail, 6.9, s * 0.8);
         },
       };
     });

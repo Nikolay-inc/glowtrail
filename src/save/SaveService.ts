@@ -2,9 +2,10 @@
 // Сейчас данные лежат в localStorage; чтобы перейти на облако, достаточно подменить бэкенд
 // (setBackend) на реализацию с тем же интерфейсом — остальной код игры не меняется.
 
+import { avatarIndex } from '../core/wardrobe';
 import { defaultEconomy, economyFromProgress, normalizeEconomy, type Economy } from '../core/economy';
 
-export const SAVE_VERSION = 5;
+export const SAVE_VERSION = 7;
 export const SAVE_KEY = 'glowtrail.save';
 /** Старый формат (до SaveService): прогресс и лог лежали в двух ключах. */
 export const LEGACY_KEYS = { progress: 'glowtrail.progress.v1', log: 'glowtrail.log.v1' } as const;
@@ -30,6 +31,8 @@ export interface Progress {
   music: boolean;
   /** Вибрация (настройка устройства, в облако не уходит). */
   vibration: boolean;
+  /** Язык интерфейса (ru / en / uk); пусто — язык системы. Настройка устройства. */
+  language: string;
 }
 
 /**
@@ -60,7 +63,7 @@ export interface Profile {
   bestDayStreak: number;
 }
 
-export type EventType = 'session' | 'start' | 'win' | 'lose' | 'abandon' | 'hint_used' | 'extra_tiles' | 'auto_ease' | 'level_skipped' | 'signup' | 'login' | 'logout' | 'auth_prompt' | 'tutorial_step' | 'tip_shown' | 'drag_place' | 'tap_place' | 'door_locked_attempt' | 'fireflies_collected' | 'tile_jump_used' | 'bridge_rotated_blocked' | 'lantern_expired' | 'currency_earn' | 'currency_spend' | 'village_restore' | 'upgrade_buy' | 'skin_buy' | 'daily_reward';
+export type EventType = 'session' | 'start' | 'win' | 'lose' | 'abandon' | 'hint_used' | 'extra_tiles' | 'auto_ease' | 'level_skipped' | 'signup' | 'login' | 'logout' | 'auth_prompt' | 'tutorial_step' | 'tip_shown' | 'drag_place' | 'tap_place' | 'door_locked_attempt' | 'fireflies_collected' | 'tile_jump_used' | 'bridge_rotated_blocked' | 'lantern_expired' | 'currency_earn' | 'currency_spend' | 'village_restore' | 'upgrade_buy' | 'skin_buy' | 'daily_reward' | 'wardrobe_buy' | 'outfit_save' | 'building_upgrade' | 'decor_place' | 'street_upgrade' | 'quest_done' | 'cozy_level' | 'not_enough_hint_click' | 'language_change' | 'chest_open';
 
 export interface LogEvent {
   /** Время события, ISO. */
@@ -163,7 +166,7 @@ export function memoryBackend(initial: Record<string, string> = {}): SaveBackend
 /** Первый уровень игры — открыт всегда. */
 export const FIRST_LEVEL_ID = 'valley-01';
 
-export const defaultProgress = (): Progress => ({ unlocked: [FIRST_LEVEL_ID], stars: {}, attempts: {}, lossStreak: {}, skipped: {}, fireflies: {}, muted: false, music: true, vibration: true });
+export const defaultProgress = (): Progress => ({ unlocked: [FIRST_LEVEL_ID], stars: {}, attempts: {}, lossStreak: {}, skipped: {}, fireflies: {}, muted: false, music: true, vibration: true, language: '' });
 
 /**
  * До версии 4 уровни хранились по номеру 1, 2, 3… Это уровни первого мира «Долина» — они остались на своих местах,
@@ -256,6 +259,7 @@ export function normalizeProgress(raw: unknown): Progress {
   if (typeof raw.muted === 'boolean') p.muted = raw.muted;
   if (typeof raw.music === 'boolean') p.music = raw.music;
   if (typeof raw.vibration === 'boolean') p.vibration = raw.vibration;
+  if (raw.language === 'ru' || raw.language === 'en' || raw.language === 'uk') p.language = raw.language;
   return p;
 }
 
@@ -299,7 +303,10 @@ function normalizeLog(raw: unknown): LogEvent[] {
  * v4 — прогресс и лог по id уровня («valley-07») вместо номера; открытые уровни — список id; светлячки.
  * v5 — раздел economy: монеты (за уже пройденные уровни — задним числом), деревня, прокачка, скины
  *      (аватарки, открытые звёздами, остаются костюмами), подсказки, ежедневная награда.
- * Шаги идут цепочкой: v1 → … → v5, поэтому любое старое сохранение доходит до текущей версии.
+ * v6 — гардероб Lumo (части, образы, стили поля) вместо скинов, бонусы построек, сундук и часовня.
+ * v7 — «Деревня 2.0»: уровни построек всех районов (вместо списка восстановленных — уровень 1), улицы,
+ *      украшения в слотах, уют, задания жителей, свет за задания и уют; часовня — счётчик за день.
+ * Шаги идут цепочкой: v1 → … → v7, поэтому любое старое сохранение доходит до текущей версии.
  */
 export function migrate(raw: unknown, legacy?: { progress: unknown; log: unknown }): SaveData {
   let data: Record<string, unknown> | null = null;
@@ -326,10 +333,11 @@ export function migrate(raw: unknown, legacy?: { progress: unknown; log: unknown
   }
   const profile = normalizeProfile(data.profile);
   const economy = normalizeEconomy(data.economy);
-  // Аватарка профиля — это надетый костюм.
-  const costume = `costume-${profile.avatar}`;
-  if (economy.skins.owned.includes(costume)) economy.skins.equipped.costume = costume;
-  else profile.avatar = Number(economy.skins.equipped.costume.slice(-1)) || 0;
+  // v5 → v6: старые скины (костюмы 0–7, формы фонаря, дорога, арка) → гардероб Lumo из частей
+  // (normalizeEconomy переносит их сам: купленное остаётся, надетое — надетым). Аватарка профиля — надетый образ.
+  // v6 → v7: список восстановленных построек `village` → уровни `buildings` (все — уровень 1), `chapelDay` →
+  // `chapel` (тоже в normalizeEconomy); улицы, украшения, уют и задания начинаются с нуля.
+  profile.avatar = avatarIndex(economy.wardrobe.look);
   return {
     version: SAVE_VERSION,
     profile,

@@ -1,9 +1,9 @@
 // Вступление при первом запуске (~12 с): тёмная долина, Lumo входит и зажигает фонарь,
 // свет пробегает по камням тропинки, вдалеке разгорается арка. Две короткие фразы. Тап — пропустить.
 
+import { currentLook } from '../ui/skins';
 import Phaser from 'phaser';
 import { sfx } from '../audio';
-import { getProfile } from '../profile';
 import { t } from '../strings';
 import { logTutorialStep } from '../tutorial';
 import { addBackground, createLumo, drawPortalIcon, text } from '../ui/draw';
@@ -57,7 +57,7 @@ export class IntroScene extends Phaser.Scene {
     drawPortalIcon(arch, 0, 0, 46, true);
     arch.setPosition(ARCH_AT.x, ARCH_AT.y);
 
-    this.lumo = createLumo(this, 190, getProfile().avatar).setPosition(-140, LUMO_AT.y).setDepth(7);
+    this.lumo = createLumo(this, 190, currentLook()).setPosition(-140, LUMO_AT.y).setDepth(7);
 
     // Темнота поверх всего, кроме текста.
     const v = currentView(this);

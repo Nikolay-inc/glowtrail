@@ -9,3 +9,4 @@ dist
 
 # Кандидаты генератора уровней (npm run gen) — воспроизводятся по seed
 generated/
+artifacts/

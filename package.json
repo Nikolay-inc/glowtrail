@@ -1,7 +1,7 @@
 {
   "name": "glowtrail",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -19,7 +19,8 @@
     "icons": "vite-node scripts/make-icons.ts && capacitor-assets generate --ios --android --iconBackgroundColor '#0b0f27' --splashBackgroundColor '#0b0f27'",
     "sim-economy": "vite-node scripts/sim-economy.ts",
     "version:bump": "vite-node scripts/app-version.ts",
-    "ios:check": "vite-node scripts/ios-check.ts"
+    "ios:check": "vite-node scripts/ios-check.ts",
+    "i18n-check": "vite-node scripts/i18n-check.ts"
   },
   "dependencies": {
     "@capacitor/android": "7.6.10",
@@ -36,7 +37,11 @@
   "devDependencies": {
     "@capacitor/assets": "3.0.5",
     "@capacitor/cli": "7.6.10",
+    "@fontsource/noto-sans": "^5.3.0",
+    "@fontsource/noto-sans-armenian": "^5.3.0",
+    "@fontsource/noto-sans-georgian": "^5.3.0",
     "@types/node": "^20.19.43",
+    "playwright": "1.65.1",
     "typescript": "^5.9.3",
     "vite": "^6.4.6",
     "vite-node": "^3.2.4",

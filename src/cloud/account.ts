@@ -1,6 +1,7 @@
 // Аккаунт игрока на Supabase Auth: регистрация и вход по email и паролю, выход, сброс пароля,
 // удаление аккаунта. Играть можно и без аккаунта — он нужен, чтобы прогресс жил в облаке.
 
+import { t } from '../i18n';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { Preferences } from '@capacitor/preferences';
 import { isNative } from '../platform';
@@ -82,7 +83,7 @@ class AccountService {
   }
 
   private api(): SupabaseClient {
-    if (!this.client) throw new AccountError('Вход пока не настроен');
+    if (!this.client) throw new AccountError(t('auth_not_configured'));
     return this.client;
   }
 

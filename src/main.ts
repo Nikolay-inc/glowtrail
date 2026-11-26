@@ -1,4 +1,6 @@
 import Phaser from 'phaser';
+import './assets/fonts.css';
+import { setLocale, systemLang, type Locale } from './i18n';
 import { initMusic } from './audio';
 import { VillageScene } from './scenes/VillageScene';
 import { WorkshopScene } from './scenes/WorkshopScene';
@@ -55,6 +57,21 @@ class BootScene extends Phaser.Scene {
   }
 }
 
+/** Язык: ?lang=xx (проверка переводов, псевдо-язык qps), выбранный в профиле или язык системы. */
+function initLocale() {
+  const q = new URLSearchParams(location.search).get('lang');
+  if (q === 'ru' || q === 'en' || q === 'uk' || q === 'qps') return setLocale(q as Locale);
+  setLocale((loadProgress().language as Locale) || systemLang());
+}
+
+/** Шрифты до первого кадра: Phaser рисует текст в canvas и сам не дождётся загрузки шрифта. */
+async function loadFonts() {
+  if (typeof document === 'undefined' || !document.fonts) return;
+  const sample = 'AaĄąŁłŐőЯяЇїΩω';
+  const all = Promise.all(['normal', 'bold'].map((w) => document.fonts.load(`${w} 40px "Noto Sans"`, sample)));
+  await Promise.race([all, new Promise((r) => setTimeout(r, 2500))]).catch(() => undefined);
+}
+
 // Запуск: в приложении сначала читаем сохранение из Preferences (асинхронно), потом стартует игра.
 async function boot() {
   if (isNative()) {
@@ -66,6 +83,9 @@ async function boot() {
       await StatusBar.setBackgroundColor({ color: '#0b0f27' }).catch(() => undefined);
     }
   }
+
+  initLocale();
+  await loadFonts();
 
   const game = new Phaser.Game({
     type: Phaser.AUTO,
@@ -101,6 +121,8 @@ async function boot() {
 
   // Для отладки в консоли браузера во время разработки.
   if (import.meta.env.DEV) (window as unknown as { game: Phaser.Game }).game = game;
+  // ?audit=1 — проверка вёрстки под переводы (npm run i18n-check).
+  if (new URLSearchParams(location.search).has('audit')) void import('./debug/audit').then((m) => m.install(game));
 }
 
 void boot();

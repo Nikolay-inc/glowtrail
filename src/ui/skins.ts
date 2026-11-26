@@ -1,16 +1,17 @@
-// Скины на экране: что надето (костюм, фонарь, дорога, арка) и как выглядят стили дороги и арки.
-// Покупка и надевание — src/meta.ts, список — src/core/economy.ts (SKINS).
+// Стили поля на экране: что надето (образ Lumo, фонари, дорога, арка) и как выглядят стили дороги и арки.
+// Покупка и надевание — src/meta.ts, список — src/core/wardrobe.ts (WARDROBE).
 
 import Phaser from 'phaser';
-import { costumeAvatar } from '../core/economy';
-import type { LanternShape } from '../core/avatars';
+import type { Look } from '../core/wardrobe';
 import { getEconomy } from '../meta';
 
-export type RoadStyle = 'glow' | 'moon' | 'firefly' | 'sunset' | 'aurora' | 'stars' | 'stones' | 'planks';
-export type ArchStyle = 'portal' | 'moon' | 'sunset' | 'stone' | 'flowers' | 'gold';
+export type RoadStyle = 'glow' | 'moon' | 'firefly' | 'sunset' | 'aurora' | 'stars' | 'stones' | 'planks' | 'ember' | 'mint';
+export type ArchStyle = 'portal' | 'moon' | 'sunset' | 'stone' | 'flowers' | 'gold' | 'crystal' | 'leaves';
 
 /** Цвета ленты света для светящихся стилей дороги: сияние, полоса, сердцевина. */
-export const ROAD_COLORS: Record<'glow' | 'moon' | 'firefly' | 'sunset' | 'aurora' | 'stars', { glow: number; band: number; core: number }> = {
+export const ROAD_COLORS: Record<Exclude<RoadStyle, 'stones' | 'planks'>, { glow: number; band: number; core: number }> = {
+  ember: { glow: 0xff6a3a, band: 0xff8a4a, core: 0xffe0b0 },
+  mint: { glow: 0x6affc8, band: 0x9af0d0, core: 0xeafff6 },
   glow: { glow: 0xffc65c, band: 0xf0bd6e, core: 0xfff1cc },
   moon: { glow: 0x9cc8ff, band: 0xb8d4ff, core: 0xf2f7ff },
   firefly: { glow: 0x9dff5c, band: 0xb8f07a, core: 0xf2ffd8 },
@@ -27,26 +28,17 @@ export const ARCH_COLORS: Record<ArchStyle, { ring: number; rim: number; open: n
   stone: { ring: 0x7a7468, rim: 0xa89e8c, open: 0xffd36b, closed: 0x8a7a60 },
   flowers: { ring: 0x3e6e4a, rim: 0xffb3cf, open: 0xffd0e4, closed: 0x9b7bff },
   gold: { ring: 0xc99a2a, rim: 0xffe08a, open: 0xfff1cc, closed: 0xc9a040 },
+  crystal: { ring: 0x5a8ac8, rim: 0xbfefff, open: 0xd8f6ff, closed: 0x7aa8e0 },
+  leaves: { ring: 0x2e5a36, rim: 0x9ad86a, open: 0xd8ffb0, closed: 0x6a9a5a },
 };
 
-export interface Look {
-  avatar: number;
-  lantern?: LanternShape;
-  road: RoadStyle;
-  arch: ArchStyle;
+/** Что сейчас надето (образ Lumo и стили поля). */
+export function currentLook(): Look {
+  return getEconomy().wardrobe.look;
 }
 
-/** Что сейчас надето. */
-export function equippedLook(): Look {
-  const e = getEconomy();
-  const lantern = e.skins.equipped.lantern.replace('lantern-', '');
-  return {
-    avatar: costumeAvatar(e),
-    lantern: lantern === 'default' ? undefined : (lantern as LanternShape),
-    road: e.skins.equipped.road.replace('road-', '') as RoadStyle,
-    arch: e.skins.equipped.arch.replace('arch-', '') as ArchStyle,
-  };
-}
+export const roadStyleOf = (look: Pick<Look, 'road'>) => look.road.replace('road-', '') as RoadStyle;
+export const archStyleOf = (look: Pick<Look, 'arch'>) => look.arch.replace('arch-', '') as ArchStyle;
 
 /** Образец дороги для магазина: короткий отрезок с поворотом. */
 export function drawRoadSample(g: Phaser.GameObjects.Graphics, style: RoadStyle, x: number, y: number, s: number) {
@@ -110,6 +102,20 @@ export function decorateArch(g: Phaser.GameObjects.Graphics, style: ArchStyle, x
       const a = (i / 7) * Math.PI * 2 - Math.PI / 2;
       g.fillStyle(i % 2 ? 0xffb3cf : 0xfff4e0, 1);
       g.fillCircle(x + Math.cos(a) * r, y + Math.sin(a) * r, r * 0.13);
+    }
+  } else if (style === 'leaves') {
+    for (let i = 0; i < 9; i++) {
+      const a = (i / 9) * Math.PI * 2;
+      g.fillStyle(i % 2 ? 0x9ad86a : 0x5aa04a, 1);
+      g.fillEllipse(x + Math.cos(a) * r * 1.02, y + Math.sin(a) * r * 1.02, r * 0.26, r * 0.14);
+    }
+  } else if (style === 'crystal') {
+    g.fillStyle(0xe8fbff, 0.95);
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2 - Math.PI / 2;
+      const cx = x + Math.cos(a) * r * 1.1;
+      const cy = y + Math.sin(a) * r * 1.1;
+      g.fillTriangle(cx - r * 0.07, cy, cx + r * 0.07, cy, cx, cy - r * 0.2);
     }
   } else if (style === 'gold' || style === 'moon') {
     g.fillStyle(style === 'gold' ? 0xffe08a : 0xe8f0ff, 1);

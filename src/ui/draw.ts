@@ -1,11 +1,14 @@
 // Вся графика рисуется фигурами в коде: иконки плиток, кнопки, Lumo, свечение.
 
 import Phaser from 'phaser';
-import { AVATARS, avatarById, type Avatar, type LanternShape } from '../core/avatars';
+import { AVATARS, type Avatar } from '../core/avatars';
+import { DEFAULT_LOOK, type Look } from '../core/wardrobe';
+import { createLumoFigure, type LumoFigure } from './lumo';
 import { addDust, addFog, addVignette, createFxTextures } from './fx';
 import { keepFitted, type ViewRect } from './viewport';
 import type { TileKind } from '../core/types';
 import { C, FONT, H, W } from './theme';
+import { setFitted, type UITextOpts } from './UIText';
 
 type G = Phaser.GameObjects.Graphics;
 
@@ -161,7 +164,7 @@ export function drawTileIcon(g: G, kind: TileKind, s: number, color: number) {
 // ---------------------------------------------------------------------------
 // Иконки интерфейса
 
-export type IconName = 'music' | 'nomusic' | 'stashbox' | 'lantern' | 'gift' | 'rotate' | 'restart' | 'undo' | 'menu' | 'stats' | 'sound' | 'mute' | 'play' | 'lock' | 'copy' | 'back' | 'trash' | 'bulb' | 'skip' | 'plus' | 'cloud' | 'user' | 'help' | 'vibrate' | 'novibrate' | 'close';
+export type IconName = 'music' | 'nomusic' | 'stashbox' | 'lantern' | 'gift' | 'rotate' | 'restart' | 'undo' | 'menu' | 'stats' | 'sound' | 'mute' | 'play' | 'lock' | 'copy' | 'back' | 'trash' | 'bulb' | 'skip' | 'plus' | 'cloud' | 'user' | 'help' | 'vibrate' | 'novibrate' | 'close' | 'hammer' | 'globe' | 'chest' | 'wardrobe' | 'scroll' | 'brush' | 'heart' | 'arrowLeft' | 'arrowRight';
 
 export function drawIcon(g: G, name: IconName, s: number, color: number) {
   const lw = s * 0.12;
@@ -327,6 +330,71 @@ export function drawIcon(g: G, name: IconName, s: number, color: number) {
       g.fillTriangle(-s * 0.04, -s * 0.26, -s * 0.04, s * 0.26, s * 0.3, 0);
       g.fillRect(s * 0.26, -s * 0.26, s * 0.08, s * 0.52);
       break;
+    case 'hammer': {
+      // Молоток: рукоять по диагонали и боёк поперёк.
+      const a = -Math.PI / 4;
+      const pts = (pp: [number, number][]) => pp.map(([px, py]) => new Phaser.Math.Vector2(px * Math.cos(a) - py * Math.sin(a), px * Math.sin(a) + py * Math.cos(a)));
+      g.fillPoints(pts([[-s * 0.05, -s * 0.1], [s * 0.05, -s * 0.1], [s * 0.05, s * 0.44], [-s * 0.05, s * 0.44]]), true);
+      g.fillPoints(pts([[-s * 0.3, -s * 0.34], [s * 0.22, -s * 0.34], [s * 0.3, -s * 0.24], [s * 0.3, -s * 0.12], [-s * 0.3, -s * 0.12]]), true);
+      break;
+    }
+    case 'scroll': {
+      // Свиток заданий: лист с валиками сверху и снизу и строками.
+      g.fillRoundedRect(-s * 0.28, -s * 0.34, s * 0.56, s * 0.68, s * 0.04);
+      g.fillRoundedRect(-s * 0.36, -s * 0.42, s * 0.72, s * 0.12, s * 0.06);
+      g.fillRoundedRect(-s * 0.36, s * 0.3, s * 0.72, s * 0.12, s * 0.06);
+      g.lineStyle(s * 0.05, 0x1a2150, 1);
+      for (const y of [-0.16, 0, 0.16]) g.lineBetween(-s * 0.18, s * y, s * 0.18, s * y);
+      break;
+    }
+    case 'brush': {
+      // Кисть: ручка по диагонали, металлическое кольцо и мазок-ворс.
+      const a = Math.PI / 4;
+      const pts = (pp: [number, number][]) => pp.map(([px, py]) => new Phaser.Math.Vector2(px * Math.cos(a) - py * Math.sin(a), px * Math.sin(a) + py * Math.cos(a)));
+      g.fillPoints(pts([[-s * 0.045, -s * 0.46], [s * 0.045, -s * 0.46], [s * 0.06, s * 0.02], [-s * 0.06, s * 0.02]]), true);
+      g.fillPoints(pts([[-s * 0.1, s * 0.04], [s * 0.1, s * 0.04], [s * 0.1, s * 0.14], [-s * 0.1, s * 0.14]]), true);
+      g.fillPoints(pts([[-s * 0.1, s * 0.16], [s * 0.1, s * 0.16], [s * 0.04, s * 0.46], [-s * 0.08, s * 0.4]]), true);
+      break;
+    }
+    case 'heart':
+      g.fillCircle(-s * 0.15, -s * 0.08, s * 0.18);
+      g.fillCircle(s * 0.15, -s * 0.08, s * 0.18);
+      g.fillTriangle(-s * 0.32, -s * 0.0, s * 0.32, -s * 0.0, 0, s * 0.34);
+      break;
+    case 'arrowLeft':
+    case 'arrowRight': {
+      const d = name === 'arrowLeft' ? -1 : 1;
+      g.lineStyle(s * 0.14, color, 1);
+      g.beginPath();
+      g.moveTo(-d * s * 0.12, -s * 0.28);
+      g.lineTo(d * s * 0.16, 0);
+      g.lineTo(-d * s * 0.12, s * 0.28);
+      g.strokePath();
+      break;
+    }
+    case 'globe':
+      g.strokeCircle(0, 0, s * 0.36);
+      g.strokeEllipse(0, 0, s * 0.34, s * 0.72);
+      g.lineBetween(-s * 0.36, 0, s * 0.36, 0);
+      g.lineBetween(-s * 0.3, -s * 0.18, s * 0.3, -s * 0.18);
+      g.lineBetween(-s * 0.3, s * 0.18, s * 0.3, s * 0.18);
+      break;
+    case 'chest':
+      g.fillRoundedRect(-s * 0.4, -s * 0.06, s * 0.8, s * 0.42, s * 0.05);
+      g.fillRoundedRect(-s * 0.4, -s * 0.34, s * 0.8, s * 0.24, { tl: s * 0.18, tr: s * 0.18, bl: 0, br: 0 });
+      g.fillStyle(0x1a2150, 1);
+      g.fillRect(-s * 0.4, -s * 0.1, s * 0.8, s * 0.05);
+      g.fillRoundedRect(-s * 0.08, -s * 0.12, s * 0.16, s * 0.18, s * 0.03);
+      break;
+    case 'wardrobe':
+      // Плечики-вешалка.
+      g.beginPath();
+      g.arc(0, -s * 0.24, s * 0.1, Math.PI, Math.PI * 2.3, false);
+      g.strokePath();
+      g.lineBetween(0, -s * 0.12, -s * 0.42, s * 0.2);
+      g.lineBetween(0, -s * 0.12, s * 0.42, s * 0.2);
+      g.lineBetween(-s * 0.42, s * 0.2, s * 0.42, s * 0.2);
+      break;
     case 'plus':
       g.fillRoundedRect(-s * 0.06, -s * 0.3, s * 0.12, s * 0.6, s * 0.04);
       g.fillRoundedRect(-s * 0.3, -s * 0.06, s * 0.6, s * 0.12, s * 0.04);
@@ -435,6 +503,8 @@ export interface ButtonOpts {
   label?: string;
   fontSize?: number;
   primary?: boolean;
+  /** Самая большая ширина кнопки (по умолчанию — ширина экрана с полями): длиннее — подпись в 2 строки и мельче. */
+  maxW?: number;
   onClick: () => void;
 }
 
@@ -469,6 +539,7 @@ export class Button extends Phaser.GameObjects.Container {
         })
         .setOrigin(0.5);
       this.add(this.labelT);
+      this.fitLabel(opts.label);
     }
     this.redraw();
     this.setSize(opts.w, opts.h);
@@ -490,8 +561,18 @@ export class Button extends Phaser.GameObjects.Container {
   }
 
   setLabel(label: string) {
-    this.labelT?.setText(label);
+    if (this.labelT) this.fitLabel(label);
     this.redraw();
+  }
+
+  /** Подпись не шире кнопки на экране: сначала кнопка растёт, потом — 2 строки и до 70% размера. */
+  private fitLabel(label: string) {
+    const { h, icon } = this.opts;
+    const base = this.opts.fontSize ?? Math.round(h * 0.38);
+    const avail = (this.opts.maxW ?? W - 80) - h * 0.6 - (icon ? h * 0.66 : 0);
+    const o: UITextOpts = { w: avail, h: h * 0.84, lines: 2, size: base, lineSpacing: -4 };
+    this.labelT!.setAlign('center');
+    setFitted(this.labelT!, label, o);
   }
 
   /** Подсветка «режим включён» (например, «Поворот плитки»). */
@@ -647,21 +728,9 @@ export function drawLumo(g: G, s: number, avatar: Avatar = AVATARS[0]) {
   g.fillCircle(lx, ly, s * 0.04);
 }
 
-/** Lumo: avatarId — костюм, lantern — форма фонаря из магазина (иначе — как у костюма). */
-export function createLumo(scene: Phaser.Scene, size: number, avatarId = 0, animate = true, lantern?: LanternShape): Phaser.GameObjects.Container {
-  const avatar = lantern ? { ...avatarById(avatarId), lantern } : avatarById(avatarId);
-  const c = scene.add.container(0, 0);
-  const glow = scene.add.image(size * 0.42, -size * 0.12, 'glow').setTint(C.lanternOn).setBlendMode(Phaser.BlendModes.ADD);
-  glow.setScale((size * 1.4) / 128).setAlpha(0.7);
-  const g = scene.add.graphics();
-  drawLumo(g, size, avatar);
-  c.add([glow, g]);
-  if (animate) {
-    // Лёгкое «дыхание» и мерцание фонарика
-    scene.tweens.add({ targets: g, scaleY: 1.04, y: -size * 0.015, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
-    scene.tweens.add({ targets: glow, alpha: 0.45, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
-  }
-  return c;
+/** Lumo в образе look (части гардероба, src/ui/lumo.ts); animate — «дыхание» и мерцание фонаря. */
+export function createLumo(scene: Phaser.Scene, size: number, look: Look = DEFAULT_LOOK, animate = true, opts: { withPet?: boolean } = {}): LumoFigure {
+  return createLumoFigure(scene, size, look, { animate, withPet: opts.withPet });
 }
 
 /** Значок арки-портала: кольцо, светящийся проём и замок (закрыта) или искра (открыта). */
@@ -727,10 +796,9 @@ export function createAvatarBadge(
   x: number,
   y: number,
   r: number,
-  avatarId: number,
-  opts: { locked?: boolean; selected?: boolean; animate?: boolean; lockLabel?: string; lantern?: LanternShape } = {},
+  look: Look,
+  opts: { locked?: boolean; selected?: boolean; animate?: boolean; lockLabel?: string } = {},
 ): Phaser.GameObjects.Container {
-  const avatar = avatarById(avatarId);
   const c = scene.add.container(x, y);
   const bg = scene.add.graphics();
   bg.fillStyle(0x000000, 0.3);
@@ -740,7 +808,7 @@ export function createAvatarBadge(
   bg.lineStyle(Math.max(4, r * 0.07), opts.selected ? C.primary : C.cardEdge, 1);
   bg.strokeCircle(0, 0, r);
   c.add(bg);
-  const lumo = createLumo(scene, r * 1.45, avatar.id, opts.animate ?? false, opts.lantern).setPosition(-r * 0.08, r * 0.12);
+  const lumo = createLumo(scene, r * 1.45, look, opts.animate ?? false).setPosition(-r * 0.08, r * 0.12);
   c.add(lumo);
   if (opts.locked) {
     lumo.setAlpha(0.25);
@@ -837,8 +905,14 @@ export function addBackground(scene: Phaser.Scene, opts: { dust?: boolean; eveni
   vignette = addVignette(scene, view);
 }
 
-export function text(scene: Phaser.Scene, x: number, y: number, str: string, size: number, color: string = C.text, bold = true) {
-  return scene.add
+/**
+ * Надпись по центру (x, y). fit — контейнер: ширина w, строк lines (по умолчанию 1), высота h — тогда текст
+ * переносится, уменьшается до 70% и в крайнем случае обрезается (src/ui/UIText.ts). Без fit — как есть.
+ */
+export function text(scene: Phaser.Scene, x: number, y: number, str: string, size: number, color: string = C.text, bold = true, fit?: { w: number; lines?: number; h?: number }) {
+  const t = scene.add
     .text(x, y, str, { fontFamily: FONT, fontSize: `${size}px`, color, fontStyle: bold ? 'bold' : 'normal', align: 'center' })
     .setOrigin(0.5);
+  if (fit) setFitted(t, str, { ...fit, size, bold });
+  return t;
 }

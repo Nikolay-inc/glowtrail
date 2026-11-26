@@ -1,10 +1,12 @@
 // Окно «Как тебя зовут?»: поле имени (настоящий <input>, чтобы на телефоне открывалась клавиатура)
 // и, при первом знакомстве, выбор аватарки из открытых.
 
+import { t } from '../i18n';
+import { DEFAULT_LOOK } from '../core/wardrobe';
 import Phaser from 'phaser';
 import { AVATARS } from '../core/avatars';
 import { sfx } from '../audio';
-import { DEFAULT_NAME, getProfile, NAME_MAX, setAvatar, setName, skipName } from '../profile';
+import { defaultName, getProfile, NAME_MAX, setAvatar, setName, skipName } from '../profile';
 import { Button, createAvatarBadge, text } from './draw';
 import { Account } from '../cloud/account';
 import { openAuthDialog } from './AuthDialog';
@@ -55,10 +57,10 @@ export function showNameDialog(scene: Phaser.Scene, opts: NameDialogOptions) {
   });
   const node = input.node as HTMLInputElement;
   node.maxLength = NAME_MAX;
-  node.placeholder = DEFAULT_NAME;
+  node.placeholder = defaultName();
   node.value = profile.name ?? '';
   node.autocomplete = 'off';
-  node.setAttribute('aria-label', 'Имя');
+  node.setAttribute('aria-label', t('name_label'));
   node.addEventListener('keydown', (e) => {
     e.stopPropagation();
     if (e.key === 'Enter') done();
@@ -74,7 +76,7 @@ export function showNameDialog(scene: Phaser.Scene, opts: NameDialogOptions) {
     const step = 190;
     const x0 = W / 2 - ((open.length - 1) * step) / 2;
     open.forEach((a, i) => {
-      const c = createAvatarBadge(scene, x0 + i * step, top + 560, 78, a.id, { selected: a.id === selected, animate: a.id === selected });
+      const c = createAvatarBadge(scene, x0 + i * step, top + 560, 78, { ...DEFAULT_LOOK, color: a.id }, { selected: a.id === selected, animate: a.id === selected });
       c.setSize(170, 170).setInteractive({ useHandCursor: true });
       c.on('pointerup', () => {
         selected = a.id;
@@ -86,7 +88,7 @@ export function showNameDialog(scene: Phaser.Scene, opts: NameDialogOptions) {
     });
   };
   if (opts.withAvatars) {
-    o.add(text(scene, W / 2, top + 400, 'Выбери фонарщика', 40, C.textDim, false));
+    o.add(text(scene, W / 2, top + 400, t('name_pick_lumo'), 40, C.textDim, false, { w: 820 }));
     drawBadges();
   }
 
@@ -102,12 +104,12 @@ export function showNameDialog(scene: Phaser.Scene, opts: NameDialogOptions) {
     close();
   };
   const btnY = top + panelH - 150;
-  o.add(new Button(scene, W / 2 + 160, btnY, { w: 360, h: 130, label: 'Готово', primary: true, onClick: done }));
+  o.add(new Button(scene, W / 2 + 160, btnY, { w: 360, h: 130, label: t('done'), primary: true, onClick: done }));
   o.add(
     new Button(scene, W / 2 - 200, btnY, {
       w: 280,
       h: 110,
-      label: opts.secondary === 'skip' ? 'Пропустить' : 'Отмена',
+      label: opts.secondary === 'skip' ? t('skip') : t('cancel'),
       fontSize: 38,
       onClick: () => {
         if (opts.secondary === 'skip') skipName();
@@ -118,7 +120,7 @@ export function showNameDialog(scene: Phaser.Scene, opts: NameDialogOptions) {
   );
   // При знакомстве — путь для тех, у кого уже есть аккаунт (прогресс подтянется из облака).
   if (opts.withAvatars && Account.configured && !Account.user) {
-    const link = text(scene, W / 2, top + panelH + 70, 'У меня есть аккаунт — войти', 40, C.textDim, false);
+    const link = text(scene, W / 2, top + panelH + 70, t('have_account'), 40, C.textDim, false, { w: W - 100 });
     link.setInteractive({ useHandCursor: true });
     link.on('pointerup', () => {
       skipName();

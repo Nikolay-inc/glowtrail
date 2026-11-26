@@ -2,8 +2,8 @@
 // Подсказка с id показывается один раз за всю игру (запоминается в сохранении); реплики без id —
 // короткая реакция на действие (например, «Сначала зажги все фонари») и исчезают сами.
 
+import { currentLook } from './skins';
 import Phaser from 'phaser';
-import { getProfile } from '../profile';
 import { hasSeenTip, markTipSeen, type TipId } from '../tutorial';
 import { createLumo } from './draw';
 import { C, FONT, W } from './theme';
@@ -109,7 +109,7 @@ export class TipManager {
     else g.fillTriangle(ax - 26, -h / 2 + 3, ax + 26, -h / 2 + 3, ax, -h / 2 - ARROW);
     node.add(g);
 
-    const lumo = createLumo(scene, face, getProfile().avatar, false).setPosition(-w / 2 + PAD + face / 2, 10);
+    const lumo = createLumo(scene, face, currentLook(), false).setPosition(-w / 2 + PAD + face / 2, 10);
     node.add(lumo);
     label.setPosition(-w / 2 + PAD * 2 + face, -label.height / 2);
     node.add(label);

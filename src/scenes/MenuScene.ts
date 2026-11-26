@@ -4,6 +4,8 @@
 // при открытии — прокручена к текущему уровню. Сверху — профиль, мир, валюты (монеты и свет) и «Войти»,
 // снизу — «Играть» и вкладки Карта / Деревня / Магазин / Профиль. Награда дня — окном при открытии.
 
+import { t, tk } from '../i18n';
+import { currentLook } from '../ui/skins';
 import Phaser from 'phaser';
 import { addTabBar, addWallet, showCurrencyIntro, showDailyDialog } from '../ui/meta';
 import { dailyAvailable } from '../meta';
@@ -103,7 +105,7 @@ export class MenuScene extends Phaser.Scene {
     this.events.once('shutdown', () => this.scale.off('resize', onResize));
 
     const profile = getProfile();
-    const badge = createAvatarBadge(this, 100, topY, 62, profile.avatar).setDepth(21);
+    const badge = createAvatarBadge(this, 100, topY, 62, currentLook()).setDepth(21);
     badge.setSize(140, 140).setInteractive({ useHandCursor: true });
     badge.on('pointerup', () => this.go('Profile'));
     const nameT = this.add
@@ -114,7 +116,7 @@ export class MenuScene extends Phaser.Scene {
     nameT.on('pointerup', () => this.go('Profile'));
 
     // Название мира и под ним валюты: монеты и свет.
-    const title = text(this, W / 2, topY + 105, world.name, 64).setDepth(21);
+    const title = text(this, W / 2, topY + 105, tk(`world.${world.id}`), 64, C.text, true, { w: W - 420 }).setDepth(21);
     title.setShadow(0, 0, '#ffc65c', 24, true, true);
     addWallet(this, W / 2, topY + 175);
 
@@ -123,7 +125,7 @@ export class MenuScene extends Phaser.Scene {
       w: loggedIn ? 130 : 230,
       h: 110,
       icon: loggedIn ? 'cloud' : 'user',
-      label: loggedIn ? undefined : 'Войти',
+      label: loggedIn ? undefined : t('login'),
       fontSize: 40,
       onClick: () => {
         sfx.tap();
@@ -136,7 +138,7 @@ export class MenuScene extends Phaser.Scene {
 
     // --- Нижняя панель: «Играть» и вкладки. Звук, вибрация, статистика и «Как играть» — в профиле.
     const playNext = () => this.play(this.nodes[next].index);
-    new Button(this, W / 2, rowY - 150, { w: 400, h: 140, icon: 'play', label: 'Играть', primary: true, fontSize: 56, onClick: playNext }).setDepth(21);
+    new Button(this, W / 2, rowY - 150, { w: 400, h: 140, icon: 'play', label: t('play'), primary: true, fontSize: 56, onClick: playNext }).setDepth(21);
     addTabBar(this, 'Menu', rowY + 40, (key) => this.go(key));
 
     // --- Прокрутка карты: палец, колесо, стрелки
@@ -206,7 +208,7 @@ export class MenuScene extends Phaser.Scene {
         if (!canShowModal() || !this.scene.isActive()) return;
         modalOpened();
         showNameDialog(this, {
-          title: 'Как тебя зовут?',
+          title: t('name_title'),
           withAvatars: true,
           secondary: 'skip',
           onClose: () => {
@@ -233,7 +235,7 @@ export class MenuScene extends Phaser.Scene {
     const levels = world.levels;
     const { height, pos } = mapLayout(levels.length);
     this.mapH = height;
-    this.map = this.add.container(0, 0).setDepth(0);
+    this.map = this.add.container(0, 0).setDepth(0).setData('scroll', true);
     const theme = world.theme;
     const rnd = new Phaser.Math.RandomDataGenerator([world.id]);
     const calm = reducedMotion();
@@ -390,7 +392,7 @@ export class MenuScene extends Phaser.Scene {
     this.map.add(houses);
 
     // Сверху — туман и обещание новых земель.
-    this.map.add(text(this, W / 2, 140, 'Дальше — новые земли…', 40, C.textDim, false).setAlpha(0.6));
+    this.map.add(text(this, W / 2, 140, t('map_more_soon'), 40, C.textDim, false, { w: W - 100 }).setAlpha(0.6));
 
     // Кружки уровней.
     this.nodes = levels.map((level, i) => ({ level, index: LEVELS.indexOf(level), x: pos[i].x, y: pos[i].y, r: isChallenge(level) ? R_CHALLENGE : R }));
@@ -401,7 +403,7 @@ export class MenuScene extends Phaser.Scene {
     const side = cur.x > W / 2 ? -1 : 1;
     const lumoX = cur.x + side * (cur.r + 80);
     const pool = this.add.image(lumoX, cur.y + 10, 'glow').setTint(C.lanternOn).setBlendMode(Phaser.BlendModes.ADD).setScale(2.4, 1.6).setAlpha(0.22);
-    const lumo = createLumo(this, 130, getProfile().avatar).setPosition(lumoX, cur.y - 10);
+    const lumo = createLumo(this, 130, currentLook(), true, { withPet: true }).setPosition(lumoX, cur.y - 10);
     if (side < 0) lumo.setScale(-1, 1);
     this.map.add([pool, lumo]);
     if (!calm) this.tweens.add({ targets: lumo, y: cur.y - 24, duration: 1400, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
@@ -485,6 +487,22 @@ export class MenuScene extends Phaser.Scene {
       const fg = this.add.graphics();
       drawFireflyIcon(fg, r * 0.78, -r * 0.78, 16, got > 0);
       c.add(fg);
+    }
+    // «Можно улучшить»: пройден меньше чем на 3 звезды или собраны не все светлячки — значок со стрелкой вверх
+    // (такие уровни советует окно «Не хватает»).
+    if (passed && (stars < 3 || (progress.fireflies[level.id] ?? 0) < level.fireflies.length)) {
+      const ig = this.add.graphics().setPosition(-r * 0.8, -r * 0.8);
+      ig.fillStyle(0x000000, 0.4);
+      ig.fillCircle(0, 3, 19);
+      ig.fillStyle(0x3f9a52, 1);
+      ig.fillCircle(0, 0, 19);
+      ig.lineStyle(3, 0xc8ffb0, 1);
+      ig.strokeCircle(0, 0, 19);
+      ig.fillStyle(0xffffff, 1);
+      ig.fillTriangle(-9, 2, 9, 2, 0, -10);
+      ig.fillRect(-3.5, 1, 7, 9);
+      ig.setData('improve', level.id);
+      c.add(ig);
     }
     this.map.add(c);
     if (current && !calm) this.tweens.add({ targets: c, scale: 1.08, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.inOut' });

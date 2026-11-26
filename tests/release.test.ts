@@ -4,12 +4,14 @@ import { buildFeedback, PRIVACY_URL } from '../src/feedback';
 import { APP_VERSION, versionLabel } from '../src/version';
 
 describe('подготовка к TestFlight', () => {
-  it('версия 0.1.0, номер сборки, подпись и Bundle ID', () => {
-    expect(APP_VERSION).toBe('0.1.0');
-    expect(versionLabel()).toMatch(/^0\.1\.0 \(сборка \d+\)$/);
+  it('версия из package.json, номер сборки, подпись и Bundle ID', () => {
+    const pkg = JSON.parse(readFileSync('package.json', 'utf8')).version as string;
+    expect(APP_VERSION).toBe(pkg);
+    expect(pkg).toBe('0.2.0');
+    expect(versionLabel()).toMatch(new RegExp(`^${pkg.replace(/\./g, '\\.')} \\(сборка \\d+\\)$`));
     const build = JSON.parse(readFileSync('app-build.json', 'utf8')).build as number;
     const pbx = readFileSync('ios/App/App.xcodeproj/project.pbxproj', 'utf8');
-    expect(pbx).toContain('MARKETING_VERSION = 0.1.0;');
+    expect(pbx).toContain(`MARKETING_VERSION = ${pkg};`);
     expect(pbx).toContain(`CURRENT_PROJECT_VERSION = ${build};`);
     expect(pbx).toContain('DEVELOPMENT_TEAM = R457T4MLSR;');
     expect(pbx).toContain('CODE_SIGN_STYLE = Automatic;');

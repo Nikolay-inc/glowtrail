@@ -1,8 +1,15 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
+  applyReplay,
   applyWin,
+  replayCoinsNext,
   buyHint,
-  buySkin,
+  buyItem,
+  chapelReady,
+  freeHintsPerDay,
+  openChest,
+  villageBonuses,
+  wellLight,
   buyUpgrade,
   claimDaily,
   coins,
@@ -26,7 +33,7 @@ import {
   VILLAGE_TOTAL,
   type Economy,
 } from '../src/core/economy';
-import { simulate, type SimLevel } from '../src/core/economySim';
+import { buildingCost, L1_LIGHT, priceTotals, PROFILES, simulate3, type ModelLevel } from '../src/core/economyModel';
 import { LEVELS } from '../src/levels/index';
 import { memoryBackend, migrate, SaveService, SAVE_VERSION } from '../src/save/SaveService';
 import { mergeSaves, toCloudPayload } from '../src/cloud/merge';
@@ -53,7 +60,9 @@ describe('валюты', () => {
     const res = restore(e, VILLAGE[0].id, lightEarned(best));
     expect(typeof res).not.toBe('string');
     e = (res as { economy: Economy }).economy;
-    expect(lightBalance(e, best)).toBe(12 - VILLAGE[0].cost);
+    // Колодец: +1 свет за каждый уровень на 3 звезды (здесь — один такой уровень).
+    expect(wellLight(e, best)).toBe(1);
+    expect(lightBalance(e, best)).toBe(12 + 1 - VILLAGE[0].cost);
   });
 });
 
@@ -66,7 +75,7 @@ describe('деревня', () => {
     expect(restore(e, VILLAGE[0].id, VILLAGE[0].cost - 1)).toBe('notEnoughLight');
   });
 
-  it('награды: монеты, скин, способность «Поворот плитки»', () => {
+  it('награды: монеты, вещи гардероба, способность «Поворот плитки»; бонусы построек', () => {
     let e = defaultEconomy();
     for (const v of VILLAGE) {
       const res = restore(e, v.id, 999);
@@ -75,8 +84,21 @@ describe('деревня', () => {
     }
     expect(nextVillageObject(e)).toBeNull();
     expect(e.upgrades.rotate).toBe(1);
-    expect(e.skins.owned).toContain('road-planks');
+    expect(e.wardrobe.owned).toContain('road-planks');
+    expect(e.wardrobe.owned).toContain('outfit-star-robe');
     expect(coins(e)).toBe(VILLAGE.reduce((s, v) => s + ('coins' in v.reward ? v.reward.coins : 0), 0));
+    expect(villageBonuses(e)).toMatchObject({ lightPer3Star: 1, extraFreeHints: 1, coinMultPct: 10, coinsPerFirefly: 5, dailyPlus3: 1, dailyChest: true, preview: 1 });
+    expect(freeHintsPerDay(e)).toBe(4);
+    // Мельница +10% и мост +5 за нового светлячка.
+    const w = applyWin(e, 'valley-11', 3, 2);
+    expect(w.coins).toBe(25);
+    expect(w.bonus).toBe(3 + 10);
+    expect(applyWin(w.economy, 'valley-11', 3, 2).bonus).toBe(0); // повтор — светлячки уже оплачены
+    // Сундук раз в день, часовня раз в день.
+    const c = openChest(e, '2026-03-01')!;
+    expect(c.coins).toBeGreaterThanOrEqual(20);
+    expect(openChest(c.economy, '2026-03-01')).toBeNull();
+    expect(chapelReady(e, '2026-03-01')).toBe(true);
   });
 });
 
@@ -97,20 +119,20 @@ describe('прокачка и скины', () => {
     expect(buyUpgrade(defaultEconomy(), 'lantern')).toBe('notEnoughCoins');
   });
 
-  it('скины: покупка, надеть, «особые» недоступны, деревенские не продаются', () => {
+  it('гардероб: покупка, надеть, «особые» недоступны, деревенские не продаются', () => {
     let e = rich();
-    e = buySkin(e, 'costume-2') as Economy;
-    expect(buySkin(e, 'costume-2')).toBe('owned');
-    expect(buySkin(e, 'costume-7')).toBe('special');
-    expect(buySkin(e, 'road-planks')).toBe('locked');
-    e = equip(e, 'costume-2');
-    expect(e.skins.equipped.costume).toBe('costume-2');
-    expect(equip(e, 'costume-5').skins.equipped.costume).toBe('costume-2'); // не куплен
+    e = buyItem(e, 'hat-brim') as Economy;
+    expect(buyItem(e, 'hat-brim')).toBe('owned');
+    expect(buyItem(e, 'hat-firefly-crown')).toBe('special');
+    expect(buyItem(e, 'road-planks')).toBe('locked');
+    e = equip(e, 'hat-brim');
+    expect(e.wardrobe.look.hat).toBe('hat-brim');
+    expect(equip(e, 'hat-witch').wardrobe.look.hat).toBe('hat-brim'); // не куплена
   });
 });
 
 describe('ежедневная награда и подсказки', () => {
-  it('календарь на 7 дней: серия, пропуск — заново, на 7-й день скин', () => {
+  it('календарь на 7 дней: серия, пропуск — заново, на 7-й день наряд', () => {
     let e = defaultEconomy();
     const days = ['2026-03-01', '2026-03-02', '2026-03-03', '2026-03-04', '2026-03-05', '2026-03-06', '2026-03-07'];
     for (const [i, d] of days.entries()) {
@@ -119,7 +141,7 @@ describe('ежедневная награда и подсказки', () => {
       e = r.economy;
       expect(claimDaily(e, d)).toBeNull(); // второй раз за день — нет
     }
-    expect(e.skins.owned).toContain('costume-4');
+    expect(e.wardrobe.owned).toContain('outfit-poncho');
     expect(dailyDay(e, '2026-03-08')).toBe(1); // после 7-го — снова 1
     expect(dailyDay(e, '2026-03-10')).toBe(1); // пропуск
   });
@@ -140,21 +162,21 @@ describe('ежедневная награда и подсказки', () => {
 describe('сохранение и облако', () => {
   beforeEach(() => SaveService.setBackend(memoryBackend()));
 
-  it('v4 → v5: монеты за пройденные уровни задним числом, открытые звёздами костюмы остаются', () => {
+  it('v4 → v6: монеты за пройденные уровни задним числом, открытые звёздами костюмы остаются вещами гардероба', () => {
     const v4 = { version: 4, profile: { playerId: 'p-12345678', avatar: 4 }, progress: { unlocked: ['valley-01'], stars: { 'valley-01': 3, 'valley-02': 3, 'valley-03': 2, 'valley-04': 3 } }, log: [] };
     const d = migrate(v4);
     expect(d.version).toBe(SAVE_VERSION);
     expect(coins(d.economy)).toBe(25 + 25 + 20 + 25);
-    expect(d.economy.skins.owned).toContain('costume-4'); // 11 звёзд ≥ 10
-    expect(d.economy.skins.equipped.costume).toBe('costume-4');
-    expect(d.profile.avatar).toBe(4);
+    expect(d.economy.wardrobe.owned).toContain('outfit-poncho'); // костюм «Янтарный» (11 звёзд ≥ 10) → пончо
+    expect(d.economy.wardrobe.look.outfit).toBe('outfit-poncho');
+    expect(d.profile.avatar).toBe(0);
   });
 
   it('победа: монеты и свет начисляются, переигровка — только разница', () => {
     const first = recordWinRewards('valley-05', 2, 0, 'valley-06');
-    expect(first).toEqual({ coins: 20, light: 4 });
+    expect(first).toEqual({ coins: 20, light: 4, bonusCoins: 0, bonusLight: 0 });
     const again = recordWinRewards('valley-05', 3, 0, 'valley-06');
-    expect(again).toEqual({ coins: 5, light: 2 });
+    expect(again).toEqual({ coins: 5, light: 2, bonusCoins: 0, bonusLight: 0 });
     expect(wallet()).toEqual({ coins: 25, light: 6 });
     const r = restoreVillage(VILLAGE[0].id);
     expect(r.ok).toBe(VILLAGE[0].cost <= 6);
@@ -167,47 +189,72 @@ describe('сохранение и облако', () => {
   });
 
   it('слияние с облаком: счётчики — максимум, покупки и деревня — объединение', () => {
-    const a = { ...rich(300), village: ['well'], skins: { ...defaultEconomy().skins, owned: [...defaultEconomy().skins.owned, 'costume-2'] } };
-    const b = { ...rich(500), coinsSpent: 100, upgrades: { stash: 1, rotate: 0, lantern: 2 }, village: ['well', 'bakery'] };
+    const a = { ...rich(300), buildings: { well: 2 }, wardrobe: { ...defaultEconomy().wardrobe, owned: [...defaultEconomy().wardrobe.owned, 'hat-brim'] } };
+    const b = { ...rich(500), coinsSpent: 100, upgrades: { stash: 1, rotate: 0, lantern: 2 }, buildings: { well: 1, bakery: 1 } };
     const m = mergeEconomy(a, b);
     expect(m.coinsEarned).toBe(500);
     expect(m.coinsSpent).toBe(100);
-    expect(m.village).toEqual(['well', 'bakery']);
+    expect(m.buildings).toEqual({ well: 2, bakery: 1 });
     expect(m.upgrades).toEqual({ stash: 1, rotate: 0, lantern: 2 });
-    expect(m.skins.owned).toContain('costume-2');
+    expect(m.wardrobe.owned).toContain('hat-brim');
     // Через облачный формат.
     const local = SaveService.load();
     const cloud = { ...local, economy: b };
-    expect(mergeSaves(local, toCloudPayload(cloud)).economy.village).toEqual(['well', 'bakery']);
-    expect(normalizeEconomy({ coinsEarned: -5, village: ['nope', 'well'] })).toMatchObject({ coinsEarned: 0, village: ['well'] });
+    expect(mergeSaves(local, toCloudPayload(cloud)).economy.buildings).toEqual({ well: 1, bakery: 1 });
+    // Старый формат (v6): список восстановленных → уровень 1.
+    expect(normalizeEconomy({ coinsEarned: -5, village: ['nope', 'well'] })).toMatchObject({ coinsEarned: 0, buildings: { well: 1 } });
   });
 
   it('старое облако без экономики: монеты за его звёзды', () => {
     const local = SaveService.load();
     const cloud = { version: 4, profile: local.profile, progress: { ...local.progress, stars: { 'valley-01': 3 } } };
     expect(coins(mergeSaves(local, cloud).economy)).toBe(25);
-    expect(economyFromProgress({}, 0).skins.equipped.costume).toBe('costume-0');
+    expect(economyFromProgress({}, 0).wardrobe.look.outfit).toBe('outfit-cloak');
   });
 });
 
-describe('симуляция экономики (типичный игрок)', () => {
-  const levels: SimLevel[] = LEVELS.map((l) => ({ id: l.id, num: l.num, rating: l.metrics?.rating ?? 3, fireflies: l.fireflies.length, infinite: l.tileSet !== null }));
-  const res = simulate(levels, 120);
+describe('экономика на три главы (npm run sim-economy)', () => {
+  const ch1: ModelLevel[] = LEVELS.slice(0, 30).map((l) => ({ num: l.num, chapter: 1, rating: l.metrics?.rating ?? 3, fireflies: l.fireflies.length, infinite: l.tileSet !== null }));
+  const avg = PROFILES.find((p) => p.id === 'average')!;
+  const base = simulate3(ch1, avg, 0);
+  const extra = simulate3(ch1, avg, 15);
 
-  it('в первый час между новыми целями не больше 5 минут', () => {
-    expect(Math.max(...res.gapsFirstHour)).toBeLessThanOrEqual(5);
-    expect(res.gapsFirstHour.length).toBeGreaterThanOrEqual(12);
+  it('средний без перепрохождений: к концу каждой главы 85–90% построек и их первых улучшений', () => {
+    expect(base.chapters).toHaveLength(3);
+    for (const c of base.chapters) {
+      expect(c.share, `глава ${c.chapter}`).toBeGreaterThanOrEqual(0.85);
+      expect(c.share, `глава ${c.chapter}`).toBeLessThanOrEqual(0.9);
+    }
   });
 
-  it('после мира 1 остаётся на что тратить монеты: дорогие скины и высшие улучшения', () => {
-    const expensive = res.leftAtWorldEnd.filter((x) => x.price >= 200);
-    expect(expensive.length).toBeGreaterThanOrEqual(3);
-    expect(expensive.some((x) => x.label.includes('улучшение'))).toBe(true);
+  it('в первый час каждой главы новая цель не реже раза в 5 минут', () => {
+    for (const r of [base, extra]) for (const c of r.chapters) expect(c.maxGapFirstHour, `+${r.extra}, глава ${c.chapter}`).toBeLessThanOrEqual(5);
   });
 
-  it('вся деревня восстанавливается примерно к концу мира 1', () => {
-    expect(res.villageDoneAt).not.toBeNull();
-    expect(res.villageDoneAt!).toBeGreaterThanOrEqual(25);
-    expect(VILLAGE_TOTAL).toBeGreaterThan(100);
+  it('уровни не блокируются: все три профиля проходят все 90 уровней, перепрохождения добавляют покупок', () => {
+    for (const p of PROFILES) expect(simulate3(ch1, p, 0).chapters).toHaveLength(3);
+    const v = (c: (typeof base.chapters)[number]) => c.l1 + c.l2 + c.l3 + c.abilities + c.wardrobe + c.streets;
+    expect(v(extra.chapters[2])).toBeGreaterThan(v(base.chapters[2]));
+    expect(extra.tailDays).not.toBeNull();
+  });
+
+  it('цены: постройки по 3 уровня, украшения в слотах 3–5 вариантов, улицы в 3 шага', () => {
+    expect(buildingCost('valley', 0, 1)).toEqual({ light: VILLAGE[0].cost, coins: 0 });
+    expect(buildingCost('forest', 9, 3).coins).toBeGreaterThan(buildingCost('forest', 9, 2).coins);
+    expect(VILLAGE_TOTAL).toBe(L1_LIGHT.valley.reduce((a, b) => a + b, 0));
+    expect(priceTotals()).toHaveLength(3);
+  });
+
+  it('повтор без улучшения: 6 → 3 → 1 → 0 монет за уровень в день, сброс назавтра', () => {
+    let e = applyWin(defaultEconomy(), 'valley-03', 3).economy;
+    const got: number[] = [];
+    for (let i = 0; i < 5; i++) {
+      const r = applyReplay(e, 'valley-03', '2026-03-01');
+      got.push(r.coins);
+      e = r.economy;
+    }
+    expect(got).toEqual([6, 3, 1, 0, 0]);
+    expect(replayCoinsNext(e, 'valley-03', '2026-03-02')).toBe(6);
+    expect(applyReplay(defaultEconomy(), 'valley-04', '2026-03-01').coins).toBe(0); // ещё не пройден
   });
 });

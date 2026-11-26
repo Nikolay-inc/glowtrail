@@ -43,6 +43,7 @@ describe('SaveService', () => {
       muted: true,
       music: true,
       vibration: true,
+      language: '',
     });
     expect('hints' in d.progress).toBe(false); // подсказки теперь бесплатные
     expect(d.log).toHaveLength(1);

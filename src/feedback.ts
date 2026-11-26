@@ -3,6 +3,7 @@
 // уходит начало статистики. Адрес — из VITE_CONTACT_EMAIL (.env.production / .env.app), в коде его нет.
 // Политика конфиденциальности — страница на сайте игры (site/privacy.html → privacy.html в сборке).
 
+import { t } from './i18n';
 import { LEVELS } from './levels/index';
 import { platform, WEB_URL } from './platform';
 import { statsText } from './storage';
@@ -24,11 +25,11 @@ export interface Feedback {
 
 /** Собрать письмо. Чистая функция — проверяется тестом. */
 export function buildFeedback(to: string, stats: string, info: { version: string; platform: string; device: string }): Feedback {
-  const head = [`Версия: ${info.version}`, `Платформа: ${info.platform}`, `Устройство: ${info.device}`].join('\n');
+  const head = [t('fb_version', { v: info.version }), t('fb_platform', { v: info.platform }), t('fb_device', { v: info.device })].join('\n');
   const full = `${head}\n\n${stats}`;
-  const cut = stats.length > BODY_STATS ? `${stats.slice(0, BODY_STATS)}\n… (полная статистика скопирована в буфер — вставь её сюда)` : stats;
-  const body = `Привет! Мой отзыв о Glowtrail:\n\n\n\n— — —\n${head}\n\n${cut}`;
-  const subject = `Glowtrail ${info.version} — отзыв`;
+  const cut = stats.length > BODY_STATS ? `${stats.slice(0, BODY_STATS)}\n${t('fb_cut')}` : stats;
+  const body = `${t('fb_hello')}\n\n\n\n— — —\n${head}\n\n${cut}`;
+  const subject = t('fb_subject', { v: info.version });
   const url = `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   return { subject, body, full, url };
 }
