@@ -144,7 +144,19 @@ async function layout() {
   const port = 5199;
   const out = `artifacts/i18n${lang === 'qps' ? '' : `-${lang}`}`;
   mkdirSync(out, { recursive: true });
-  const vite = spawn('npx', ['vite', '--port', String(port), '--strictPort'], { stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, GLOW_NO_HMR: '1' } });
+  // Своя группа процессов: npx запускает vite дочерним процессом, и kill одного npx оставлял vite
+  // жить — открытые каналы не давали скрипту завершиться (в CI шаг висел часами).
+  const vite = spawn('npx', ['vite', '--port', String(port), '--strictPort'], { stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, GLOW_NO_HMR: '1' }, detached: true });
+  const stopVite = () => {
+    try {
+      if (vite.pid) process.kill(-vite.pid, 'SIGTERM');
+    } catch {
+      /* уже завершён */
+    }
+    vite.stdout.destroy();
+    vite.stderr.destroy();
+  };
+  process.once('exit', stopVite);
   await new Promise<void>((resolve, reject) => {
     const to = setTimeout(() => reject(new Error('vite не запустился')), 30000);
     vite.stdout.on('data', (d: Buffer) => {
@@ -189,7 +201,7 @@ async function layout() {
     process.stdout.write(`  ${name}: ${(v as unknown[]).length ? `✗ ${(v as unknown[]).length}` : '✓'}\n`);
   }
   await browser.close();
-  vite.kill();
+  stopVite();
   // Один и тот же ключ на одном экране — одной строкой.
   const seen = new Set<string>();
   for (const f of found) {
@@ -209,3 +221,4 @@ if (errors.length) {
   process.exit(1);
 }
 console.log('✓ i18n-check: всё в порядке');
+process.exit(0);
