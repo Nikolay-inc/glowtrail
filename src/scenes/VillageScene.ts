@@ -18,7 +18,11 @@ import { currentLook } from '../ui/skins';
 import { uiText } from '../ui/UIText';
 import { drawBuilding, drawDecor, drawSilhouette, drawStreet, type BuildingView } from '../ui/village';
 import * as P from '../ui/villagePanels';
-import { edgeRows, stretchLayout } from '../ui/viewport';
+import { BRIDGE_X, drawCrossing, drawRiver, RIVER_HW_BRIDGE, riverShape } from '../ui/villageRiver';
+import { currentView, edgeRows, stretchLayout } from '../ui/viewport';
+
+/** Какая постройка района — мост через реку: долина — мост (5-я), лес — мост-качели (9-я). */
+const BRIDGE_INDEX: Partial<Record<DistrictId, number>> = { valley: 4, forest: 8 };
 import { C, H, W } from '../ui/theme';
 
 /** Название постройки и тексты — по ключам i18n. */
@@ -35,11 +39,11 @@ const LAYOUT: Record<DistrictId, Spot[]> = {
     { x: 390, f: 1, s: 0.85 },
     { x: 210, f: 0.81, s: 0.78 },
     { x: 870, f: 0.81, s: 0.72 },
-    { x: 820, f: 0.48, s: 0.68 },
+    { x: 800, f: 0.43, s: 0.66 },
     { x: 540, f: 0.58, s: 0.85 },
     { x: 545, f: 0.83, s: 0.76 },
     { x: 220, f: 0.2, s: 0.78 },
-    { x: 250, f: 0.46, s: 0.8 },
+    { x: 250, f: 0.41, s: 0.8 },
     { x: 545, f: 0.2, s: 0.78 },
     { x: 870, f: 0.2, s: 0.7 },
   ],
@@ -49,8 +53,8 @@ const LAYOUT: Record<DistrictId, Spot[]> = {
     { x: 870, f: 0.2, s: 0.7 },
     { x: 870, f: 0.81, s: 0.72 },
     { x: 210, f: 0.81, s: 0.76 },
-    { x: 820, f: 0.48, s: 0.68 },
-    { x: 250, f: 0.46, s: 0.78 },
+    { x: 800, f: 0.43, s: 0.66 },
+    { x: 250, f: 0.41, s: 0.78 },
     { x: 545, f: 0.83, s: 0.74 },
     { x: 220, f: 0.2, s: 0.76 },
     { x: 540, f: 0.58, s: 0.85 },
@@ -74,7 +78,7 @@ const LAYOUT: Record<DistrictId, Spot[]> = {
 const SLOTS: [number, number][] = [
   [70, 0.24], [380, 0.24], [700, 0.24], [1005, 0.26],
   [415, 0.34], [690, 0.35],
-  [60, 0.52], [430, 0.48], [650, 0.5], [1000, 0.52],
+  [60, 0.43], [430, 0.42], [650, 0.43], [1000, 0.44],
   [140, 0.67], [300, 0.67], [780, 0.67], [940, 0.67],
   [60, 0.84], [350, 0.85], [725, 0.85], [1015, 0.84],
   [120, 1.03], [245, 1.04], [600, 1.04], [735, 1.04], [880, 1.03], [1005, 1.01],
@@ -349,7 +353,28 @@ export class VillageScene extends Phaser.Scene implements P.VillageHost {
     const l = LAYOUT[this.district][i];
     // Чем выше свободная область, тем крупнее постройки (на коротких экранах — помельче, без наложений).
     const k = Phaser.Math.Clamp((this.yBot - this.yTop) / 1000, 0.85, 1.25);
+    // Мост (5-я постройка долины и леса) стоит поперёк реки: точка постройки — ближний конец на южном берегу.
+    if (this.isBridge(i)) return { x: BRIDGE_X, y: this.riverCY() + RIVER_HW_BRIDGE + 16, s: 1 };
     return { x: l.x, y: this.yTop + (this.yBot - this.yTop) * l.f, s: l.s * k };
+  }
+
+  private isBridge(i: number) {
+    return this.hasRiver() && BRIDGE_INDEX[this.district] === i;
+  }
+
+  /** Река есть в долине и в лесу (в Горном городе — нет). */
+  private hasRiver() {
+    return this.district !== 'mountain';
+  }
+
+  /** Середина реки у моста. */
+  private riverCY() {
+    return this.yTop + (this.yBot - this.yTop) * 0.55;
+  }
+
+  /** Длина моста — от берега до берега. */
+  private bridgeLen() {
+    return 2 * RIVER_HW_BRIDGE + 32;
   }
 
   private slotPos(i: number) {
@@ -362,13 +387,13 @@ export class VillageScene extends Phaser.Scene implements P.VillageHost {
   private streetPoints(): Phaser.Math.Vector2[][] {
     const V = Phaser.Math.Vector2;
     const sp = (i: number) => this.spot(i);
-    const pts = [
-      new V(545, this.yBot + 80),
-      new V(500, sp(5).y + 20),
-      new V(560, sp(4).y - 10),
-      new V(520, sp(7).y + 20),
-      new V(545, sp(8).y + 30),
-    ];
+    // Через реку тропинка идёт прямо по мосту: от ближнего конца к дальнему.
+    const near = this.riverCY() + RIVER_HW_BRIDGE + 16;
+    const far = near - this.bridgeLen();
+    const pts = this.hasRiver()
+      ? [new V(545, this.yBot + 80), new V(500, this.yTop + (this.yBot - this.yTop) * 0.83 + 20), new V(BRIDGE_X, near + 40), new V(BRIDGE_X, far - 30), new V(520, this.yTop + (this.yBot - this.yTop) * 0.41 + 20), new V(545, this.yTop + (this.yBot - this.yTop) * 0.2 + 30)]
+      : [new V(545, this.yBot + 80), new V(500, sp(5).y + 20), new V(560, sp(4).y - 10), new V(520, sp(7).y + 20), new V(545, sp(8).y + 30)];
+    void sp;
     const all = new Phaser.Curves.Spline(pts).getPoints(80);
     const n = all.length - 1;
     return Array.from({ length: STREETS_PER_DISTRICT }, (_, k) => all.slice(Math.round((k * n) / 4), Math.round(((k + 1) * n) / 4) + 1));
@@ -390,8 +415,16 @@ export class VillageScene extends Phaser.Scene implements P.VillageHost {
       const step = open ? streetStep(e, d, i) : 0;
       const res = drawStreet(sg, pts, step as 0 | 1 | 2 | 3, 44);
       for (const l of res.lamps) this.map.add(this.add.image(l.x, l.y - 40, 'glow').setTint(0xffd27a).setBlendMode(Phaser.BlendModes.ADD).setScale(0.9).setAlpha(0.55));
-      if (this.editMode && open) this.streetMarker(pts[Math.floor(pts.length * [0.45, 0.5, 0.35, 0.6][i])], i, step);
+      if (this.editMode && open) this.streetMarker(pts[Math.floor(pts.length * [0.45, 0.25, 0.75, 0.6][i])], i, step);
     });
+    // Река поверх тропинки (под мостом тропинки не видно), на всю видимую ширину — за края экрана.
+    if (this.hasRiver()) {
+      const view = currentView(this);
+      const rg = this.add.graphics();
+      this.map.add(rg);
+      const glints = drawRiver(this, rg, this.riverCY(), Math.min(-40, view.x - 60), Math.max(W + 40, view.x + view.w + 60), GROUND[d]);
+      for (const img of glints) this.map.add(img);
+    }
     // Постройки, украшения — по глубине (ниже на экране — ближе).
     const items: { y: number; obj: Phaser.GameObjects.GameObject }[] = [];
     districtBuildings(d).forEach((b, i) => items.push({ y: this.spot(i).y, obj: d === 'mountain' ? this.drawSilhouetteAt(i) : this.drawBuildingAt(b.id, i, open) }));
@@ -431,7 +464,6 @@ export class VillageScene extends Phaser.Scene implements P.VillageHost {
     const g = this.add.graphics();
     this.map.add(g);
     const top = this.yTop - 260;
-    const bridgeY = this.spot(4).y;
     g.fillStyle(pal.far, 1);
     g.fillEllipse(540, top + 260, 1500, 420);
     g.fillRect(-200, top + 260, 1480, H * 2);
@@ -444,18 +476,16 @@ export class VillageScene extends Phaser.Scene implements P.VillageHost {
       g.fillStyle(0xdfe6ff, 0.5);
       for (const [x, h] of [[120, 300], [520, 380], [900, 320]] as const) g.fillTriangle(x - 40, top + 280 - h + 60, x + 40, top + 280 - h + 60, x, top + 280 - h);
     }
-    // Ручей поперёк — под мостом
-    g.lineStyle(64, pal.water, 1);
-    g.strokePoints(new Phaser.Curves.Spline([new Phaser.Math.Vector2(-60, bridgeY - 10), new Phaser.Math.Vector2(300, bridgeY - 40), new Phaser.Math.Vector2(780, bridgeY + 10), new Phaser.Math.Vector2(1140, bridgeY - 30)]).getPoints(40), false);
-    g.lineStyle(5, pal.ripple, 0.45);
-    for (const x of [120, 330, 760, 960]) g.lineBetween(x - 28, bridgeY - 18 + (x % 3) * 6, x + 28, bridgeY - 18 + (x % 3) * 6);
-    // Ели по краям (в лесу — гуще и выше)
+    // Река рисуется в drawMap (поверх тропинки). Ели по краям (в лесу — гуще и выше), не в русле.
+    const river = this.hasRiver() ? riverShape(this.riverCY()) : null;
+    const inRiver = (x: number, y: number) => !!river && y > river.y(x) - river.hw(x) - 8 && y < river.y(x) + river.hw(x) + 18;
     const rnd = new Phaser.Math.RandomDataGenerator([`village-${d}`]);
     const n = d === 'forest' ? 30 : 18;
     for (let i = 0; i < n; i++) {
       const x = i % 2 ? rnd.between(1000, 1070) : rnd.between(10, 70);
       const y = rnd.between(top + 200, this.yBot + 60);
       const s = rnd.realInRange(0.6, 1) * (d === 'forest' ? 1.25 : 1);
+      if (inRiver(x, y)) continue;
       g.fillStyle(pal.tree, 1);
       g.fillTriangle(x - 36 * s, y, x + 36 * s, y, x, y - 100 * s);
       g.fillTriangle(x - 28 * s, y - 40 * s, x + 28 * s, y - 40 * s, x, y - 128 * s);
@@ -465,6 +495,7 @@ export class VillageScene extends Phaser.Scene implements P.VillageHost {
       for (let i = 0; i < 14; i++) {
         const x = i % 2 ? rnd.between(960, 1050) : rnd.between(30, 120);
         const y = rnd.between(this.yTop, this.yBot + 40);
+        if (inRiver(x, y)) continue;
         g.fillStyle(0x3a2a40, 1);
         g.fillRect(x - 2, y - 10, 4, 10);
         g.fillStyle(0x5ad6c8, 0.8);
@@ -481,7 +512,8 @@ export class VillageScene extends Phaser.Scene implements P.VillageHost {
     const level = open ? buildingLevel(e, id) : 0;
     const lit = level > 0;
     const c = this.add.container(sp.x, sp.y);
-    const b = drawBuilding(this, id, lit, Math.max(1, level));
+    // Мост через реку — вид сверху, поперёк русла (в окне постройки — обычный рисунок сбоку).
+    const b = this.isBridge(i) ? drawCrossing(this, this.district === 'forest' ? 'rope' : 'stone', lit, Math.max(1, level), this.bridgeLen()) : drawBuilding(this, id, lit, Math.max(1, level));
     if (lit) c.add(this.add.image(0, -b.height * sp.s * 0.35, 'glow').setTint(0xffb84d).setBlendMode(Phaser.BlendModes.ADD).setScale(3.4 + level * 0.4, 2.4 + level * 0.3).setAlpha(0.18 + level * 0.04));
     const body = this.add.container(0, 0, b.objects).setScale(sp.s);
     if (!open) body.setAlpha(0.55);

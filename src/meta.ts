@@ -60,7 +60,8 @@ export function getEconomy(): Economy {
 /** Баланс: монеты и свет. */
 export function wallet(): { coins: number; light: number } {
   const d = SaveService.load();
-  return { coins: coins(d.economy), light: lightBalance(d.economy, d.progress) };
+  // Свет не бывает меньше нуля (на случай несогласованных данных после слияния устройств).
+  return { coins: coins(d.economy), light: Math.max(0, lightBalance(d.economy, d.progress)) };
 }
 
 /** Способности на уровень (прокачка): слоты «отложить», заряды поворота, сколько плиток видно наперёд. */

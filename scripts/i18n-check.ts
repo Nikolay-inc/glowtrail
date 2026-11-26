@@ -177,7 +177,7 @@ async function layout() {
     save.progress.stars[l.id] = 1 + (i % 3);
     save.progress.unlocked.push(l.id);
   });
-  save.economy = { ...defaultEconomy(), coinsEarned: 260, buildings: { well: 2, bakery: 1, workshop: 1 }, upgrades: { stash: 0, rotate: 1, lantern: 1 } };
+  save.economy = { ...defaultEconomy(), coinsEarned: 260, buildings: { well: 2, bakery: 1, workshop: 1, bridge: 2 }, upgrades: { stash: 0, rotate: 1, lantern: 1 } };
   save.economy.wardrobe.owned.push('hat-brim', 'outfit-jacket', 'pet-firefly', 'trail-sparks');
   // Деревня 2.0: улица и украшения, часть построек улучшена.
   save.economy.streets = { 'valley:0': 2, 'valley:1': 1 };

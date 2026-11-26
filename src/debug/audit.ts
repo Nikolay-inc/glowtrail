@@ -168,7 +168,7 @@ function views(game: Phaser.Game): Record<string, () => Promise<void>> {
   v['village-forest'] = async () => {
     SaveService.update((d) => {
       d.progress.stars[LEVELS[29].id] = 2;
-      d.economy.buildings = { ...d.economy.buildings, herbalist: 1, observatory: 2 };
+      d.economy.buildings = { ...d.economy.buildings, herbalist: 1, observatory: 2, 'swing-bridge': 3 };
     });
     await start('Village', { district: 'forest' }, 1000);
   };
