@@ -7,7 +7,7 @@ import { grant, type Economy } from './economy';
 import type { Quest, QuestKind, QuestState } from './questState';
 import { grantStreetStep } from './village';
 import { DAILY_QUESTS, WEEKLY_QUEST, type DistrictId } from './villageData';
-import { grantItem, itemById } from './wardrobe';
+import { CHEST_ITEMS, grantItem, itemById, QUEST_ITEMS } from './wardrobe';
 
 export type { Quest, QuestKind, QuestState } from './questState';
 
@@ -190,9 +190,8 @@ export function applyQuestEvent(e: Economy, ev: QuestEvent): { economy: Economy;
 /** Сколько выполненных, но не забранных заданий (точка на кнопке). */
 export const questsReady = (e: Economy) => [...e.quests.daily, ...(e.quests.weekly ? [e.quests.weekly] : [])].filter((q) => isDone(q) && !q.claimed).length;
 
-const CHEST_ITEMS = ['staff-crook', 'face-monocle', 'road-ember', 'acc-wings', 'trail-fireflies'];
-/** Вещи «за задания» (source 'quest') — по одной за каждое большое задание недели, пока есть. */
-const questItems = () => ['hat-miner', 'face-mustache', 'outfit-vest', 'acc-satchel', 'pet-moth', 'trail-leaves'].filter((id) => itemById(id));
+/** Вещи «за задания» — по одной за каждое большое задание недели, пока есть. */
+const questItems = () => QUEST_ITEMS.filter((id) => itemById(id));
 
 export type ClaimResult = { economy: Economy; coins: number; light: number; item: string | null; street: string | null };
 

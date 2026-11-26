@@ -146,12 +146,19 @@ export const WARDROBE: readonly WardrobeItem[] = [
   item('arch-flowers', 'arch', 'rare', 'village'),
   item('arch-sunset', 'arch', 'rare', 'coins', 160),
   item('arch-stone', 'arch', 'rare', 'coins', 190),
-  item('arch-leaves', 'arch', 'rare', 'quest'),
+  item('arch-leaves', 'arch', 'rare', 'cozy'),
   item('arch-crystal', 'arch', 'epic', 'coins', 480),
   item('arch-gold', 'arch', 'special', 'special'),
 ];
 
 export const itemById = (id: string) => WARDROBE.find((w) => w.id === id);
+
+/** Вещи из сундуков (каждый 4-й сундук, награда уюта «сундук») — по порядку, пока есть. */
+export const CHEST_ITEMS: readonly string[] = ['staff-crook', 'face-monocle', 'road-ember', 'acc-wings', 'trail-fireflies'];
+/** Вещи «за задания» — по одной за каждое большое задание недели, по порядку: части Lumo и стили поля вперемешку. */
+/** Вещи «за уют» — награда уровня деревни «вещь», по порядку: части Lumo и стиль поля. */
+export const COZY_ITEMS: readonly string[] = ['face-freckles', 'arch-leaves', 'acc-badge', 'pet-mushroom'];
+export const QUEST_ITEMS: readonly string[] = ['hat-miner', 'lamp-crystal', 'face-mustache', 'outfit-vest', 'road-mint', 'acc-satchel', 'pet-moth', 'trail-leaves'];
 
 // ---------------------------------------------------------------------------
 // Цена покупки: валюта и сумма. Обычные вещи и половина редких — за свет (свет не копится без дела),

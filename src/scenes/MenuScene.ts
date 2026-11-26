@@ -8,7 +8,7 @@ import { t, tk } from '../i18n';
 import { currentLook } from '../ui/skins';
 import Phaser from 'phaser';
 import { addTabBar, addWallet, showCurrencyIntro, showDailyDialog } from '../ui/meta';
-import { dailyAvailable } from '../meta';
+import { dailyAvailable, syncChallenges } from '../meta';
 import { currentView, edgeRows, stretchLayout, type ViewRect } from '../ui/viewport';
 import { isChallenge, LEVELS, numberInWorld, WORLDS, type World } from '../levels/index';
 import type { Level } from '../core/types';
@@ -68,6 +68,8 @@ export class MenuScene extends Phaser.Scene {
     const bounds = stretchLayout(this);
     const { topY, rowY } = edgeRows(bounds);
     addBackground(this, { dust: false });
+    // Награды испытаний, пройденных раньше (старое сохранение, другое устройство) — для отметки на вкладке «Деревня».
+    syncChallenges();
     const progress = loadProgress();
     const world = WORLDS[0];
     const next = this.nextLevel(progress);

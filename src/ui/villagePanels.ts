@@ -48,7 +48,7 @@ function newModal(host: VillageHost, w = 940): Modal {
 // Иллюстрация постройки
 
 /** Крупная иллюстрация постройки (уровень 0 — заброшена), с подсветкой и оживлением. */
-function illustration(host: VillageHost, id: string, level: number, size = 360) {
+export function illustration(host: Phaser.Scene, id: string, level: number, size = 360) {
   const scene = host;
   const c = scene.add.container(0, 0);
   const lit = level > 0;

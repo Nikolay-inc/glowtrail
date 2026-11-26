@@ -12,6 +12,7 @@ import {
   bonusesOf,
   BUILDINGS,
   buildingCost,
+  CHALLENGE_STREET_COINS,
   CHEST_AVG_COINS,
   COZY,
   COZY_REWARDS,
@@ -29,7 +30,7 @@ import {
   type BuildingCost,
   type DistrictId,
 } from './villageData';
-import { isLumoPart, itemBaseCost, WARDROBE } from './wardrobe';
+import { CHEST_ITEMS, COZY_ITEMS, isLumoPart, itemBaseCost, QUEST_ITEMS, WARDROBE } from './wardrobe';
 
 // Цены, бонусы, уют и задания — общие с игрой (src/core/villageData.ts).
 export {
@@ -200,8 +201,12 @@ export interface ChapterSummary {
   /** Вещи гардероба Lumo (части, не стили поля): куплено и получено наградами (всего к концу главы). */
   wardrobeBought: number;
   wardrobeRewards: number;
-  /** Стили поля (фонари, дороги, арки), купленные. */
+  /** Стили поля (фонари, дороги, арки): куплено и получено наградами (всего к концу главы). */
   fieldBought: number;
+  fieldRewards: number;
+  /** Бесплатные расцветы за испытания: получено и использовано (всего к концу главы). */
+  bloomsEarned: number;
+  bloomsUsed: number;
   abilities: number;
   /**
    * Самый длинный промежуток между целями в первый час главы и их число. Промежуток, внутри которого не закончился
@@ -252,9 +257,9 @@ export function chapterLevels(ch1: ModelLevel[]): ModelLevel[][] {
 
 /** Вещи «за монеты» с ценой в своей валюте (обычные и половина редких — свет). */
 export const SHOP_ITEMS = WARDROBE.filter((w) => w.source === 'coins').map((w) => ({ id: w.id, rarity: w.rarity, lumo: isLumoPart(w.id), ...itemBaseCost(w.id) }));
-const CHEST_LIST = ['staff-crook', 'face-monocle', 'road-ember', 'acc-wings', 'trail-fireflies'];
-const QUEST_LIST = ['hat-miner', 'face-mustache', 'outfit-vest', 'acc-satchel', 'pet-moth', 'trail-leaves'];
-const COZY_LIST = WARDROBE.filter((w) => w.source === 'cozy').map((w) => w.id);
+const CHEST_LIST = [...CHEST_ITEMS];
+const QUEST_LIST = QUEST_ITEMS.filter((id) => WARDROBE.some((w) => w.id === id));
+const COZY_LIST = [...COZY_ITEMS];
 
 /** Полная симуляция трёх глав для профиля; extra — минут перепрохождений и заданий в день. */
 export function simulate3(ch1: ModelLevel[], p: Profile, extra: number, opts: { tailMaxDays?: number } = {}): SimResult {
@@ -288,6 +293,9 @@ export function simulate3(ch1: ModelLevel[], p: Profile, extra: number, opts: { 
   let abilities = 0;
   const owned = new Set<string>();
   let rewardsLumo = 0;
+  let rewardsField = 0;
+  let bloomsEarned = 0;
+  let bloomsUsed = 0;
   let boughtLumo = 0;
   let boughtField = 0;
   const best: { stars: number; ff: number; total: number; ch: number }[] = [];
@@ -316,6 +324,7 @@ export function simulate3(ch1: ModelLevel[], p: Profile, extra: number, opts: { 
     if (!id || owned.has(id)) return false;
     owned.add(id);
     if (isLumoPart(id)) rewardsLumo++;
+    else rewardsField++;
     return true;
   };
   const firstFree = (list: string[]) => list.find((id) => !owned.has(id));
@@ -367,9 +376,12 @@ export function simulate3(ch1: ModelLevel[], p: Profile, extra: number, opts: { 
     addCozy(COZY.decor);
     goal('decor', `${d}:${k + 1}.${v + 1}`);
   };
-  /** Следующая вещь за свет / за монеты (дешёвые сначала; части Lumo — раньше стилей поля). */
-  const nextItem = (cur: 'coins' | 'light') =>
-    SHOP_ITEMS.filter((w) => w.currency === cur && !owned.has(w.id)).sort((a, b) => Number(b.lumo) - Number(a.lumo) || a.amount - b.amount)[0];
+  /** Следующая вещь за свет / за монеты (дешёвые сначала): части Lumo и стили поля по очереди, Lumo — первой. */
+  const nextItem = (cur: 'coins' | 'light', late = false) => {
+    // В «добирании» стиль поля — на каждые три части Lumo.
+    const field = boughtField < boughtLumo / (late ? 3 : 1);
+    return SHOP_ITEMS.filter((w) => w.currency === cur && !owned.has(w.id)).sort((a, b) => Number(a.lumo === field) - Number(b.lumo === field) || a.amount - b.amount)[0];
+  };
   const buyItem = (w: (typeof SHOP_ITEMS)[number]) => {
     owned.add(w.id);
     if (w.lumo) boughtLumo++;
@@ -385,8 +397,26 @@ export function simulate3(ch1: ModelLevel[], p: Profile, extra: number, opts: { 
     return r;
   };
 
+  /** Расцвет в подарок за испытание: игрок выбирает самую дорогую по расцвету постройку на 2-м уровне. */
+  const useBlooms = () => {
+    while (bloomsUsed < bloomsEarned) {
+      let pickB: { d: DistrictId; i: number; c: number } | null = null;
+      for (const d of open) dist[d].level.forEach((lv, i) => {
+        const c = buildingCost(d, i, 3).coins;
+        if (lv === 2 && (!pickB || c > pickB.c)) pickB = { d, i, c };
+      });
+      if (!pickB) return;
+      const b = pickB as { d: DistrictId; i: number };
+      dist[b.d].level[b.i] = 3;
+      bloomsUsed++;
+      addCozy(COZY.building[2]);
+      goal('L3', `${b.d}:${DISTRICT_BUILDINGS[b.d][b.i]}+gift`);
+    }
+  };
+
   /** Покупки между уровнями: постройка за свет, трата лишнего света, одна покупка за монеты. */
   const spend = (late: boolean) => {
+    useBlooms();
     // Свет: следующая постройка района по порядку (сначала текущий район).
     let nextL1 = 0;
     for (const d of open) {
@@ -400,6 +430,9 @@ export function simulate3(ch1: ModelLevel[], p: Profile, extra: number, opts: { 
         if (def && 'item' in def.reward) reward(def.reward.item);
         addCozy(COZY.building[0]);
         goal('L1', `${d}:${DISTRICT_BUILDINGS[d][i]}`);
+        // Следующая постройка района — на неё и копим.
+        const j = dist[d].level.indexOf(0);
+        if (j >= 0) nextL1 = buildingCost(d, j, 1).light;
       } else nextL1 = c.light;
       break;
     }
@@ -414,7 +447,7 @@ export function simulate3(ch1: ModelLevel[], p: Profile, extra: number, opts: { 
     } else {
       for (let guard = 0; guard < 4; guard++) {
         const spare = light - reserve;
-        const item = nextItem('light');
+        const item = nextItem('light', late);
         // Вещь: в «добирании» — не чаще раза в день, в обычной игре — раз в 6 дней (свет идёт и на украшения).
         if (item && day - itemDay >= (late ? 1 : 6) && spare >= item.amount) {
           light -= item.amount;
@@ -491,7 +524,7 @@ export function simulate3(ch1: ModelLevel[], p: Profile, extra: number, opts: { 
       }
     }
     if (late) {
-      const ci = nextItem('coins');
+      const ci = nextItem('coins', true);
       if (ci) options.push({ tier: 2, price: ci.amount, buy: () => buyItem(ci) });
     }
     options.sort((a, b) => a.tier - b.tier || a.price - b.price);
@@ -604,6 +637,11 @@ export function simulate3(ch1: ModelLevel[], p: Profile, extra: number, opts: { 
       ffErr = wantFf - ff;
       const r = play(c * 30 + k, l, stars[k], ff);
       dayNew += r.m;
+      // Испытание (10, 20, 30 главы): шаг улицы сразу и расцвет постройки на выбор.
+      if ((k + 1) % 10 === 0) {
+        if (!freeStreet()) coins += CHALLENGE_STREET_COINS;
+        bloomsEarned++;
+      }
       spend(false);
       if (dayNew >= NEW_LEVEL_MINUTES) {
         replayRound(extra);
@@ -636,6 +674,9 @@ export function simulate3(ch1: ModelLevel[], p: Profile, extra: number, opts: { 
       wardrobeBought: boughtLumo,
       wardrobeRewards: rewardsLumo,
       fieldBought: boughtField,
+      fieldRewards: rewardsField,
+      bloomsEarned,
+      bloomsUsed,
       abilities,
       maxGapFirstHour: Math.round(Math.max(0, ...idle) * 10) / 10,
       maxGapRaw: Math.round(Math.max(0, ...gaps) * 10) / 10,

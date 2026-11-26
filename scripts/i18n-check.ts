@@ -3,7 +3,8 @@
 //     у всех данных (вещи, наборы, постройки, улучшения, миры) есть тексты, в коде нет русского текста;
 //  2) Playwright открывает каждый экран и окно на псевдо-языке qps (английский +40%, акценты, [скобки])
 //     на 375x667 и проверяет, что текст не выходит за свой контейнер и за экран (src/debug/audit.ts);
-//     нарушения — список «экран + ключ», тогда скрипт падает. Скриншоты — artifacts/i18n.
+//     нарушения — список «экран + ключ», тогда скрипт падает. Там же: надписи с внутренним id (постройки, районы,
+//     вещи, наборы, украшения) вместо названия и ключи без перевода. Скриншоты — artifacts/i18n.
 // Флаги: --static (без браузера), --lang qps|ru|en|uk, --size 375x667, --only map,village.
 
 import { spawn } from 'node:child_process';
@@ -110,6 +111,7 @@ for (const k of keys) {
 const need = [
   ...WARDROBE.map((w) => `item.${w.id}`),
   ...SETS.map((s) => `set.${s.id}`),
+  ...BUILDINGS.filter((b) => b.district === 'mountain').map((v) => `building.${v.id}.name`),
   ...BUILDINGS.filter((b) => b.district !== 'mountain').flatMap((v) => [`building.${v.id}.name`, `building.${v.id}.story`, `building.${v.id}.lit`, `bonus.${v.id}`, `resident.${v.id}`]),
   ...DISTRICTS.map((d) => `district.${d}`),
   ...DECOR_TYPE_ORDER.flatMap((d) => [`decor.${d}`, ...[0, 1, 2, 3, 4].map((v) => `decor.${d}.${v}`)]),
@@ -197,6 +199,8 @@ async function layout() {
     found.push(...(v as typeof found));
     const el = await page.evaluate(() => (window as unknown as { __audit: { ellipsis: () => { text: string; key?: string }[] } }).__audit.ellipsis());
     for (const e of el) warn.push(`${name}: многоточие ${e.key ?? ''} «${e.text.slice(0, 60)}»`);
+    const miss: string[] = await page.evaluate(() => (window as unknown as { __audit: { missing: () => string[] } }).__audit.missing());
+    for (const k of miss) errors.push(`нет перевода (показан ключ): ${name} · ${k}`);
     await page.screenshot({ path: `${out}/${name}.png` });
     process.stdout.write(`  ${name}: ${(v as unknown[]).length ? `✗ ${(v as unknown[]).length}` : '✓'}\n`);
   }
@@ -208,7 +212,7 @@ async function layout() {
     const id = `${f.view}|${f.key}|${f.reason}`;
     if (seen.has(id)) continue;
     seen.add(id);
-    errors.push(`вёрстка: ${f.view} · ${f.key} · ${f.reason} +${f.over}px «${f.text}»`);
+    errors.push(f.reason === 'rawid' ? `id вместо названия: ${f.view} · ${f.key} «${f.text}»` : `вёрстка: ${f.view} · ${f.key} · ${f.reason} +${f.over}px «${f.text}»`);
   }
   console.log(`Экранов: ${names.filter((n) => !only || only.includes(n)).length}, скриншоты — ${out}/`);
 }

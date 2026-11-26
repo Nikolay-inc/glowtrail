@@ -5,7 +5,7 @@
 import { avatarIndex } from '../core/wardrobe';
 import { defaultEconomy, economyFromProgress, normalizeEconomy, type Economy } from '../core/economy';
 
-export const SAVE_VERSION = 7;
+export const SAVE_VERSION = 8;
 export const SAVE_KEY = 'glowtrail.save';
 /** Старый формат (до SaveService): прогресс и лог лежали в двух ключах. */
 export const LEGACY_KEYS = { progress: 'glowtrail.progress.v1', log: 'glowtrail.log.v1' } as const;
@@ -63,7 +63,7 @@ export interface Profile {
   bestDayStreak: number;
 }
 
-export type EventType = 'session' | 'start' | 'win' | 'lose' | 'abandon' | 'hint_used' | 'extra_tiles' | 'auto_ease' | 'level_skipped' | 'signup' | 'login' | 'logout' | 'auth_prompt' | 'tutorial_step' | 'tip_shown' | 'drag_place' | 'tap_place' | 'door_locked_attempt' | 'fireflies_collected' | 'tile_jump_used' | 'bridge_rotated_blocked' | 'lantern_expired' | 'currency_earn' | 'currency_spend' | 'village_restore' | 'upgrade_buy' | 'skin_buy' | 'daily_reward' | 'wardrobe_buy' | 'outfit_save' | 'building_upgrade' | 'decor_place' | 'street_upgrade' | 'quest_done' | 'cozy_level' | 'not_enough_hint_click' | 'language_change' | 'chest_open';
+export type EventType = 'session' | 'start' | 'win' | 'lose' | 'abandon' | 'hint_used' | 'extra_tiles' | 'auto_ease' | 'level_skipped' | 'signup' | 'login' | 'logout' | 'auth_prompt' | 'tutorial_step' | 'tip_shown' | 'drag_place' | 'tap_place' | 'door_locked_attempt' | 'fireflies_collected' | 'tile_jump_used' | 'bridge_rotated_blocked' | 'lantern_expired' | 'currency_earn' | 'currency_spend' | 'village_restore' | 'upgrade_buy' | 'skin_buy' | 'daily_reward' | 'wardrobe_buy' | 'outfit_save' | 'building_upgrade' | 'decor_place' | 'street_upgrade' | 'quest_done' | 'cozy_level' | 'not_enough_hint_click' | 'language_change' | 'chest_open' | 'challenge_reward';
 
 export interface LogEvent {
   /** Время события, ISO. */
@@ -306,7 +306,9 @@ function normalizeLog(raw: unknown): LogEvent[] {
  * v6 — гардероб Lumo (части, образы, стили поля) вместо скинов, бонусы построек, сундук и часовня.
  * v7 — «Деревня 2.0»: уровни построек всех районов (вместо списка восстановленных — уровень 1), улицы,
  *      украшения в слотах, уют, задания жителей, свет за задания и уют; часовня — счётчик за день.
- * Шаги идут цепочкой: v1 → … → v7, поэтому любое старое сохранение доходит до текущей версии.
+ * v8 — награды испытаний (`economy.challenges`: шаг улицы и расцвет на выбор за уровни 10/20/30 главы). Поле
+ *      начинается пустым; за уже пройденные испытания награда выдаётся при следующем заходе (`syncChallenges`).
+ * Шаги идут цепочкой: v1 → … → v8, поэтому любое старое сохранение доходит до текущей версии.
  */
 export function migrate(raw: unknown, legacy?: { progress: unknown; log: unknown }): SaveData {
   let data: Record<string, unknown> | null = null;
@@ -337,6 +339,7 @@ export function migrate(raw: unknown, legacy?: { progress: unknown; log: unknown
   // (normalizeEconomy переносит их сам: купленное остаётся, надетое — надетым). Аватарка профиля — надетый образ.
   // v6 → v7: список восстановленных построек `village` → уровни `buildings` (все — уровень 1), `chapelDay` →
   // `chapel` (тоже в normalizeEconomy); улицы, украшения, уют и задания начинаются с нуля.
+  // v7 → v8: `challenges` пустое (normalizeEconomy); награды за пройденные испытания — syncChallenges в meta.
   profile.avatar = avatarIndex(economy.wardrobe.look);
   return {
     version: SAVE_VERSION,

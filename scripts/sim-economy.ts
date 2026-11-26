@@ -5,6 +5,7 @@
 //  - слабый без перепрохождений: не меньше 75% к концу каждой главы;
 //  - гардероб (части Lumo, куплено + награды) у среднего без перепрохождений: глава 1 — 3–4, глава 3 — 10–12,
 //    с 15 мин в день — примерно вдвое больше (1,6–2,4×); первая покупка вещи — в первые 20 минут;
+//  - стили поля (фонари, дороги, арки; куплено + награды) у среднего без перепрохождений: глава 1 — 1–2, глава 3 — 5–6;
 //  - свет не копится: у среднего в конце каждой главы ≤ 30 света (с перепрохождениями ≤ 60);
 //  - «хвост» у среднего с 15 мин в день: все третьи уровни построек, все улицы и по украшению в каждом слоте —
 //    не дольше 45 дней после главы 3;
@@ -12,6 +13,8 @@
 //  - уровни экономика не блокирует (в модели уровень проходится всегда — проверяем, что все 90 пройдены).
 // Модель — src/core/economyModel.ts, цены — src/core/villageData.ts и wardrobe.ts (общие с игрой).
 
+import ru from '../src/i18n/ru.json';
+import { decorType } from '../src/core/villageData';
 import { LEVELS } from '../src/levels/index';
 import {
   ABILITY_ORDER,
@@ -41,6 +44,29 @@ import {
 
 const ch1: ModelLevel[] = LEVELS.slice(0, 30).map((l) => ({ num: l.num, chapter: 1, rating: l.metrics?.rating ?? 3, fireflies: l.fireflies.length, infinite: l.tileSet !== null }));
 
+// Названия — из русских текстов игры (i18n), а не внутренние id.
+const RU = ru as Record<string, string>;
+const tr = (key: string) => RU[key] ?? key;
+const district = (d: string) => tr(`district.${d}`);
+const building = (id: string) => tr(`building.${id}.name`);
+const ABILITY: Record<string, string> = { stash: 'upgrade.stash.name', rotate: 'upgrade.rotate.name', lantern: 'upgrade.lantern.name' };
+const COZY_WORD: Record<string, string> = { coins: 'монеты', light: 'свет', item: 'вещь', street: 'шаг улицы', chest: 'сундук' };
+/** Цель симуляции («valley:well», «forest:3.2», «valley:2→1», «rotate→2», id вещи…) — по-человечески. */
+function label(what: string): string {
+  let m: RegExpMatchArray | null;
+  if ((m = what.match(/^(\w+):(\d+)\.(\d+)$/))) {
+    const type = decorType(+m[2] - 1);
+    return `${district(m[1])}: ${tr(`decor.${type}`)} «${tr(`decor.${type}.${+m[3] - 1}`)}» (слот ${m[2]})`;
+  }
+  if ((m = what.match(/^(\w+):(\d+)→(\d+)$/))) return `${tr(`street.${m[1]}.${+m[2] - 1}`)} → шаг ${m[3]}`;
+  if ((m = what.match(/^(\w+):([\w-]+?)(\+gift)?$/))) return `${district(m[1])}: ${building(m[2])}${m[3] ? ' (подарок за испытание)' : ''}`;
+  if ((m = what.match(/^(\w+)→(\d+)$/))) return `${tr(ABILITY[m[1]] ?? m[1])} → ${m[2]}`;
+  if ((m = what.match(/^cozy (\d+)$/))) return `награда уюта ${m[1]}`;
+  if ((m = what.match(/^quest (\d+)$/))) return `задание жителя ${m[1]}`;
+  if ((m = what.match(/^level (\d+)$/))) return `улучшить уровень ${m[1]}`;
+  return RU[`item.${what}`] ?? what;
+}
+
 const row = (cells: (string | number)[]) => `| ${cells.join(' | ')} |`;
 const head = (cells: string[]) => `${row(cells)}\n${row(cells.map(() => '---'))}`;
 const out: string[] = [];
@@ -54,12 +80,12 @@ p();
 p('### Постройки по уровням (свет / монеты)');
 p();
 for (const c of CHAPTERS) {
-  p(`**Глава ${c.id} — ${c.district}** (монеты × ${c.coinMult})`);
+  p(`**Глава ${c.id} — ${district(c.district)}** (монеты × ${c.coinMult})`);
   p();
   p(head(['Постройка', 'Ур. 1 восстановить', 'Ур. 2 улучшить', 'Ур. 3 расцвет']));
   DISTRICT_BUILDINGS[c.district].forEach((id, i) => {
     const [a, b, d] = ([1, 2, 3] as const).map((n) => buildingCost(c.district, i, n));
-    p(row([id, `${a.light} свет`, `${b.coins} мон.`, `${d.coins} мон. + ${d.light} свет`]));
+    p(row([building(id), `${a.light} свет`, `${b.coins} мон.`, `${d.coins} мон. + ${d.light} свет`]));
   });
   p();
 }
@@ -69,7 +95,8 @@ for (const x of totals) p(row([x.chapter, x.l1Light, x.l2Coins, `${x.l3Coins} + 
 p();
 p(`Украшения: вариант 1…5 слота — ${DECOR_PRICES.map((c, i) => (DECOR_LIGHT[i] ? `${DECOR_LIGHT[i]} свет` : `${c} мон.`)).join(' / ')} (монеты × глава, кроме первого), в слоте 3–5 вариантов, покупка один раз, смена бесплатно.`);
 p(`Улицы: тропинка → гравий → брусчатка → мощёная с фонарями — ${STREET_PRICES.join(' / ')} мон. (× глава); шаг улицы — ещё и награда уюта и задания недели.`);
-p(`Улучшения способностей: ${ABILITY_ORDER.map((a) => `${a.id} ${a.level} — ${abilityPrice(a)}`).join(', ')} (всего ${abilitiesTotal()}).`);
+p(`Испытания (уровни 10, 20, 30 каждой главы): шаг улицы сразу и расцвет (3-й уровень) одной постройки на выбор — бесплатно; нет постройки на 2-м уровне — подарок ждёт.`);
+p(`Улучшения способностей: ${ABILITY_ORDER.map((a) => `${tr(ABILITY[a.id])} ${a.level} — ${abilityPrice(a)}`).join(', ')} (всего ${abilitiesTotal()}).`);
 const wt = wardrobeTotal();
 const byR = (r: string, cur: string) => SHOP_ITEMS.filter((w) => w.rarity === r && w.currency === cur);
 const fmtR = (r: string, cur: 'coins' | 'light') => {
@@ -77,7 +104,7 @@ const fmtR = (r: string, cur: 'coins' | 'light') => {
   return l.length ? `${l.length} шт. ${Math.min(...l.map((x) => x.amount))}–${Math.max(...l.map((x) => x.amount))} ${cur === 'light' ? 'света' : 'мон.'}` : '';
 };
 p(`Гардероб: обычные — ${fmtR('common', 'light')}; редкие — ${fmtR('rare', 'light')} и ${fmtR('rare', 'coins')}; эпические — ${fmtR('epic', 'coins')}; всего ${wt.light} света и ${wt.coins} мон. Остальные вещи — награды деревни, дня, заданий, сундуков, уюта; «особые» — Р4.`);
-p(`Доходы сверх уровней: задания жителей ${DAILY_QUESTS.map((q) => ('coins' in q ? `${q.coins} мон.` : `${q.light} свет`)).join(' + ')} в день и ${WEEKLY_QUEST.coins} мон. + сундук + шаг улицы в неделю; повтор без улучшения — ${REPLAY_COINS.join(' → ')} мон. за уровень в день; уют — награда каждые ${COZY_STEP} очков (${COZY_REWARDS.map((r) => Object.keys(r)[0]).join(', ')}).`);
+p(`Доходы сверх уровней: задания жителей ${DAILY_QUESTS.map((q) => ('coins' in q ? `${q.coins} мон.` : `${q.light} свет`)).join(' + ')} в день и ${WEEKLY_QUEST.coins} мон. + сундук + шаг улицы в неделю; повтор без улучшения — ${REPLAY_COINS.join(' → ')} мон. за уровень в день; уют — награда каждые ${COZY_STEP} очков (${COZY_REWARDS.map((r) => COZY_WORD[Object.keys(r)[0]]).join(', ')}).`);
 p();
 
 // ---------------------------------------------------------------------------
@@ -87,13 +114,14 @@ const runs: SimResult[] = [];
 for (const prof of PROFILES) for (const extra of [0, 15]) runs.push(simulate3(ch1, prof, extra));
 const NAMES: Record<string, string> = { weak: 'слабый (1,8★, 40%)', average: 'средний (2,4★, 65%)', strong: 'сильный (2,9★, 90%)' };
 const wardrobeOf = (c: SimResult['chapters'][number]) => c.wardrobeBought + c.wardrobeRewards;
+const fieldOf = (c: SimResult['chapters'][number]) => c.fieldBought + c.fieldRewards;
 
 p('## Когда что доступно');
 p();
-p(head(['Профиль', '+мин/день', 'Глава', 'Пройдена (мин / дней)', 'Ур.1', 'Ур.2', 'Доля 1+2', 'Ур.3', 'Слотов украшено', 'Вариантов куплено', 'Улицы', 'Гардероб Lumo (куплено / награды)', 'Стили поля', 'Способности', 'Макс. пауза в 1-й час', 'Осталось мон.', 'Свет в конце главы']));
+p(head(['Профиль', '+мин/день', 'Глава', 'Пройдена (мин / дней)', 'Ур.1', 'Ур.2', 'Доля 1+2', 'Ур.3', 'Слотов украшено', 'Вариантов куплено', 'Улицы', 'Гардероб Lumo (куплено / награды)', 'Стили поля (куплено / награды)', 'Расцвет за испытания (получено / выбрано)', 'Способности', 'Макс. пауза в 1-й час', 'Осталось мон.', 'Свет в конце главы']));
 for (const r of runs) {
   for (const c of r.chapters) {
-    p(row([NAMES[r.profile], r.extra, c.chapter, `${c.doneAt} / ${c.days}`, `${c.l1}/10`, `${c.l2}/10`, `${Math.round(c.share * 100)}%`, `${c.l3}/10`, `${c.decorSlots}/${DECOR_SLOTS}`, `${c.decorBought}/${c.decorTotal}`, `${c.streets}/${c.streetsTotal}`, `${wardrobeOf(c)} (${c.wardrobeBought} / ${c.wardrobeRewards})`, c.fieldBought, `${c.abilities}/${ABILITY_ORDER.length}`, `${c.maxGapFirstHour} мин (${c.goalsFirstHour} целей)`, c.coinsLeft, c.lightLeft]));
+    p(row([NAMES[r.profile], r.extra, c.chapter, `${c.doneAt} / ${c.days}`, `${c.l1}/10`, `${c.l2}/10`, `${Math.round(c.share * 100)}%`, `${c.l3}/10`, `${c.decorSlots}/${DECOR_SLOTS}`, `${c.decorBought}/${c.decorTotal}`, `${c.streets}/${c.streetsTotal}`, `${wardrobeOf(c)} (${c.wardrobeBought} / ${c.wardrobeRewards})`, `${fieldOf(c)} (${c.fieldBought} / ${c.fieldRewards})`, `${c.bloomsEarned} / ${c.bloomsUsed}`, `${c.abilities}/${ABILITY_ORDER.length}`, `${c.maxGapFirstHour} мин (${c.goalsFirstHour} целей)`, c.coinsLeft, c.lightLeft]));
   }
 }
 p();
@@ -112,7 +140,7 @@ for (const c of avg0.chapters) {
 p();
 p('## Где у среднего игрока «впритык»');
 p();
-for (const w of avg0.waits.slice(0, 8)) p(`- глава ${w.chapter}, уровень ${w.level}: ${w.minutes} мин без новой цели — ждёт ${w.waitingFor}`);
+for (const w of avg0.waits.slice(0, 8)) p(`- глава ${w.chapter}, уровень ${w.level}: ${w.minutes} мин без новой цели — ждёт: ${label(w.waitingFor)}`);
 p();
 p('## Сколько добирать после главы 3 (15 мин в день)');
 p();
@@ -139,6 +167,11 @@ if (w1 < 3 || w1 > 4) problems.push(`гардероб среднего к кон
 if (w3 < 10 || w3 > 12) problems.push(`гардероб среднего к концу главы 3: ${w3} (нужно 10–12)`);
 if (w3x < w3 * 1.6 || w3x > w3 * 2.4) problems.push(`гардероб среднего с 15 мин к концу главы 3: ${w3x} (нужно примерно вдвое больше ${w3}: ${Math.ceil(w3 * 1.6)}–${Math.floor(w3 * 2.4)})`);
 if (avg0.firstItemAt === null || avg0.firstItemAt > 20) problems.push(`первая вещь гардероба у среднего: ${avg0.firstItemAt === null ? 'нет' : `${Math.round(avg0.firstItemAt)} мин`} (нужно ≤ 20 мин)`);
+// Стили поля (фонари, дороги, арки), куплено + награды.
+const f1 = fieldOf(avg0.chapters[0]);
+const f3 = fieldOf(avg0.chapters[2]);
+if (f1 < 1 || f1 > 2) problems.push(`стили поля у среднего к концу главы 1: ${f1} (нужно 1–2)`);
+if (f3 < 5 || f3 > 6) problems.push(`стили поля у среднего к концу главы 3: ${f3} (нужно 5–6)`);
 // 2. Свет не копится.
 for (const c of avg0.chapters) if (c.lightLeft > 30) problems.push(`свет у среднего в конце главы ${c.chapter}: ${c.lightLeft} (нужно ≤ 30)`);
 for (const c of avg15.chapters) if (c.lightLeft > 60) problems.push(`свет у среднего с 15 мин в конце главы ${c.chapter}: ${c.lightLeft} (нужно ≤ 60)`);
@@ -159,5 +192,5 @@ if (problems.length) {
   process.exit(1);
 }
 console.log(
-  `\n✓ Цели экономики выполнены: средний ${avg0.chapters.map((c) => pct(c.share)).join('/')} и слабый ${weak0.chapters.map((c) => pct(c.share)).join('/')} построек без перепрохождений; гардероб ${w1} → ${w3} (с 15 мин ${w3x}), первая вещь на ${Math.round(avg0.firstItemAt!)} мин; свет в конце глав ≤ ${Math.max(...avg0.chapters.map((c) => c.lightLeft))} (с 15 мин ≤ ${Math.max(...avg15.chapters.map((c) => c.lightLeft))}); хвост ${Math.max(m.buildings!, m.streets!, m.decorOne!)} дн.; паузы ≤ 5 мин; уровни не блокируются.`,
+  `\n✓ Цели экономики выполнены: средний ${avg0.chapters.map((c) => pct(c.share)).join('/')} и слабый ${weak0.chapters.map((c) => pct(c.share)).join('/')} построек без перепрохождений; гардероб ${w1} → ${w3} (с 15 мин ${w3x}), стили поля ${f1} → ${f3}, первая вещь на ${Math.round(avg0.firstItemAt!)} мин; свет в конце глав ≤ ${Math.max(...avg0.chapters.map((c) => c.lightLeft))} (с 15 мин ≤ ${Math.max(...avg15.chapters.map((c) => c.lightLeft))}); хвост ${Math.max(m.buildings!, m.streets!, m.decorOne!)} дн.; паузы ≤ 5 мин; уровни не блокируются.`,
 );

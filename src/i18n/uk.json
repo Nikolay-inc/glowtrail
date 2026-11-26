@@ -626,5 +626,21 @@
   "daily_take": "Забрати",
   "cozy_reward_street": "Крок вулиці",
   "street_free": "Вулиця стала кращою: {name}",
-  "quest_street": "+ крок вулиці"
+  "quest_street": "+ крок вулиці",
+  "challenge_gift_title": "Нагорода випробування",
+  "bloom_gift_pick": "Обери будівлю — вона безкоштовно розквітне (3-й рівень).",
+  "bloom_gift_pick_n": "Обери будівлю — вона безкоштовно розквітне (3-й рівень). Подарунків: {n}.",
+  "bloom_gift_wait": "Ще один подарунок — розквіт будівлі. Він зачекає: поліпши будь-яку будівлю до 2-го рівня й обери, яка розквітне.",
+  "bloom_gift_goal": "Розквіт у подарунок — обрати",
+  "bloom_gift_wait_short": "Розквіт у подарунок чекає: поліпши будівлю до 2-го рівня",
+  "building.mine.name": "Шахта",
+  "building.forge.name": "Кузня",
+  "building.cable-car.name": "Канатна дорога",
+  "building.crystal-cave.name": "Кришталева печера",
+  "building.goat-farm.name": "Козяча ферма",
+  "building.bell-tower.name": "Дзвіниця",
+  "building.hot-springs.name": "Гарячі джерела",
+  "building.stone-bridge.name": "Кам’яний міст",
+  "building.star-temple.name": "Зоряний храм",
+  "building.summit-beacon.name": "Маяк на вершині"
 }

@@ -626,5 +626,21 @@
   "daily_take": "Забрать",
   "cozy_reward_street": "Шаг улицы",
   "street_free": "Улица стала лучше: {name}",
-  "quest_street": "+ шаг улицы"
+  "quest_street": "+ шаг улицы",
+  "challenge_gift_title": "Награда испытания",
+  "bloom_gift_pick": "Выбери постройку — она бесплатно расцветёт (3-й уровень).",
+  "bloom_gift_pick_n": "Выбери постройку — она бесплатно расцветёт (3-й уровень). Подарков: {n}.",
+  "bloom_gift_wait": "Ещё в подарок — расцвет постройки. Он подождёт: улучши любую постройку до 2-го уровня и выбери, какая расцветёт.",
+  "bloom_gift_goal": "Расцвет в подарок — выбрать",
+  "bloom_gift_wait_short": "Расцвет в подарок ждёт: улучши постройку до 2-го уровня",
+  "building.mine.name": "Шахта",
+  "building.forge.name": "Кузница",
+  "building.cable-car.name": "Канатная дорога",
+  "building.crystal-cave.name": "Хрустальная пещера",
+  "building.goat-farm.name": "Козья ферма",
+  "building.bell-tower.name": "Колокольня",
+  "building.hot-springs.name": "Горячие источники",
+  "building.stone-bridge.name": "Каменный мост",
+  "building.star-temple.name": "Звёздный храм",
+  "building.summit-beacon.name": "Маяк на вершине"
 }

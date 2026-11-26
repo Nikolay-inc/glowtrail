@@ -39,10 +39,10 @@ import {
   type UpgradeId,
 } from './core/economy';
 import { applyQuestEvent, claimQuest as claimQuestCore, ensureQuests, questsReady, rerollQuest, type QuestContext, type QuestEvent, type Seen } from './core/quests';
-import { chapterMult, claimCozy as claimCozyCore, clearDecor, cozyLevel, placeDecor as placeDecorCore, upgradeStreet, type CozyGrant } from './core/village';
+import { bloomCandidates, bloomsPending, chapterMult, claimCozy as claimCozyCore, clearDecor, cozyLevel, earnChallenge, freeBloom, placeDecor as placeDecorCore, upgradeStreet, type CozyGrant } from './core/village';
 import { BUILDINGS, type DistrictId } from './core/villageData';
 import { avatarIndex, loadLook, saveLook, wearSet, type WardrobeState } from './core/wardrobe';
-import { LEVELS } from './levels/index';
+import { isChallenge, LEVELS } from './levels/index';
 import { localDay } from './profile';
 import { SaveService, type LogEvent, type SaveData } from './save/SaveService';
 
@@ -474,3 +474,52 @@ export const rerollsLeft = () => {
   const e = getEconomy();
   return Math.max(0, villageBonuses(e).questRerolls - (e.quests.day === today() ? e.quests.rerolls : 0));
 };
+
+// ---------------------------------------------------------------------------
+// Награды испытаний (уровни 10, 20, 30 главы): шаг улицы сразу, расцвет постройки — на выбор игрока
+
+/** Районы, где действуют подарки (горный город ещё закрыт). */
+const giftDistricts = () => openDistricts().filter((d) => d !== 'mountain');
+
+export type ChallengeReward = { street: string | null; coins: number };
+
+/** Победа на испытании: выдать награду (один раз за уровень). null — не испытание или награда уже была. */
+export function challengeReward(levelId: string): ChallengeReward | null {
+  const level = LEVELS.find((l) => l.id === levelId);
+  if (!level || !isChallenge(level) || (SaveService.load().progress.stars[levelId] ?? 0) <= 0) return null;
+  const res = earnChallenge(getEconomy(), levelId, giftDistricts());
+  if (!res) return null;
+  SaveService.update((x) => {
+    x.economy = res.economy;
+    push(x, { ev: 'challenge_reward', level: levelId });
+    if (res.street) push(x, { ev: 'street_upgrade', item: `${res.street}:free`, amount: 0, source: 'challenge' });
+    if (res.coins) push(x, { ev: 'currency_earn', currency: 'coins', amount: res.coins, source: 'challenge' });
+  });
+  return { street: res.street, coins: res.coins };
+}
+
+/** Испытания, пройденные раньше (до v8 или на другом устройстве), — выдать их награды. Возвращает, сколько выдано. */
+export function syncChallenges(): number {
+  const p = SaveService.load().progress;
+  const earned = new Set(getEconomy().challenges.earned);
+  let n = 0;
+  for (const l of LEVELS) if (isChallenge(l) && (p.stars[l.id] ?? 0) > 0 && !earned.has(l.id) && challengeReward(l.id)) n++;
+  return n;
+}
+
+/** Подарки-расцветы: сколько ждут и какие постройки можно выбрать (на 2-м уровне). */
+export function bloomGift(): { pending: number; candidates: string[] } {
+  const e = getEconomy();
+  return { pending: bloomsPending(e).length, candidates: bloomCandidates(e, giftDistricts()) };
+}
+
+/** Бесплатный расцвет выбранной постройки. */
+export function useBloomGift(id: string): boolean {
+  const res = freeBloom(getEconomy(), id);
+  if (typeof res === 'string') return false;
+  SaveService.update((x) => {
+    x.economy = res;
+    push(x, { ev: 'building_upgrade', item: `${id}:3`, amount: 0, source: 'challenge' });
+  });
+  return true;
+}

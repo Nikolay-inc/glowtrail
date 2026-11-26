@@ -626,5 +626,21 @@
   "daily_take": "Claim",
   "cozy_reward_street": "Street upgrade",
   "street_free": "Street improved: {name}",
-  "quest_street": "+ street upgrade"
+  "quest_street": "+ street upgrade",
+  "challenge_gift_title": "Challenge reward",
+  "bloom_gift_pick": "Pick a building — it will bloom for free (level 3).",
+  "bloom_gift_pick_n": "Pick a building — it will bloom for free (level 3). Gifts: {n}.",
+  "bloom_gift_wait": "Another gift: a building bloom. It will wait — upgrade any building to level 2, then pick which one blooms.",
+  "bloom_gift_goal": "Free bloom — pick a building",
+  "bloom_gift_wait_short": "A free bloom is waiting: upgrade a building to level 2",
+  "building.mine.name": "Mine",
+  "building.forge.name": "Forge",
+  "building.cable-car.name": "Cable car",
+  "building.crystal-cave.name": "Crystal cave",
+  "building.goat-farm.name": "Goat farm",
+  "building.bell-tower.name": "Bell tower",
+  "building.hot-springs.name": "Hot springs",
+  "building.stone-bridge.name": "Stone bridge",
+  "building.star-temple.name": "Star temple",
+  "building.summit-beacon.name": "Summit beacon"
 }

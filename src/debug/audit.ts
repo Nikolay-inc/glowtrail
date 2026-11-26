@@ -4,7 +4,9 @@
 
 import Phaser from 'phaser';
 import { nextVillageObject, VILLAGE } from '../core/economy';
-import { getLocale, keyOfText, t } from '../i18n';
+import { getLocale, keyOfText, missingKeys, t } from '../i18n';
+import { SETS, WARDROBE } from '../core/wardrobe';
+import { BUILDINGS, DECOR_TYPE_ORDER, DISTRICTS } from '../core/villageData';
 import { LEVELS } from '../levels/index';
 import { getEconomy } from '../meta';
 import { SaveService } from '../save/SaveService';
@@ -12,13 +14,14 @@ import { ALL_RULES } from '../tutorial';
 import { showCurrencyIntro, showDailyDialog } from '../ui/meta';
 import { showNameDialog } from '../ui/NameDialog';
 import { showNotEnough } from '../ui/notEnough';
+import { showBloomGift } from '../ui/bloomGift';
 import { ellipsisLog, type UIBox } from '../ui/UIText';
 
 export interface Violation {
   view: string;
   key: string;
   text: string;
-  reason: 'box' | 'button' | 'panel' | 'screen';
+  reason: 'box' | 'button' | 'panel' | 'screen' | 'rawid';
   over: number;
 }
 
@@ -164,6 +167,36 @@ function views(game: Phaser.Game): Record<string, () => Promise<void>> {
   for (const tab of ['lamp', 'road', 'arch'] as const) v[`shop-${tab}`] = async () => void (await start('Shop', { tab }));
   for (const part of ['hat', 'face', 'outfit', 'staff', 'accessory', 'pet', 'trail', 'sets'] as const) v[`wardrobe-${part}`] = async () => void (await start('Shop', { tab: 'wardrobe', part }));
   ALL_RULES.forEach((r, i) => (v[`rule-${r}`] = async () => void (await start('Rules', { cards: [...ALL_RULES], index: i, from: 'Menu', menuMode: true }, 1200))));
+  // Награда испытания: выбор постройки для расцвета и «подарок ждёт» (нет постройки на 2-м уровне).
+  const giftPending = () =>
+    SaveService.update((d) => {
+      if (!d.economy.challenges.earned.includes('audit-challenge')) d.economy.challenges.earned.push('audit-challenge');
+      delete d.economy.challenges.bloomed['audit-challenge'];
+    });
+  v['win-challenge'] = async () => {
+    giftPending();
+    const s = (await start('Game', { levelIndex: 9 }, 1400)) as unknown as Any;
+    s.closeOverlay?.();
+    s.showWinPanel(3);
+    // В игре окно открывается через 1,3 с после окна победы (таймер сцены); здесь — сразу.
+    showBloomGift(s as unknown as Phaser.Scene, { street: 'valley:2' });
+    await sleep(600);
+  };
+  v['bloom-gift'] = async () => {
+    giftPending();
+    const s = await start('Village');
+    showBloomGift(s, { street: 'valley:1' });
+    await sleep(500);
+  };
+  v['bloom-wait'] = async () => {
+    giftPending();
+    const keep = { ...getEconomy().buildings };
+    SaveService.update((d) => (d.economy.buildings = Object.fromEntries(Object.entries(keep).map(([k, n]) => [k, Math.min(1, n)]))));
+    const s = await start('Village');
+    showBloomGift(s, { coins: 100 });
+    await sleep(500);
+    SaveService.update((d) => (d.economy.buildings = keep));
+  };
   // Открытый лесной квартал (последним: отмечает уровень 30 пройденным в сохранении проверки).
   v['village-forest'] = async () => {
     SaveService.update((d) => {
@@ -207,7 +240,12 @@ function shown(o: Phaser.GameObjects.GameObject): boolean {
   return true;
 }
 
-/** Надписи активных сцен, которые вылезают за свой контейнер, кнопку, окно или экран. */
+/** Внутренние id данных (постройки, районы, вещи, наборы, украшения) — в интерфейсе их быть не должно. */
+const RAW_IDS = new Set<string>([...BUILDINGS.map((b) => b.id), ...DISTRICTS, ...WARDROBE.map((w) => w.id), ...SETS.map((s) => s.id), ...DECOR_TYPE_ORDER]);
+/** В псевдо-языке все переведённые буквы с акцентами: «голое» слово-id значит, что надпись мимо i18n. */
+const rawIdIn = (s: string) => s.split(/[^a-z0-9-]+/).find((w) => w.length > 2 && RAW_IDS.has(w));
+
+/** Надписи активных сцен, которые вылезают за свой контейнер, кнопку, окно или экран, и надписи с id вместо названия. */
 export function check(game: Phaser.Game, view: string): Violation[] {
   const out: Violation[] = [];
   for (const scene of game.scene.getScenes(true)) {
@@ -229,6 +267,8 @@ export function check(game: Phaser.Game, view: string): Violation[] {
           let scrolled = false;
           for (let q = parent; q; q = (q as unknown as { parentContainer: Phaser.GameObjects.Container | null }).parentContainer) if (q.getData('scroll')) scrolled = true;
           if (!outside && !scrolled) push('screen', contains(screen, b, 2));
+          const raw = getLocale() === 'qps' ? rawIdIn((o instanceof Phaser.GameObjects.Text ? o.text : '') || src) : undefined;
+          if (raw) out.push({ view, key, text: src.slice(0, 80), reason: 'rawid', over: 0 });
           if (ui && parent !== null && o instanceof Phaser.GameObjects.Text) {
             const ox = o.originX;
             const oy = o.originY;
@@ -266,5 +306,11 @@ export function install(game: Phaser.Game) {
     open: (name: string) => v[name](),
     check: (name: string) => check(game, name),
     ellipsis: () => ellipsisLog.splice(0),
+    /** Ключи без перевода, показанные с прошлого вызова. */
+    missing: () => {
+      const out = [...missingKeys];
+      missingKeys.clear();
+      return out;
+    },
   };
 }

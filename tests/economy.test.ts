@@ -258,6 +258,21 @@ describe('экономика на три главы (npm run sim-economy)', () =
     expect(base.firstItemAt!).toBeLessThanOrEqual(20);
   });
 
+  it('стили поля (фонари, дороги, арки): 1–2 к главе 1, 5–6 к главе 3 — покупки и награды', () => {
+    const f = (c: (typeof base.chapters)[number]) => c.fieldBought + c.fieldRewards;
+    expect(f(base.chapters[0])).toBeGreaterThanOrEqual(1);
+    expect(f(base.chapters[0])).toBeLessThanOrEqual(2);
+    expect(f(base.chapters[2])).toBeGreaterThanOrEqual(5);
+    expect(f(base.chapters[2])).toBeLessThanOrEqual(6);
+  });
+
+  it('испытания 10/20/30 каждой главы: расцвет в подарок — 3 за главу, выбирается, когда есть постройка на 2-м уровне', () => {
+    for (const c of base.chapters) {
+      expect(c.bloomsEarned).toBe(c.chapter * 3);
+      expect(c.bloomsUsed).toBe(c.bloomsEarned);
+    }
+  });
+
   it('свет не копится: в конце главы ≤ 30 (с перепрохождениями ≤ 60)', () => {
     for (const c of base.chapters) expect(c.lightLeft, `глава ${c.chapter}`).toBeLessThanOrEqual(30);
     for (const c of extra.chapters) expect(c.lightLeft, `+15, глава ${c.chapter}`).toBeLessThanOrEqual(60);

@@ -28,7 +28,8 @@ import {
   tilesPlaced,
   type StashIndex,
 } from '../core/game';
-import { abilities, buyHint, adHint, chapelAvailable, getEconomy, hintsLeft, questEvent, recordWinRewards, spendChapel, spendHint } from '../meta';
+import { abilities, buyHint, adHint, chapelAvailable, challengeReward, getEconomy, hintsLeft, questEvent, recordWinRewards, spendChapel, spendHint, type ChallengeReward } from '../meta';
+import { showBloomGift } from '../ui/bloomGift';
 import { showNotEnough } from '../ui/notEnough';
 import { archStyleOf, currentLook, roadStyleOf } from '../ui/skins';
 import { buttonRichLabel, drawCoin, drawLight, toast } from '../ui/meta';
@@ -153,6 +154,8 @@ export class GameScene extends Phaser.Scene {
   private usedHint = false;
   /** Задания жителей, выполненные этой победой (показываем на экране победы). */
   private questsDone: Quest[] = [];
+  /** Награда испытания этой победы (уровни 10, 20, 30): шаг улицы выдан, расцвет — на выбор в окне. */
+  private challengeGift: ChallengeReward | null = null;
   /** Подсказка, которую игрок попросил кнопкой; держится до следующего хода. */
   private activeHint: Action | null = null;
   private extraUsed = false;
@@ -1334,6 +1337,7 @@ export class GameScene extends Phaser.Scene {
     const prog = this.custom ? null : loadProgress();
     const before = prog ? { stars: prog.stars[s.level.id] ?? 0, ff: prog.fireflies[s.level.id] ?? 0 } : null;
     this.reward = this.custom ? { coins: 0, light: 0, bonusCoins: 0, bonusLight: 0 } : recordWinRewards(s.level.id, stars, ff, nextLevelOf(s.level)?.id ?? null);
+    this.challengeGift = this.custom ? null : challengeReward(s.level.id);
     if (before) {
       // Задания жителей: победа, звёзды, светлячки, улучшенный результат, механики уровня.
       const improved = before.stars > 0 && (stars > before.stars || ff > before.ff);
@@ -1463,6 +1467,17 @@ export class GameScene extends Phaser.Scene {
       const n = this.questsDone.length;
       this.questsDone = [];
       this.time.delayedCall(1700, () => this.overlay === o && toast(this, t('quest_done_toast', { n }), top - 70));
+    }
+    // Испытание: окно награды — шаг улицы и расцвет постройки на выбор (или «подарок ждёт»).
+    if (this.challengeGift) {
+      const gift = this.challengeGift;
+      this.challengeGift = null;
+      modalOpened();
+      this.time.delayedCall(1300, () => {
+        if (this.overlay !== o) return modalClosed();
+        this.events.once('shutdown', () => modalClosed());
+        showBloomGift(this, { street: gift.street, coins: gift.coins, onClose: () => modalClosed() });
+      });
     }
     // После уровня 6 гостю один раз предлагаем войти или зарегистрироваться (можно «Позже»).
     // Не одновременно с другими окнами и не сразу после другого окна.

@@ -9,7 +9,7 @@
 
 import { defaultQuests, mergeQuests, normalizeQuests, type QuestState } from './questState';
 import { BONUS, bonusesOf, BUILDINGS, buildingDef, costOf, discounted, districtBuildings, DECOR_SLOTS, STREETS_PER_DISTRICT, decorVariants, type Bonuses, type BuildingDef, type DistrictId, type Reward } from './villageData';
-import { defaultWardrobe, grantItem, itemBaseCost, itemById, mergeWardrobe, normalizeWardrobe, wardrobeFromSkins, wear, type Cost, type WardrobeState } from './wardrobe';
+import { CHEST_ITEMS as CHEST_LIST, defaultWardrobe, grantItem, itemBaseCost, itemById, mergeWardrobe, normalizeWardrobe, wardrobeFromSkins, wear, type Cost, type WardrobeState } from './wardrobe';
 
 export type { Reward, DistrictId } from './villageData';
 export type { Cost, Currency } from './wardrobe';
@@ -55,6 +55,12 @@ export interface Economy {
   chapel: { day: string; used: number };
   /** Повторы уровней без улучшения за день: награда убывает 6 → 3 → 1 → 0, сброс раз в сутки. */
   replays: { day: string; counts: Record<string, number> };
+  /**
+   * Награды уровней-«испытаний» (10, 20, 30 каждой главы): earned — id уровней, за которые награда выдана
+   * (шаг улицы — сразу), bloomed — бесплатные расцветы: id уровня → постройка, выбранная игроком.
+   * Расцвет, который ещё не выбран (нет постройки на 2-м уровне или «Позже»), ждёт — не теряется.
+   */
+  challenges: { earned: string[]; bloomed: Record<string, string> };
 }
 
 /** Монеты за повтор уровня без улучшения: 1-й, 2-й, 3-й, дальше — за день. */
@@ -100,6 +106,7 @@ export function defaultEconomy(): Economy {
     chest: { lastDay: '', count: 0 },
     chapel: { day: '', used: 0 },
     replays: { day: '', counts: {} },
+    challenges: { earned: [], bloomed: {} },
   };
 }
 
@@ -136,9 +143,11 @@ export function wellLight(e: Economy, best: Best): number {
 /** Свет, потраченный на постройки: восстановление (ур. 1) и расцвет (ур. 3). */
 export function lightSpent(e: Economy): number {
   let sum = 0;
+  // Расцвет в награду за испытание — бесплатный (свет за него не списывается).
+  const free = new Set(Object.values(e.challenges.bloomed));
   for (const [id, lv] of Object.entries(e.buildings)) {
     if (!buildingDef(id) || lv < 1) continue;
-    sum += costOf(id, 1).light + (lv >= 3 ? costOf(id, 3).light : 0);
+    sum += costOf(id, 1).light + (lv >= 3 && !free.has(id) ? costOf(id, 3).light : 0);
   }
   return sum + e.lightShop;
 }
@@ -285,7 +294,7 @@ export function openChest(e: Economy, today: string): { economy: Economy; coins:
   return { economy: out, coins: c, item };
 }
 
-const CHEST_ITEMS = () => ['staff-crook', 'face-monocle', 'road-ember', 'acc-wings', 'trail-fireflies'].filter((id) => itemById(id));
+const CHEST_ITEMS = () => CHEST_LIST.filter((id) => itemById(id));
 
 /** Часовня: бесплатный «+3 плитки» ещё раз за попытку — столько раз в день, сколько даёт уровень часовни. */
 export const chapelLeft = (e: Economy, today: string) => Math.max(0, villageBonuses(e).dailyPlus3 - (e.chapel.day === today ? e.chapel.used : 0));
@@ -486,6 +495,14 @@ export function normalizeEconomy(raw: unknown): Economy {
     for (const [k, v] of Object.entries(raw.replays.counts)) counts[k] = num(v);
     e.replays = { day: str(raw.replays.day), counts };
   }
+  // v8: награды испытаний.
+  if (isObj(raw.challenges)) {
+    const earned = Array.isArray(raw.challenges.earned) ? raw.challenges.earned.filter((x): x is string => typeof x === 'string' && !!x) : [];
+    e.challenges.earned = [...new Set(earned)];
+    if (isObj(raw.challenges.bloomed)) {
+      for (const [k, v] of Object.entries(raw.challenges.bloomed)) if (e.challenges.earned.includes(k) && typeof v === 'string' && buildingDef(v)) e.challenges.bloomed[k] = v;
+    }
+  }
   return e;
 }
 
@@ -527,6 +544,8 @@ export function mergeEconomy(local: Economy, cloud: Economy | null): Economy {
     chest: local.chest.lastDay >= cloud.chest.lastDay ? { ...local.chest, count: Math.max(local.chest.count, cloud.chest.count) } : { ...cloud.chest, count: Math.max(local.chest.count, cloud.chest.count) },
     chapel: local.chapel.day > cloud.chapel.day ? local.chapel : cloud.chapel.day > local.chapel.day ? cloud.chapel : { day: local.chapel.day, used: Math.max(local.chapel.used, cloud.chapel.used) },
     replays: local.replays.day >= cloud.replays.day ? local.replays : cloud.replays,
+    // Награды испытаний: полученные — объединение, выбранные расцветы — объединение (при споре — это устройство).
+    challenges: { earned: [...new Set([...local.challenges.earned, ...cloud.challenges.earned])], bloomed: { ...cloud.challenges.bloomed, ...local.challenges.bloomed } },
   };
 }
 

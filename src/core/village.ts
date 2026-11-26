@@ -1,9 +1,11 @@
 // «Деревня 2.0» — действия поверх экономики (чистые функции): районы, улицы, украшения в слотах, уют.
 // Восстановление и улучшение построек — src/core/economy.ts (restore, upgradeBuilding), данные — villageData.ts.
 
+export { CHALLENGE_STREET_COINS } from './villageData';
 import { buildingLevel, coins, discountCost, grant, pay, type Cost, type Economy } from './economy';
 import {
   BUILDINGS,
+  CHALLENGE_STREET_COINS,
   COZY,
   COZY_REWARDS,
   COZY_STEP,
@@ -18,7 +20,7 @@ import {
   type CozyReward,
   type DistrictId,
 } from './villageData';
-import { grantItem, WARDROBE } from './wardrobe';
+import { CHEST_ITEMS, COZY_ITEMS, grantItem, itemById } from './wardrobe';
 
 // ---------------------------------------------------------------------------
 // Улицы
@@ -111,8 +113,7 @@ export function cozyLevel(e: Economy): { level: number; points: number; into: nu
 export const cozyRewardAt = (n: number): CozyReward => COZY_REWARDS[n % COZY_REWARDS.length];
 
 /** Вещи «за уют» по порядку. */
-const cozyItems = () => WARDROBE.filter((w) => w.source === 'cozy').map((w) => w.id);
-const CHEST_ITEMS = ['staff-crook', 'face-monocle', 'road-ember', 'acc-wings', 'trail-fireflies'];
+const cozyItems = () => COZY_ITEMS.filter((id) => itemById(id));
 
 export type CozyGrant = { coins: number; light: number; item: string | null; chest: boolean; street: string | null };
 
@@ -147,3 +148,34 @@ export function claimCozy(e: Economy, mult: number, open: readonly DistrictId[] 
 
 /** Множитель монет по самому дальнему открытому району. */
 export const chapterMult = (open: readonly DistrictId[]) => Math.max(...open.map((d) => DISTRICT_COIN_MULT[d]));
+
+// ---------------------------------------------------------------------------
+// Награды испытаний (уровни 10, 20, 30 каждой главы): шаг улицы — сразу, расцвет постройки — на выбор игрока
+
+
+export type ChallengeGrant = { economy: Economy; street: string | null; coins: number };
+
+/** Победа на испытании: выдать награду один раз (шаг улицы и один ожидающий расцвет). null — уже выдана. */
+export function earnChallenge(e: Economy, levelId: string, open: readonly DistrictId[]): ChallengeGrant | null {
+  if (e.challenges.earned.includes(levelId)) return null;
+  let out: Economy = { ...e, challenges: { ...e.challenges, earned: [...e.challenges.earned, levelId] } };
+  const st = grantStreetStep(out, open);
+  out = st.economy;
+  const coins = st.street ? 0 : CHALLENGE_STREET_COINS;
+  if (coins) out = grant(out, { coins });
+  return { economy: out, street: st.street, coins };
+}
+
+/** Испытания, за которые расцвет ещё не выбран (по порядку получения). */
+export const bloomsPending = (e: Economy): string[] => e.challenges.earned.filter((id) => !(id in e.challenges.bloomed));
+
+/** Постройки, которые можно довести до расцвета подарком: на 2-м уровне в открытых районах. */
+export const bloomCandidates = (e: Economy, open: readonly DistrictId[]): string[] => BUILDINGS.filter((b) => open.includes(b.district) && buildingLevel(e, b.id) === 2).map((b) => b.id);
+
+/** Бесплатный расцвет выбранной постройки (тратит самый ранний ожидающий подарок). */
+export function freeBloom(e: Economy, buildingId: string): Economy | 'none' | 'notLevel2' {
+  const pending = bloomsPending(e);
+  if (!pending.length) return 'none';
+  if (buildingLevel(e, buildingId) !== 2) return 'notLevel2';
+  return { ...e, buildings: { ...e.buildings, [buildingId]: 3 }, challenges: { ...e.challenges, bloomed: { ...e.challenges.bloomed, [pending[0]]: buildingId } } };
+}

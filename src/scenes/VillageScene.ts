@@ -10,7 +10,8 @@ import { buildingLevel, coins, nextInDistrict, nextLevelCost, type Reward, type 
 import { decorPlaced, streetStep } from '../core/village';
 import { DECOR_SLOTS, decorType, districtBuildings, STREETS_PER_DISTRICT, type DistrictId } from '../core/villageData';
 import { t, tk } from '../i18n';
-import { chestAvailable, cozy, districtOpen, getEconomy, questsToClaim, wallet } from '../meta';
+import { bloomGift, chestAvailable, cozy, districtOpen, getEconomy, questsToClaim, syncChallenges, wallet } from '../meta';
+import { showBloomGift } from '../ui/bloomGift';
 import { addBackground, Button, createLumo, drawIcon, layoutRow, text } from '../ui/draw';
 import { addTabBar, addWallet, buttonRichLabel, drawLight, richText } from '../ui/meta';
 import type { Modal } from '../ui/Modal';
@@ -128,6 +129,8 @@ export class VillageScene extends Phaser.Scene implements P.VillageHost {
     addBackground(this, { evening: true, dust: false });
     this.cameras.main.fadeIn(200, 11, 15, 39);
     this.modal = undefined;
+    // Награды испытаний, пройденных раньше (старое сохранение, другое устройство).
+    syncChallenges();
     const { topY, rowY } = edgeRows(bounds);
     this.topY = topY;
     this.rowY = rowY;
@@ -241,10 +244,24 @@ export class VillageScene extends Phaser.Scene implements P.VillageHost {
       z.on('pointerup', onTap);
       g.add([bg, label, z]);
     };
+    // Награда испытания: расцвет постройки на выбор — главная цель, пока не выбран; нет постройки на 2-м
+    // уровне — подсказка вместо цели «не хватает» (подарок ждёт).
+    const gift = bloomGift();
+    const openGift = () => {
+      this.closeModal();
+      showBloomGift(this, { track: (m) => (this.modal = m), onBloom: () => this.refresh() });
+    };
+    if (gift.pending && gift.candidates.length) {
+      const b = new Button(this, W / 2, y + 4, { w: 720, h: 96, icon: 'gift', label: t('bloom_gift_goal'), primary: true, fontSize: 36, onClick: openGift });
+      this.tweens.add({ targets: b, scale: 1.04, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+      g.add(b);
+      return;
+    }
+    const waitPill = () => gift.pending > 0 && (pill(t('bloom_gift_wait_short'), openGift), true);
     if (next) {
       const v = next;
       if (light >= v.cost) g.add(buttonRichLabel(new Button(this, W / 2, y + 4, { w: 720, h: 96, primary: true, onClick: () => this.showBuilding(v) }), t('village_goal_restore', { name: buildingName(v.id), n: v.cost }), 36));
-      else pill(t('village_goal_more', { name: buildingName(v.id), n: v.cost - light }), () => this.showBuilding(v));
+      else if (!waitPill()) pill(t('village_goal_more', { name: buildingName(v.id), n: v.cost - light }), () => this.showBuilding(v));
       return;
     }
     // Всё восстановлено — самое дешёвое следующее улучшение.
@@ -260,7 +277,7 @@ export class VillageScene extends Phaser.Scene implements P.VillageHost {
     const obj: VillageObject = { id: b.id, cost: 0, reward: b.reward };
     const have = coins(e);
     if (have >= c!.coins && light >= c!.light) g.add(buttonRichLabel(new Button(this, W / 2, y + 4, { w: 720, h: 96, primary: true, onClick: () => this.showBuilding(obj) }), t('village_goal_upgrade', { name: buildingName(b.id), n: c!.coins }), 36));
-    else pill(t('village_goal_upgrade_more', { name: buildingName(b.id), n: Math.max(0, c!.coins - have) }), () => this.showBuilding(obj));
+    else if (!waitPill()) pill(t('village_goal_upgrade_more', { name: buildingName(b.id), n: Math.max(0, c!.coins - have) }), () => this.showBuilding(obj));
   }
 
   // -------------------------------------------------------------------------

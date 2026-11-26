@@ -1,4 +1,5 @@
-// «Деревня 2.0»: уровни построек, районы, бонусы по уровням, улицы, украшения, уют, задания жителей, миграция v6 → v7.
+// «Деревня 2.0»: уровни построек, районы, бонусы по уровням, улицы, украшения, уют, задания жителей, награды испытаний,
+// миграция v6 → v7 → v8.
 import { describe, expect, it } from 'vitest';
 import {
   applyWin,
@@ -21,9 +22,9 @@ import {
 } from '../src/core/economy';
 import { buildingCost as modelCost } from '../src/core/economyModel';
 import { applyQuestEvent, claimQuest, dailyQuests, ensureQuests, rerollQuest, weekOf, weeklyQuest, type QuestContext } from '../src/core/quests';
-import { claimCozy, cozyLevel, cozyPoints, decorCost, placeDecor, clearDecor, streetNextPrice, upgradeStreet } from '../src/core/village';
+import { bloomCandidates, bloomsPending, CHALLENGE_STREET_COINS, claimCozy, cozyLevel, cozyPoints, decorCost, earnChallenge, freeBloom, placeDecor, clearDecor, streetNextPrice, upgradeStreet } from '../src/core/village';
 import { BUILDINGS, buildingCost, costOf, COZY_STEP, decorPrice, streetPrice } from '../src/core/villageData';
-import { WARDROBE } from '../src/core/wardrobe';
+import { CHEST_ITEMS, COZY_ITEMS, FIELD_SLOTS, itemBaseCost, QUEST_ITEMS, WARDROBE } from '../src/core/wardrobe';
 import { migrate } from '../src/save/SaveService';
 
 const rich = (n = 5000): Economy => ({ ...defaultEconomy(), coinsEarned: n });
@@ -222,7 +223,7 @@ describe('сохранение v7', () => {
   it('v6: список восстановленных → уровни 1, chapelDay → счётчик часовни', () => {
     const v6 = { version: 6, profile: {}, progress: { unlocked: [], stars: {}, attempts: {}, lossStreak: {}, skipped: {}, fireflies: {} }, economy: { coinsEarned: 100, village: ['well', 'bakery'], chapelDay: '2026-11-25' }, log: [] };
     const d = migrate(v6);
-    expect(d.version).toBe(7);
+    expect(d.version).toBe(8);
     expect(d.economy.buildings).toEqual({ well: 1, bakery: 1 });
     expect(d.economy.chapel).toEqual({ day: '2026-11-25', used: 1 });
     expect(d.economy.streets).toEqual({});
@@ -241,5 +242,72 @@ describe('сохранение v7', () => {
     expect(m.streets).toEqual({ 'valley:0': 3 });
     expect(m.decor.owned.sort()).toEqual(['valley:0:0', 'valley:1:1']);
     expect(m.lightBonus).toBe(6);
+  });
+});
+
+describe('награда испытания (уровни 10, 20, 30)', () => {
+  const lv2 = (over: Record<string, number> = {}): Economy => ({ ...rich(0), buildings: { well: 2, bakery: 1, ...over } });
+
+  it('шаг улицы сразу и расцвет на выбор — один раз за уровень', () => {
+    const r = earnChallenge(lv2(), 'valley-10', ['valley'])!;
+    expect(r.street).toBe('valley:0');
+    expect(r.economy.streets['valley:0']).toBe(1);
+    expect(bloomsPending(r.economy)).toEqual(['valley-10']);
+    expect(earnChallenge(r.economy, 'valley-10', ['valley'])).toBeNull();
+    // Все улицы мощёные — монеты вместо шага.
+    const paved = { ...lv2(), streets: { 'valley:0': 3, 'valley:1': 3, 'valley:2': 3, 'valley:3': 3 } };
+    const c = earnChallenge(paved, 'valley-20', ['valley'])!;
+    expect(c.street).toBeNull();
+    expect(coins(c.economy)).toBe(CHALLENGE_STREET_COINS);
+  });
+
+  it('расцвет: только постройка на 2-м уровне, бесплатно (без монет и света); нет такой — подарок ждёт', () => {
+    const e0 = earnChallenge(lv2(), 'valley-10', ['valley'])!.economy;
+    expect(bloomCandidates(e0, ['valley'])).toEqual(['well']);
+    expect(freeBloom(e0, 'bakery')).toBe('notLevel2');
+    const light0 = lightSpent(e0);
+    const e1 = freeBloom(e0, 'well') as Economy;
+    expect(e1.buildings.well).toBe(3);
+    expect(coins(e1)).toBe(coins(e0));
+    expect(lightSpent(e1)).toBe(light0);
+    expect(bloomsPending(e1)).toEqual([]);
+    expect(freeBloom(e1, 'well')).toBe('none');
+    // Нет постройки на 2-м уровне — подарок не теряется, ждёт улучшения.
+    const wait = earnChallenge({ ...rich(0), buildings: { well: 1 } }, 'valley-10', ['valley'])!.economy;
+    expect(bloomCandidates(wait, ['valley'])).toEqual([]);
+    expect(bloomsPending(wait)).toEqual(['valley-10']);
+    const later = { ...wait, buildings: { well: 2 } };
+    expect((freeBloom(later, 'well') as Economy).buildings.well).toBe(3);
+  });
+
+  it('сохранение v8: старое — пусто; нормализация и слияние (объединение, выбранное — с этого устройства)', () => {
+    const v7 = { version: 7, profile: {}, progress: { unlocked: [], stars: {}, attempts: {}, lossStreak: {}, skipped: {}, fireflies: {} }, economy: { coinsEarned: 10, buildings: { well: 2 } }, log: [] };
+    const d = migrate(v7);
+    expect(d.version).toBe(8);
+    expect(d.economy.challenges).toEqual({ earned: [], bloomed: {} });
+    const n = normalizeEconomy({ challenges: { earned: ['valley-10', 'valley-10', 5], bloomed: { 'valley-10': 'well', 'valley-20': 'mill', 'valley-30': 'nope' } } });
+    expect(n.challenges).toEqual({ earned: ['valley-10'], bloomed: { 'valley-10': 'well' } });
+    const a: Economy = { ...rich(), buildings: { well: 3 }, challenges: { earned: ['valley-10', 'valley-20'], bloomed: { 'valley-10': 'well' } } };
+    const b: Economy = { ...rich(), buildings: { mill: 3 }, challenges: { earned: ['valley-10', 'valley-30'], bloomed: { 'valley-30': 'mill' } } };
+    const m = mergeEconomy(a, b);
+    expect(m.challenges.earned.sort()).toEqual(['valley-10', 'valley-20', 'valley-30']);
+    expect(m.challenges.bloomed).toEqual({ 'valley-10': 'well', 'valley-30': 'mill' });
+    expect(bloomsPending(m)).toEqual(['valley-20']);
+  });
+});
+
+describe('стили поля в наградах', () => {
+  it('каждый стиль поля «за задания», «за уют», «из сундука» и «из деревни» действительно выдаётся', () => {
+    const village = new Set(BUILDINGS.flatMap((b) => ('item' in b.reward ? [b.reward.item] : [])));
+    const lists: Record<string, readonly string[]> = { quest: QUEST_ITEMS, cozy: COZY_ITEMS, chest: CHEST_ITEMS };
+    for (const w of WARDROBE.filter((x) => (FIELD_SLOTS as readonly string[]).includes(x.slot))) {
+      if (w.source === 'village') expect(village.has(w.id), w.id).toBe(true);
+      else if (lists[w.source]) expect(lists[w.source].includes(w.id), w.id).toBe(true);
+    }
+    for (const id of [...QUEST_ITEMS, ...COZY_ITEMS, ...CHEST_ITEMS]) expect(WARDROBE.some((w) => w.id === id), id).toBe(true);
+    // Стили поля есть и в наградах, и за свет.
+    expect(QUEST_ITEMS.some((id) => id.startsWith('lamp-') || id.startsWith('road-'))).toBe(true);
+    expect(COZY_ITEMS.some((id) => id.startsWith('arch-'))).toBe(true);
+    expect(WARDROBE.filter((x) => (FIELD_SLOTS as readonly string[]).includes(x.slot) && itemBaseCost(x.id).currency === 'light').length).toBeGreaterThanOrEqual(4);
   });
 });

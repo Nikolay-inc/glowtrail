@@ -168,10 +168,15 @@ export function t(key: StringKey, params: Params = {}): string {
   return tk(key, params);
 }
 
+/** Ключи, которых нет ни в одном языке (показан сам ключ) — для i18n-check. */
+export const missingKeys = new Set<string>();
+
 /** То же для ключей, собранных из данных (`item.${id}`): нет ключа — сам ключ (и тест это ловит). */
 export function tk(key: string, params: Params = {}): string {
   const lang: Lang = locale === 'qps' ? 'en' : locale;
-  const raw = TABLES[lang][key] ?? TABLES.en[key] ?? TABLES.ru[key] ?? key;
+  const found = TABLES[lang][key] ?? TABLES.en[key] ?? TABLES.ru[key];
+  if (found === undefined) missingKeys.add(key);
+  const raw = found ?? key;
   let out = format(raw, params);
   if (locale === 'qps') out = pseudo(out);
   if (reverse.size > 5000) reverse.clear();

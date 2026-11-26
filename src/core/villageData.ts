@@ -32,7 +32,7 @@ const REWARDS: Record<DistrictId, readonly [string, Reward][]> = {
     ['bridge', { coins: 60 }],
     ['garden', { item: 'arch-flowers' }],
     ['chapel', { coins: 80 }],
-    ['square', { item: 'lamp-star' }],
+    ['square', { coins: 90 }],
     ['lumo', { item: 'outfit-star-robe' }],
     ['lighthouse', { coins: 150 }],
   ],
@@ -42,7 +42,7 @@ const REWARDS: Record<DistrictId, readonly [string, Reward][]> = {
     ['owl-post', { item: 'acc-keys' }],
     ['mushroom-farm', { coins: 70 }],
     ['sawmill', { item: 'outfit-apron' }],
-    ['lamp-workshop', { coins: 80 }],
+    ['lamp-workshop', { item: 'lamp-star' }],
     ['teahouse', { item: 'pet-firefly' }],
     ['forester', { coins: 90 }],
     ['swing-bridge', { coins: 100 }],
@@ -82,7 +82,7 @@ export const L1_LIGHT: Record<DistrictId, readonly number[]> = {
   mountain: [10, 11, 12, 13, 14, 15, 16, 17, 18, 19],
 };
 /** Уровень 2 «улучшить» — монеты (долина × 1,1; лес × 1,45; горы × 1,8 — бонусы построек растут с уровнями). */
-export const L2_MULT: Record<DistrictId, number> = { valley: 1, forest: 1.45, mountain: 1.8 };
+export const L2_MULT: Record<DistrictId, number> = { valley: 1, forest: 1.55, mountain: 2.3 };
 export const L2_COINS_BASE: readonly number[] = [45, 60, 70, 75, 85, 95, 105, 110, 120, 140];
 
 export interface BuildingCost {
@@ -214,3 +214,5 @@ export const WEEKLY_QUEST = { coins: 200, chest: true, street: true } as const;
 
 /** Сундук: монеты 20–40 (в среднем 30), каждый 4-й — вещь гардероба. */
 export const CHEST_AVG_COINS = 30;
+/** Награда испытания: монеты вместо шага улицы, если все улицы открытых районов уже мощёные. */
+export const CHALLENGE_STREET_COINS = 100;

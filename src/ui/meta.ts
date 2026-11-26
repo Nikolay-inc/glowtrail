@@ -4,7 +4,7 @@
 import Phaser from 'phaser';
 import { sfx } from '../audio';
 import { DAILY, nextVillageObject, type DailyReward } from '../core/economy';
-import { claimDaily, cozy, dailyAvailable, getEconomy, questsToClaim, wallet } from '../meta';
+import { bloomGift, claimDaily, cozy, dailyAvailable, getEconomy, questsToClaim, wallet } from '../meta';
 import { Button, drawIcon, text } from './draw';
 import { C, FONT, W, H } from './theme';
 import { fmt, t, tk } from '../i18n';
@@ -113,7 +113,8 @@ export function addTabBar(scene: Phaser.Scene, active: Tab, y: number, go: (key:
   const step = W / TABS.length;
   // Точка на «Деревне»: хватает света на следующую постройку, есть награда уюта или выполненное задание жителя.
   const next = nextVillageObject(getEconomy());
-  const villageReady = (!!next && wallet().light >= next.cost) || questsToClaim() > 0 || cozy().pending > 0;
+  const gift = bloomGift();
+  const villageReady = (!!next && wallet().light >= next.cost) || questsToClaim() > 0 || cozy().pending > 0 || (gift.pending > 0 && gift.candidates.length > 0);
   TABS.forEach((t, i) => {
     const x = step * (i + 0.5);
     const on = t.key === active;
