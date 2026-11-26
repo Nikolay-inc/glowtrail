@@ -9,9 +9,10 @@
 
 import { defaultQuests, mergeQuests, normalizeQuests, type QuestState } from './questState';
 import { BONUS, bonusesOf, BUILDINGS, buildingDef, costOf, discounted, districtBuildings, DECOR_SLOTS, STREETS_PER_DISTRICT, decorVariants, type Bonuses, type BuildingDef, type DistrictId, type Reward } from './villageData';
-import { defaultWardrobe, grantItem, itemById, mergeWardrobe, normalizeWardrobe, wardrobeFromSkins, wear, type WardrobeState } from './wardrobe';
+import { defaultWardrobe, grantItem, itemBaseCost, itemById, mergeWardrobe, normalizeWardrobe, wardrobeFromSkins, wear, type Cost, type WardrobeState } from './wardrobe';
 
 export type { Reward, DistrictId } from './villageData';
+export type { Cost, Currency } from './wardrobe';
 
 // ---------------------------------------------------------------------------
 // Состояние
@@ -36,6 +37,8 @@ export interface Economy {
   cozyClaimed: number;
   /** Свет, полученный сверх уровней (задания жителей, уют). */
   lightBonus: number;
+  /** Свет, потраченный на вещи гардероба и украшения (постройки считаются по их уровням). */
+  lightShop: number;
   /** Задания жителей (src/core/quests.ts). */
   quests: QuestState;
   /** Уровни прокачки (0 — базовый). rotate: 0 — способность ещё не открыта. */
@@ -88,6 +91,7 @@ export function defaultEconomy(): Economy {
     decor: { owned: [], placed: {} },
     cozyClaimed: 0,
     lightBonus: 0,
+    lightShop: 0,
     quests: defaultQuests(),
     upgrades: { stash: 0, rotate: 0, lantern: 0 },
     hints: { bank: START_HINTS, freeDay: '', freeUsed: 0 },
@@ -136,7 +140,7 @@ export function lightSpent(e: Economy): number {
     if (!buildingDef(id) || lv < 1) continue;
     sum += costOf(id, 1).light + (lv >= 3 ? costOf(id, 3).light : 0);
   }
-  return sum;
+  return sum + e.lightShop;
 }
 export const lightBalance = (e: Economy, best: Best) => lightEarned(best) + wellLight(e, best) + e.lightBonus - lightSpent(e);
 
@@ -325,19 +329,28 @@ export function buyUpgrade(e: Economy, id: UpgradeId): Economy | BuyError {
 // ---------------------------------------------------------------------------
 // Гардероб: покупка вещей за монеты, надевание
 
-/** Цена вещи с учётом скидки дома Lumo. */
-export const itemPrice = (e: Economy, id: string) => discounted(itemById(id)?.price ?? 0, villageBonuses(e).wardrobeDiscountPct);
+/** Скидка на цену в любой валюте: монеты — кратно 5, свет — до целого (не меньше 1). */
+export const discountCost = (c: Cost, pct: number): Cost => (pct <= 0 ? c : c.currency === 'coins' ? { ...c, amount: discounted(c.amount, pct) } : { ...c, amount: Math.max(1, Math.round((c.amount * (100 - pct)) / 100)) });
 
-/** Купить вещь за монеты (только вещи «за монеты»; остальные — из деревни, заданий, сундуков, награды дня). */
-export function buyItem(e: Economy, id: string): Economy | BuyError {
+/** Цена вещи (монеты или свет) с учётом скидки дома Lumo. */
+export const itemCost = (e: Economy, id: string): Cost => discountCost(itemBaseCost(id), villageBonuses(e).wardrobeDiscountPct);
+
+/** Заплатить монетами или светом (свет — из баланса light, посчитанного снаружи). */
+export function pay(e: Economy, c: Cost, light: number): Economy | 'notEnoughCoins' | 'notEnoughLight' {
+  if (c.currency === 'coins') return coins(e) < c.amount ? 'notEnoughCoins' : { ...e, coinsSpent: e.coinsSpent + c.amount };
+  return light < c.amount ? 'notEnoughLight' : { ...e, lightShop: e.lightShop + c.amount };
+}
+
+/** Купить вещь (обычные и часть редких — за свет, остальные — за монеты; вещи из деревни, заданий, сундуков, награды дня не продаются). */
+export function buyItem(e: Economy, id: string, light = 0): Economy | BuyError | 'notEnoughLight' {
   const it = itemById(id);
   if (!it) return 'locked';
   if (e.wardrobe.owned.includes(id)) return 'owned';
   if (it.source === 'special') return 'special';
   if (it.source !== 'coins') return 'locked';
-  const price = itemPrice(e, id);
-  if (coins(e) < price) return 'notEnoughCoins';
-  return { ...e, coinsSpent: e.coinsSpent + price, wardrobe: grantItem(e.wardrobe, id) };
+  const paid = pay(e, itemCost(e, id), light);
+  if (typeof paid === 'string') return paid;
+  return { ...paid, wardrobe: grantItem(paid.wardrobe, id) };
 }
 
 export function equip(e: Economy, id: string, color?: number): Economy {
@@ -451,6 +464,7 @@ export function normalizeEconomy(raw: unknown): Economy {
   }
   e.cozyClaimed = num(raw.cozyClaimed);
   e.lightBonus = num(raw.lightBonus);
+  e.lightShop = num(raw.lightShop);
   e.quests = normalizeQuests(raw.quests);
   if (isObj(raw.upgrades)) {
     for (const id of Object.keys(UPGRADES) as UpgradeId[]) e.upgrades[id] = Math.min(UPGRADES[id].values.length - 1, num(raw.upgrades[id]));
@@ -504,6 +518,7 @@ export function mergeEconomy(local: Economy, cloud: Economy | null): Economy {
     decor: { owned: decorOwned, placed: { ...cloud.decor.placed, ...local.decor.placed } },
     cozyClaimed: Math.max(local.cozyClaimed, cloud.cozyClaimed),
     lightBonus: Math.max(local.lightBonus, cloud.lightBonus),
+    lightShop: Math.max(local.lightShop, cloud.lightShop),
     quests: mergeQuests(local.quests, cloud.quests),
     upgrades,
     hints: { bank: Math.max(local.hints.bank, cloud.hints.bank), freeDay: laterHints.freeDay, freeUsed: laterHints.freeUsed },

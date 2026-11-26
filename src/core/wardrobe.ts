@@ -152,6 +152,38 @@ export const WARDROBE: readonly WardrobeItem[] = [
 ];
 
 export const itemById = (id: string) => WARDROBE.find((w) => w.id === id);
+
+// ---------------------------------------------------------------------------
+// Цена покупки: валюта и сумма. Обычные вещи и половина редких — за свет (свет не копится без дела),
+// остальные редкие и эпические — за монеты (эпические позже — и за покупки в Р4).
+
+export type Currency = 'coins' | 'light';
+export interface Cost {
+  currency: Currency;
+  amount: number;
+}
+
+/** Делители «монеты → свет»: обычная вещь за 80–110 монет стоит 10–14 света, редкая за 180–240 — 20–27 света. */
+export const LIGHT_DIV: Record<'common' | 'rare', number> = { common: 8, rare: 9 };
+
+const COSTS = new Map<string, Cost>();
+{
+  let rare = 0;
+  for (const w of WARDROBE) {
+    if (w.source !== 'coins') continue;
+    if (w.rarity === 'common') COSTS.set(w.id, { currency: 'light', amount: Math.max(5, Math.round(w.price / LIGHT_DIV.common)) });
+    else if (w.rarity === 'rare') COSTS.set(w.id, rare++ % 2 === 0 ? { currency: 'light', amount: Math.round(w.price / LIGHT_DIV.rare) } : { currency: 'coins', amount: w.price });
+    else COSTS.set(w.id, { currency: 'coins', amount: w.price });
+  }
+}
+
+/** Базовая цена вещи (без скидок); у вещей не «за монеты» — их «стоимость» в монетах (купить нельзя). */
+export const itemBaseCost = (id: string): Cost => COSTS.get(id) ?? { currency: 'coins', amount: itemById(id)?.price ?? 0 };
+/** Вещь — часть Lumo (гардероб), а не стиль поля (фонарь, дорога, арка). */
+export const isLumoPart = (id: string) => {
+  const it = itemById(id);
+  return !!it && (PART_SLOTS as readonly string[]).includes(it.slot);
+};
 export const itemsOf = (slot: Slot) => WARDROBE.filter((w) => w.slot === slot);
 
 /** Образ Lumo и стили поля: id предмета в каждом слоте, цвет одежды — индекс палитры. */

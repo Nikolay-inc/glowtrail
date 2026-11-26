@@ -10,7 +10,7 @@ import { cozyRewardAt, decorCost, decorOwned, decorPlaced, streetNextPrice, stre
 import { BONUS, BUILDINGS, buildingDef, COZY, decorType, decorVariants, DISTRICTS, type DistrictId } from '../core/villageData';
 import { haptics } from '../haptics';
 import { t, tk } from '../i18n';
-import { buyStreet, claimChest, claimCozy, claimQuest, cozy, districtOpen, getEconomy, quests, rerollQuestMeta, rerollsLeft, restoreVillage, setDecor, upgradeVillage, wallet } from '../meta';
+import { buyStreet, canAfford, claimChest, claimCozy, claimQuest, cozy, districtOpen, getEconomy, quests, rerollQuestMeta, rerollsLeft, restoreVillage, setDecor, upgradeVillage, wallet } from '../meta';
 import { Button, drawIcon } from './draw';
 import { bonusIcon, itemIcon, rewardCaption, rewardIcon } from './itemPreview';
 import { buttonRichLabel, drawCoin, drawLight, richText, smartText, toast } from './meta';
@@ -359,12 +359,13 @@ export function showDecor(host: VillageHost, slot: number) {
     let label: string;
     if (isPlaced) label = t('decor_placed');
     else if (owned) label = t('decor_place');
-    else label = t('buy_for', { n: price });
+    else label = t(price.currency === 'light' ? 'buy_for_light' : 'buy_for', { n: price.amount });
+    const ok = canAfford(price);
     const btn = buttonRichLabel(
-      new Button(host, x, y + 108, { w: cw - 30, h: 64, primary: !isPlaced && (owned || coins(e) >= price), maxW: cw - 16, onClick: () => pickDecor(host, slot, v) }),
+      new Button(host, x, y + 108, { w: cw - 30, h: 64, primary: !isPlaced && (owned || ok), maxW: cw - 16, onClick: () => pickDecor(host, slot, v) }),
       label,
       26,
-      isPlaced || owned || coins(e) >= price,
+      isPlaced || owned || ok,
     );
     if (isPlaced) btn.setEnabled(false);
     grid.add(btn);
@@ -382,13 +383,14 @@ function pickDecor(host: VillageHost, slot: number, v: number) {
   const e = getEconomy();
   const owned = decorOwned(e, d, slot, v);
   const price = decorCost(e, d, v);
-  if (!owned && coins(e) < price) {
-    // «Не хватает» — в этом же окне: заменяем содержимое.
+  if (!owned && !canAfford(price)) {
+    // «Не хватает монет / света» — в этом же окне: заменяем содержимое.
     const m = newModal(host, 920);
     sfx.invalid();
+    const light = price.currency === 'light';
     m.add(decorIcon(host, decorType(slot), v, 160), 170, 10);
-    m.rich(t('not_enough_coins', { n: price - coins(e) }), 50, '#ff9a8a');
-    addEarnHints(host, m, 'coins');
+    m.rich(light ? t('not_enough_light', { n: price.amount - wallet().light }) : t('not_enough_coins', { n: price.amount - coins(e) }), 50, '#ff9a8a');
+    addEarnHints(host, m, price.currency);
     m.buttons([new Button(host, 0, 0, { w: 380, h: 100, icon: 'play', label: t('ad_soon'), fontSize: 32, onClick: () => undefined }).setEnabled(false)]);
     m.open();
     return;
@@ -412,6 +414,7 @@ const cozyRewardIcon = (host: VillageHost, n: number, size: number): Phaser.Game
   if ('coins' in r) drawCoin(g, 0, 0, size * 0.4);
   else if ('light' in r) drawLight(g, 0, 0, size * 0.4);
   else if ('item' in r) drawIcon(g, 'wardrobe', size * 0.8, C.icon);
+  else if ('street' in r) drawIcon(g, 'hammer', size * 0.8, C.icon);
   else drawIcon(g, 'chest', size * 0.8, C.icon);
   return g;
 };
@@ -419,6 +422,7 @@ const cozyRewardText = (n: number, mult: number) => {
   const r = cozyRewardAt(n);
   if ('coins' in r) return t('reward.coins', { n: Math.round((r.coins * mult) / 5) * 5 });
   if ('light' in r) return t('reward.light', { n: r.light });
+  if ('street' in r) return t('cozy_reward_street');
   return 'item' in r ? t('cozy_reward_item') : t('cozy_reward_chest');
 };
 
@@ -469,6 +473,7 @@ function takeCozy(host: VillageHost) {
   }
   if (got.coins) m.rich(t('reward.coins', { n: got.coins }), 50, '#ffd36b');
   if (got.light) m.rich(t('reward.light', { n: got.light }), 50, '#ffc65c');
+  if (got.street) m.text(t('street_free', { name: tk(`street.${got.street.replace(':', '.')}`) }), 36, '#ffd36b', 2, true);
   m.buttons([new Button(host, 0, 0, { w: 360, h: 110, label: t('restored_ok'), primary: true, onClick: () => (host.closeModal(), cozy().pending && showCozy(host)) })]);
   m.open();
 }
@@ -507,6 +512,7 @@ function questCard(host: VillageHost, m: Modal, q: Quest, weekly: boolean, rerol
   // Награда и кнопка справа.
   const rx = w / 2 - 125;
   c.add(richText(host, rx, -h / 2 + 50, questRewardText(q) + (q.chest ? ` + ${t('quest_chest')}` : ''), 28, '#ffd36b', true, 230, false, 2));
+  if (q.chest) c.add(uiText(host, rx, -h / 2 + 108, t('quest_street'), { w: 230, size: 22, color: '#ffd36b' }));
   if (q.claimed) c.add(uiText(host, rx, 30, t('quest_claimed'), { w: 220, size: 28, color: '#9dff5c', bold: true }));
   else if (done) {
     const b = new Button(host, rx, 30, { w: 210, h: 84, label: t('quest_claim'), primary: true, fontSize: 32, maxW: 230, onClick: () => takeQuest(host, q.id) });
@@ -538,7 +544,7 @@ function takeQuest(host: VillageHost, id: string) {
   haptics.win();
   host.refresh();
   showQuests(host);
-  const parts = [res.coins ? t('reward.coins', { n: res.coins }) : '', res.light ? t('reward.light', { n: res.light }) : '', res.item ? tk(`item.${res.item}`) : ''].filter(Boolean).join('  ');
+  const parts = [res.coins ? t('reward.coins', { n: res.coins }) : '', res.light ? t('reward.light', { n: res.light }) : '', res.item ? tk(`item.${res.item}`) : '', res.street ? t('street_free', { name: tk(`street.${res.street.replace(':', '.')}`) }) : ''].filter(Boolean).join('  ');
   toastMsg(host, parts);
 }
 

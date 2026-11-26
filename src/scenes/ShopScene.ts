@@ -6,10 +6,10 @@
 
 import Phaser from 'phaser';
 import { sfx } from '../audio';
-import { coins, itemPrice } from '../core/economy';
+import { coins, itemCost } from '../core/economy';
 import { fullSet, itemById, itemsOf, MAX_SAVED_LOOKS, PART_SLOTS, setById, setItems, SETS, type Look, type PartSlot, type Rarity, type Slot, type WardrobeItem } from '../core/wardrobe';
 import { fmt, t, tk } from '../i18n';
-import { buyItem, equipItem, equipSet, getEconomy, loadOutfit, saveOutfit } from '../meta';
+import { buyItem, canAfford, equipItem, equipSet, getEconomy, loadOutfit, saveOutfit, wallet } from '../meta';
 import { addBackground, Button, drawIcon, text, type IconName } from '../ui/draw';
 import { itemIcon } from '../ui/itemPreview';
 import { createLumoFigure, type LumoFigure } from '../ui/lumo';
@@ -301,7 +301,9 @@ export class ShopScene extends Phaser.Scene {
     if (worn) c.add(uiText(this, 0, by, t(wear ? 'shop_worn' : 'shop_selected'), { w: w - 20, size: 28, color: '#ffd36b' }));
     else if (owned) c.add(new Button(this, 0, by, { w: w - 30, h: 66, label: t(wear ? 'shop_wear' : 'shop_select'), fontSize: 26, maxW: w - 16, onClick: () => this.equip(it) }));
     else if (it.source === 'coins') {
-      const b = buttonRichLabel(new Button(this, 0, by, { w: w - 30, h: 66, primary: coins(e) >= itemPrice(e, it.id), maxW: w - 16, onClick: () => this.buy(it) }), `${fmt(itemPrice(e, it.id))} {coin}`, 28, coins(e) >= itemPrice(e, it.id));
+      const cost = itemCost(e, it.id);
+      const ok = canAfford(cost);
+      const b = buttonRichLabel(new Button(this, 0, by, { w: w - 30, h: 66, primary: ok, maxW: w - 16, onClick: () => this.buy(it) }), `${fmt(cost.amount)} ${cost.currency === 'light' ? '{light}' : '{coin}'}`, 28, ok);
       c.add(b);
     } else c.add(uiText(this, 0, by, t(`source_${it.source}` as 'source_village'), { w: w - 20, lines: 2, h: 60, size: 22, color: it.source === 'special' ? '#c9a8ff' : C.textDim, bold: false }));
     // Тап по карточке: своя — надеть/выбрать, чужая — примерить.
@@ -324,7 +326,9 @@ export class ShopScene extends Phaser.Scene {
   private buy(it: WardrobeItem) {
     const r = buyItem(it.id);
     if (!r.ok) {
-      if (r.error === 'notEnoughCoins') showNotEnough(this, 'coins', itemPrice(getEconomy(), it.id) - coins(getEconomy()));
+      const cost = itemCost(getEconomy(), it.id);
+      if (r.error === 'notEnoughCoins') showNotEnough(this, 'coins', cost.amount - coins(getEconomy()));
+      else if (r.error === 'notEnoughLight') showNotEnough(this, 'light', cost.amount - wallet().light);
       else {
         sfx.invalid();
         toast(this, t('unavailable'));
@@ -362,7 +366,9 @@ export class ShopScene extends Phaser.Scene {
     let right = w / 2 - 120;
     if (it && it.source === 'coins') {
       const e = getEconomy();
-      const b = buttonRichLabel(new Button(this, 0, 0, { w: 200, h: 76, primary: coins(e) >= itemPrice(e, it.id), maxW: 320, onClick: () => this.buy(it) }), t('buy_for', { n: itemPrice(e, it.id) }), 28, coins(e) >= itemPrice(e, it.id));
+      const cost = itemCost(e, it.id);
+      const ok = canAfford(cost);
+      const b = buttonRichLabel(new Button(this, 0, 0, { w: 200, h: 76, primary: ok, maxW: 320, onClick: () => this.buy(it) }), t(cost.currency === 'light' ? 'buy_for_light' : 'buy_for', { n: cost.amount }), 28, ok);
       b.setX(right - b.buttonWidth / 2);
       right -= b.buttonWidth + 20;
       bar.add(b);

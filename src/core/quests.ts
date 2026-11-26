@@ -5,7 +5,8 @@
 
 import { grant, type Economy } from './economy';
 import type { Quest, QuestKind, QuestState } from './questState';
-import { DAILY_QUESTS, WEEKLY_QUEST } from './villageData';
+import { grantStreetStep } from './village';
+import { DAILY_QUESTS, WEEKLY_QUEST, type DistrictId } from './villageData';
 import { grantItem, itemById } from './wardrobe';
 
 export type { Quest, QuestKind, QuestState } from './questState';
@@ -193,10 +194,10 @@ const CHEST_ITEMS = ['staff-crook', 'face-monocle', 'road-ember', 'acc-wings', '
 /** Вещи «за задания» (source 'quest') — по одной за каждое большое задание недели, пока есть. */
 const questItems = () => ['hat-miner', 'face-mustache', 'outfit-vest', 'acc-satchel', 'pet-moth', 'trail-leaves'].filter((id) => itemById(id));
 
-export type ClaimResult = { economy: Economy; coins: number; light: number; item: string | null };
+export type ClaimResult = { economy: Economy; coins: number; light: number; item: string | null; street: string | null };
 
-/** Забрать награду: монеты или свет (+ свет грибной фермы); у большого задания — сундук и вещь «за задания». */
-export function claimQuest(e: Economy, id: string, questLight = 0): ClaimResult | null {
+/** Забрать награду: монеты или свет (+ свет грибной фермы); у большого задания — сундук, вещь «за задания» и шаг улицы. */
+export function claimQuest(e: Economy, id: string, questLight = 0, open: readonly DistrictId[] = ['valley']): ClaimResult | null {
   const all = [...e.quests.daily, ...(e.quests.weekly ? [e.quests.weekly] : [])];
   const q = all.find((x) => x.id === id);
   if (!q || q.claimed || !isDone(q)) return null;
@@ -205,14 +206,19 @@ export function claimQuest(e: Economy, id: string, questLight = 0): ClaimResult 
   let light = 'light' in q.reward ? q.reward.light : 0;
   if (!q.chest) light += questLight;
   let item: string | null = null;
+  let street: string | null = null;
   if (q.chest) {
+    // Большое задание недели: ещё и бесплатный шаг улицы.
+    const st = grantStreetStep(out, open);
+    out = st.economy;
+    street = st.street;
     coins += 30;
     item = [...questItems(), ...CHEST_ITEMS].find((x) => !out.wardrobe.owned.includes(x)) ?? null;
     if (item) out = { ...out, wardrobe: grantItem(out.wardrobe, item) };
   }
   if (coins) out = grant(out, { coins });
   if (light) out = grant(out, { light });
-  return { economy: out, coins, light, item };
+  return { economy: out, coins, light, item, street };
 }
 
 /** Заменить задание (совиная почта): другое из того же уровня трудности. */

@@ -10,12 +10,14 @@
 import { DAILY, UPGRADES, type UpgradeId } from './economy';
 import {
   bonusesOf,
+  BUILDINGS,
   buildingCost,
   CHEST_AVG_COINS,
   COZY,
   COZY_REWARDS,
   COZY_STEP,
   DAILY_QUESTS,
+  DECOR_PRICES,
   DECOR_SLOTS,
   decorPrice,
   decorVariants,
@@ -27,7 +29,7 @@ import {
   type BuildingCost,
   type DistrictId,
 } from './villageData';
-import { RARITY_PRICE, WARDROBE } from './wardrobe';
+import { isLumoPart, itemBaseCost, WARDROBE } from './wardrobe';
 
 // Цены, бонусы, уют и задания — общие с игрой (src/core/villageData.ts).
 export {
@@ -37,6 +39,7 @@ export {
   COZY_REWARDS,
   COZY_STEP,
   DAILY_QUESTS,
+  DECOR_LIGHT,
   DECOR_PRICES,
   DECOR_SLOTS,
   decorPrice,
@@ -77,7 +80,7 @@ export const CHAPTERS: readonly Chapter[] = [
 export const REPLAY_COINS: readonly number[] = [6, 3, 1, 0];
 
 /** Вещи гардероба за монеты (цены — src/core/wardrobe.ts, середины по редкости — RARITY_PRICE). */
-export const WARDROBE_COIN_ITEMS = WARDROBE.filter((w) => w.source === 'coins').map((w) => ({ id: w.id, price: w.price, rarity: w.rarity }));
+export const WARDROBE_COIN_ITEMS = WARDROBE.filter((w) => w.source === 'coins').map((w) => ({ id: w.id, price: w.price, rarity: w.rarity, ...itemBaseCost(w.id) }));
 
 /** Улучшения способностей — в порядке, в котором их обычно берут. */
 export const ABILITY_ORDER: readonly { id: UpgradeId; level: number }[] = [
@@ -188,11 +191,17 @@ export interface ChapterSummary {
   /** Доля построек и первых улучшений района (из 20) к концу главы. */
   share: number;
   l3: number;
-  decor: number;
+  /** Слотов района с украшением (из 24) и купленных вариантов (всех районов, из всех). */
+  decorSlots: number;
+  decorBought: number;
   decorTotal: number;
   streets: number;
   streetsTotal: number;
-  wardrobe: number;
+  /** Вещи гардероба Lumo (части, не стили поля): куплено и получено наградами (всего к концу главы). */
+  wardrobeBought: number;
+  wardrobeRewards: number;
+  /** Стили поля (фонари, дороги, арки), купленные. */
+  fieldBought: number;
   abilities: number;
   /**
    * Самый длинный промежуток между целями в первый час главы и их число. Промежуток, внутри которого не закончился
@@ -203,6 +212,7 @@ export interface ChapterSummary {
   maxGapRaw: number;
   goalsFirstHour: number;
   coinsLeft: number;
+  /** Свет, оставшийся в конце главы. */
   lightLeft: number;
   /** Когда (минута главы) восстановлена каждая постройка. */
   l1At: number[];
@@ -214,10 +224,15 @@ export interface SimResult {
   extra: number;
   chapters: ChapterSummary[];
   events: SimEvent[];
+  /** Минута первой покупки вещи гардероба (null — не было). */
+  firstItemAt: number | null;
   /** Сколько дней «добирания» (только перепрохождения и задания по extra мин) после главы 3 до покупки всего. */
   tailDays: number | null;
-  /** Вехи «добирания» (день после главы 3, 0 — уже к концу главы 3): все постройки на 3-м уровне, улицы, украшения, гардероб. */
-  milestones: { buildings: number | null; streets: number | null; decor: number | null; wardrobe: number | null; abilities: number | null };
+  /**
+   * Вехи «добирания» (день после главы 3, 0 — уже к концу главы 3): все постройки на 3-м уровне, все улицы,
+   * по украшению в каждом слоте, все варианты украшений, весь гардероб, способности.
+   */
+  milestones: { buildings: number | null; streets: number | null; decorOne: number | null; decor: number | null; wardrobe: number | null; abilities: number | null };
   /** Минут перепрохождений и заданий всего — за всю игру (вместе с хвостом). */
   extraMinutesTotal: number;
   /** Самые долгие ожидания следующей цели у игрока (минуты) — где «впритык». */
@@ -226,13 +241,20 @@ export interface SimResult {
 
 interface District {
   level: number[];
-  decor: number[];
+  /** Купленные варианты по слотам (номера). */
+  decor: number[][];
   streets: number[];
 }
 
 export function chapterLevels(ch1: ModelLevel[]): ModelLevel[][] {
   return [ch1, plannedLevels(2), plannedLevels(3)];
 }
+
+/** Вещи «за монеты» с ценой в своей валюте (обычные и половина редких — свет). */
+export const SHOP_ITEMS = WARDROBE.filter((w) => w.source === 'coins').map((w) => ({ id: w.id, rarity: w.rarity, lumo: isLumoPart(w.id), ...itemBaseCost(w.id) }));
+const CHEST_LIST = ['staff-crook', 'face-monocle', 'road-ember', 'acc-wings', 'trail-fireflies'];
+const QUEST_LIST = ['hat-miner', 'face-mustache', 'outfit-vest', 'acc-satchel', 'pet-moth', 'trail-leaves'];
+const COZY_LIST = WARDROBE.filter((w) => w.source === 'cozy').map((w) => w.id);
 
 /** Полная симуляция трёх глав для профиля; extra — минут перепрохождений и заданий в день. */
 export function simulate3(ch1: ModelLevel[], p: Profile, extra: number, opts: { tailMaxDays?: number } = {}): SimResult {
@@ -247,16 +269,27 @@ export function simulate3(ch1: ModelLevel[], p: Profile, extra: number, opts: { 
   let cozyPaid = 0;
   let chests = 0;
   let extraTotal = 0;
+  let firstItemAt: number | null = null;
+  let itemDay = -99;
   const events: SimEvent[] = [];
   const waits: SimResult['waits'] = [];
-  const dist: Record<DistrictId, District> = {
-    valley: { level: Array(10).fill(0), decor: Array(DECOR_SLOTS).fill(0), streets: Array(STREETS_PER_DISTRICT).fill(0) },
-    forest: { level: Array(10).fill(0), decor: Array(DECOR_SLOTS).fill(0), streets: Array(STREETS_PER_DISTRICT).fill(0) },
-    mountain: { level: Array(10).fill(0), decor: Array(DECOR_SLOTS).fill(0), streets: Array(STREETS_PER_DISTRICT).fill(0) },
+  const mk = (): District => ({ level: Array(10).fill(0), decor: Array.from({ length: DECOR_SLOTS }, () => []), streets: Array(STREETS_PER_DISTRICT).fill(0) });
+  /** Самый дешёвый некупленный вариант слота в валюте cur. */
+  const nextVariant = (d: DistrictId, k: number, cur: 'coins' | 'light') => {
+    let bestV = -1;
+    for (let v = 0; v < decorVariants(k); v++) {
+      if (dist[d].decor[k].includes(v)) continue;
+      const c = decorPrice(d, v);
+      if (c.currency === cur && (bestV < 0 || c.amount < decorPrice(d, bestV).amount)) bestV = v;
+    }
+    return bestV;
   };
+  const dist: Record<DistrictId, District> = { valley: mk(), forest: mk(), mountain: mk() };
   let abilities = 0;
-  let wardrobe = 0;
-  const wardrobeList = [...WARDROBE_COIN_ITEMS].sort((a, b) => a.price - b.price);
+  const owned = new Set<string>();
+  let rewardsLumo = 0;
+  let boughtLumo = 0;
+  let boughtField = 0;
   const best: { stars: number; ff: number; total: number; ch: number }[] = [];
   const open: DistrictId[] = [];
   let chapterIdx = 0;
@@ -278,6 +311,29 @@ export function simulate3(ch1: ModelLevel[], p: Profile, extra: number, opts: { 
     lastGoal = t;
     events.push({ t: Math.round(t * 10) / 10, tChapter: Math.round((t - chapterStart) * 10) / 10, day, chapter: chapterIdx + 1, level: curLevel, kind, what });
   };
+  /** Вещь получена наградой (части Lumo считаем в «гардероб»). */
+  const reward = (id: string | undefined) => {
+    if (!id || owned.has(id)) return false;
+    owned.add(id);
+    if (isLumoPart(id)) rewardsLumo++;
+    return true;
+  };
+  const firstFree = (list: string[]) => list.find((id) => !owned.has(id));
+  /** Бесплатный шаг самой простой улицы в открытых районах. */
+  const freeStreet = () => {
+    let bestS: { d: DistrictId; i: number } | null = null;
+    for (const d of open) dist[d].streets.forEach((st, i) => st < 3 && (!bestS || st < dist[bestS.d].streets[bestS.i]) && (bestS = { d, i }));
+    if (!bestS) return false;
+    const b = bestS as { d: DistrictId; i: number };
+    dist[b.d].streets[b.i]++;
+    cozy += COZY.street;
+    return true;
+  };
+  const openChest = () => {
+    chests++;
+    coins += Math.round(CHEST_AVG_COINS * (1 + (Math.max(1, bon().chestTier) - 1) * 0.5));
+    if (chests % 4 === 0) reward(firstFree(CHEST_LIST));
+  };
   const addCozy = (n: number) => {
     cozy += n;
     while (cozy >= (cozyPaid + 1) * COZY_STEP) {
@@ -286,28 +342,53 @@ export function simulate3(ch1: ModelLevel[], p: Profile, extra: number, opts: { 
       goal('cozy', `cozy ${cozyPaid}`);
       if ('coins' in r) coins += Math.round(r.coins * coinMult());
       else if ('light' in r) light += r.light;
-      else if ('chest' in r) coins += CHEST_AVG_COINS;
+      else if ('item' in r) {
+        if (!reward(firstFree(COZY_LIST))) coins += 100;
+      } else if ('street' in r) {
+        if (!freeStreet()) coins += 100;
+      } else openChest();
     }
   };
 
-  /** Новый день: награда дня, сундук площади, задания (если играет extra). */
+  /** Новый день: награда дня, сундук площади. */
   const newDay = () => {
     day++;
     dayNew = 0;
     const r = DAILY[calendar % 7];
     calendar++;
     if ('coins' in r) coins += r.coins;
-    else if ('item' in r) coins += 0; // наряд дня — вещь, не монеты
-    const tier = bon().chestTier;
-    if (tier) {
-      chests++;
-      coins += Math.round(CHEST_AVG_COINS * (1 + (tier - 1) * 0.5));
-    }
+    else if ('item' in r && !reward(r.item)) coins += r.orCoins;
+    if (bon().chestTier) openChest();
   };
 
-  /** Покупки между уровнями: не больше одной постройки и одной покупки за монеты. */
+  /** Купить в слот k вариант v. */
+  const buyDecor = (d: DistrictId, k: number, v: number) => {
+    dist[d].decor[k].push(v);
+    addCozy(COZY.decor);
+    goal('decor', `${d}:${k + 1}.${v + 1}`);
+  };
+  /** Следующая вещь за свет / за монеты (дешёвые сначала; части Lumo — раньше стилей поля). */
+  const nextItem = (cur: 'coins' | 'light') =>
+    SHOP_ITEMS.filter((w) => w.currency === cur && !owned.has(w.id)).sort((a, b) => Number(b.lumo) - Number(a.lumo) || a.amount - b.amount)[0];
+  const buyItem = (w: (typeof SHOP_ITEMS)[number]) => {
+    owned.add(w.id);
+    if (w.lumo) boughtLumo++;
+    else boughtField++;
+    if (firstItemAt === null) firstItemAt = t;
+    itemDay = day;
+    goal('wardrobe', w.id);
+  };
+  /** Свет, который держим на расцвет (когда есть постройки на 2-м уровне). */
+  const l3Reserve = () => {
+    let r = 0;
+    for (const d of open) dist[d].level.forEach((lv, i) => lv === 2 && (r = Math.max(r, buildingCost(d, i, 3).light)));
+    return r;
+  };
+
+  /** Покупки между уровнями: постройка за свет, трата лишнего света, одна покупка за монеты. */
   const spend = (late: boolean) => {
-    // Свет: следующая постройка района по порядку (сначала текущий район), потом расцвет.
+    // Свет: следующая постройка района по порядку (сначала текущий район).
+    let nextL1 = 0;
     for (const d of open) {
       const i = dist[d].level.indexOf(0);
       if (i < 0) continue;
@@ -315,70 +396,109 @@ export function simulate3(ch1: ModelLevel[], p: Profile, extra: number, opts: { 
       if (light >= c.light) {
         light -= c.light;
         dist[d].level[i] = 1;
+        const def = BUILDINGS.find((b) => b.id === DISTRICT_BUILDINGS[d][i]);
+        if (def && 'item' in def.reward) reward(def.reward.item);
         addCozy(COZY.building[0]);
         goal('L1', `${d}:${DISTRICT_BUILDINGS[d][i]}`);
-      }
+      } else nextL1 = c.light;
       break;
     }
-    // Монеты: сначала улучшение уже восстановленной постройки (копит на него), потом способности, расцвет, улицы,
-    // украшения, гардероб — самое дешёвое из доступного. Расцвет и украшения — когда все улучшения сделаны.
-    let pendingL2: { d: DistrictId; i: number; c: number } | null = null;
+    // Лишний свет: сверх того, что копится на следующую постройку (и на расцвет в «добирании»).
+    // Первая вещь — как можно раньше (дешёвая обычная за свет); дальше не больше одной вещи в день,
+    // остальное — украшения за свет в текущем районе.
+    const reserve = nextL1 + (late ? l3Reserve() : 0);
+    const li = nextItem('light');
+    if (li && firstItemAt === null && light >= li.amount && t >= 4) {
+      light -= li.amount;
+      buyItem(li);
+    } else {
+      for (let guard = 0; guard < 4; guard++) {
+        const spare = light - reserve;
+        const item = nextItem('light');
+        // Вещь: в «добирании» — не чаще раза в день, в обычной игре — раз в 6 дней (свет идёт и на украшения).
+        if (item && day - itemDay >= (late ? 1 : 6) && spare >= item.amount) {
+          light -= item.amount;
+          buyItem(item);
+          continue;
+        }
+        // Украшение за свет: самый дешёвый световой вариант в слотах открытых районов (сначала пустые слоты текущего района).
+        let opt: { d: DistrictId; k: number; v: number; c: number; empty: boolean } | null = null;
+        for (const d of open) {
+          dist[d].decor.forEach((vs, k) => {
+            const v = nextVariant(d, k, 'light');
+            if (v < 0) return;
+            const c = decorPrice(d, v).amount;
+            const empty = vs.length === 0;
+            const o0 = opt as { c: number; empty: boolean } | null;
+            if (!o0 || Number(empty) > Number(o0.empty) || (empty === o0.empty && c < o0.c)) opt = { d, k, v, c, empty };
+          });
+          if (opt) break;
+        }
+        const o = opt as { d: DistrictId; k: number; v: number; c: number } | null;
+        if (o && spare >= o.c) {
+          light -= o.c;
+          buyDecor(o.d, o.k, o.v);
+          continue;
+        }
+        break;
+      }
+    }
+    // Монеты: улучшение уже восстановленной постройки или способность (копит на то, что дешевле).
+    let target: { price: number; buy: () => void } | null = null;
     for (const d of open) {
       dist[d].level.forEach((lv, i) => {
-        if (lv === 1) {
-          const c = buildingCost(d, i, 2).coins;
-          if (!pendingL2 || c < pendingL2.c) pendingL2 = { d, i, c };
-        }
+        if (lv !== 1) return;
+        const c = buildingCost(d, i, 2).coins;
+        if (!target || c < target.price) target = { price: c, buy: () => ((dist[d].level[i] = 2), addCozy(COZY.building[1]), goal('L2', `${d}:${DISTRICT_BUILDINGS[d][i]}`)) };
       });
-    }
-    // Следующее улучшение способности — наравне с улучшениями построек: копит на то, что дешевле.
-    let target: { price: number; buy: () => void } | null = null;
-    if (pendingL2) {
-      const pl = pendingL2 as { d: DistrictId; i: number; c: number };
-      target = { price: pl.c, buy: () => ((dist[pl.d].level[pl.i] = 2), addCozy(COZY.building[1]), goal('L2', `${pl.d}:${DISTRICT_BUILDINGS[pl.d][pl.i]}`)) };
     }
     if (abilities < ABILITY_ORDER.length) {
       const a = ABILITY_ORDER[abilities];
       const price = abilityPrice(a);
-      if ((a.id !== 'rotate' || bon().rotateCharges > 0) && (!target || price < target.price)) target = { price, buy: () => (abilities++, goal('ability', `${a.id}→${a.level}`)) };
+      const tg = target as { price: number } | null;
+      if ((a.id !== 'rotate' || bon().rotateCharges > 0) && (!tg || price < tg.price)) target = { price, buy: () => (abilities++, goal('ability', `${a.id}→${a.level}`)) };
     }
     let budget = coins;
-    if (target) {
-      if (coins >= target.price) {
-        coins -= target.price;
-        target.buy();
+    const tgt = target as { price: number; buy: () => void } | null;
+    if (tgt) {
+      if (coins >= tgt.price) {
+        coins -= tgt.price;
+        tgt.buy();
         return;
       }
       // Копит на цель, но позволяет себе мелочь: в обычной игре — только если давно не было ничего нового
-      // (не дороже пятой части цели: первое украшение в слот, недорогая вещь), в «добирании» — не дороже трети.
+      // (не дороже пятой части цели: первое украшение в слот), в «добирании» — не дороже трети.
       if (!late && t - lastGoal < 1.2) return;
-      budget = Math.min(coins, Math.max(decorPrice(open[0], 0), Math.floor(target.price / (late ? 3 : 5))));
+      budget = Math.min(coins, Math.max(DECOR_PRICES[0], Math.floor(tgt.price / (late ? 3 : 5))));
     }
-    const options: { price: number; light?: number; buy: () => void }[] = [];
-    if (late) {
-      for (const d of open) {
-        const i = dist[d].level.indexOf(2);
-        if (i >= 0) {
-          const c = buildingCost(d, i, 3);
-          options.push({ price: c.coins, light: c.light, buy: () => ((dist[d].level[i] = 3), addCozy(COZY.building[2]), goal('L3', `${d}:${DISTRICT_BUILDINGS[d][i]}`)) });
-        }
-        const s = dist[d].streets.findIndex((x) => x < 3);
-        if (s >= 0) options.push({ price: streetPrice(d, dist[d].streets[s]), buy: () => (dist[d].streets[s]++, addCozy(COZY.street), goal('street', `${d}:${s + 1}→${dist[d].streets[s]}`)) });
-        const k = dist[d].decor.findIndex((x, slot) => x < decorVariants(slot));
-        if (k >= 0) options.push({ price: decorPrice(d, dist[d].decor[k]), buy: () => (dist[d].decor[k]++, addCozy(COZY.decor), goal('decor', `${d}:${k + 1}.${dist[d].decor[k]}`)) });
+    // Варианты покупки: tier 0 — расцвет, 1 — улицы и первое украшение в пустой слот, 2 — остальное.
+    const options: { tier: number; price: number; light?: number; buy: () => void }[] = [];
+    for (const d of late ? open : open.slice(0, 1)) {
+      const k = dist[d].decor.findIndex((vs) => vs.length === 0);
+      if (k >= 0) options.push({ tier: 1, price: decorPrice(d, 0).amount, buy: () => buyDecor(d, k, 0) });
+      if (!late) continue;
+      const i = dist[d].level.indexOf(2);
+      if (i >= 0) {
+        const c = buildingCost(d, i, 3);
+        options.push({ tier: 0, price: c.coins, light: c.light, buy: () => ((dist[d].level[i] = 3), addCozy(COZY.building[2]), goal('L3', `${d}:${DISTRICT_BUILDINGS[d][i]}`)) });
       }
-      if (wardrobe < wardrobeList.length) options.push({ price: wardrobeList[wardrobe].price, buy: () => (wardrobe++, goal('wardrobe', wardrobeList[wardrobe - 1].id)) });
-    } else {
-      // В обычной игре — недорогая вещь гардероба и первое украшение в свободный слот текущего района.
-      if (wardrobe < wardrobeList.length && wardrobeList[wardrobe].price <= RARITY_PRICE.common) options.push({ price: wardrobeList[wardrobe].price, buy: () => (wardrobe++, goal('wardrobe', wardrobeList[wardrobe - 1].id)) });
-      const d = open[0];
-      const k = dist[d].decor.indexOf(0);
-      if (k >= 0) options.push({ price: decorPrice(d, 0), buy: () => (dist[d].decor[k] = 1, addCozy(COZY.decor), goal('decor', `${d}:${k + 1}.1`)) });
+      const s2 = dist[d].streets.findIndex((x) => x < 3);
+      if (s2 >= 0) options.push({ tier: 1, price: streetPrice(d, dist[d].streets[s2]), buy: () => (dist[d].streets[s2]++, addCozy(COZY.street), goal('street', `${d}:${s2 + 1}→${dist[d].streets[s2]}`)) });
+      const kc = dist[d].decor.findIndex((vs, slot) => vs.length > 0 && nextVariant(d, slot, 'coins') >= 0);
+      if (kc >= 0) {
+        const v = nextVariant(d, kc, 'coins');
+        options.push({ tier: 2, price: decorPrice(d, v).amount, buy: () => buyDecor(d, kc, v) });
+      }
     }
-    // Расцвет построек — в первую очередь (он виден и даёт уют), остальное — от дешёвого к дорогому.
-    options.sort((a, b) => (b.light ? 1 : 0) - (a.light ? 1 : 0) || a.price - b.price);
-    const o = options[0];
-    if (o && budget >= o.price && light >= (o.light ?? 0)) {
+    if (late) {
+      const ci = nextItem('coins');
+      if (ci) options.push({ tier: 2, price: ci.amount, buy: () => buyItem(ci) });
+    }
+    options.sort((a, b) => a.tier - b.tier || a.price - b.price);
+    const o = options.find((x) => budget >= x.price && light >= (x.light ?? 0)) ?? null;
+    // Не перескакивать через уровень приоритета: пока есть доступный по свету расцвет — копить на него.
+    const top = options[0];
+    if (o && (!late || !top || o.tier <= top.tier || light < (top.light ?? 0))) {
       coins -= o.price;
       light -= o.light ?? 0;
       o.buy();
@@ -420,7 +540,6 @@ export function simulate3(ch1: ModelLevel[], p: Profile, extra: number, opts: { 
     extraTotal += minutes;
     let left = minutes;
     // Задания жителей: 3 в день (выполняются заодно с перепрохождениями), неделя — каждый 7-й день.
-    // Задания выполняются по ходу перепрохождений: каждое — отдельная цель (через треть, две трети и в конце).
     let quests = 0;
     const questTick = () => {
       while (quests < DAILY_QUESTS.length && minutes - left >= ((quests + 1) * minutes) / DAILY_QUESTS.length - 0.01) {
@@ -431,11 +550,14 @@ export function simulate3(ch1: ModelLevel[], p: Profile, extra: number, opts: { 
         goal('quest', `quest ${quests}`);
       }
     };
-    if (day % 7 === 0) coins += Math.round(WEEKLY_QUEST.coins * coinMult() * (1 + bon().weeklyPct / 100)) + CHEST_AVG_COINS;
+    if (day % 7 === 0) {
+      coins += Math.round(WEEKLY_QUEST.coins * coinMult() * (1 + bon().weeklyPct / 100)) + CHEST_AVG_COINS;
+      if (!reward(firstFree(QUEST_LIST))) reward(firstFree(CHEST_LIST));
+      if (WEEKLY_QUEST.street) freeStreet();
+    }
     const played = new Set<number>();
     const maxS = Math.floor(p.maxStars + 0.5);
     const order = best.map((b, i) => ({ b, i })).filter((x) => x.b);
-    // Сначала то, где можно добрать больше всего.
     order.sort((a, z) => (z.b ? 3 - z.b.stars + z.b.total - z.b.ff : 0) - (a.b ? 3 - a.b.stars + a.b.total - a.b.ff : 0));
     for (const { b, i } of order) {
       if (left <= 0) break;
@@ -445,13 +567,11 @@ export function simulate3(ch1: ModelLevel[], p: Profile, extra: number, opts: { 
       if (!canStars && !canFf) continue;
       const r = play(i, l, canStars ? b.stars + 1 : b.stars, canFf ? Math.min(b.total, b.ff + 1) : b.ff);
       left -= r.m;
-      // Улучшенный результат (звезда, светлячок — «можно улучшить» на карте) — тоже цель.
       if (r.improved) goal('improve', `level ${l.num}`);
       played.add(i);
       questTick();
       spend(true);
     }
-    // Повторы без улучшения: 6 монет за первый повтор уровня за день.
     for (const { b, i } of order) {
       if (left <= 0) break;
       if (played.has(i)) continue;
@@ -462,7 +582,6 @@ export function simulate3(ch1: ModelLevel[], p: Profile, extra: number, opts: { 
       spend(true);
     }
     t += Math.max(0, left);
-    left = Math.min(left, 0);
     questTick();
   };
 
@@ -476,7 +595,6 @@ export function simulate3(ch1: ModelLevel[], p: Profile, extra: number, opts: { 
     open.unshift(CHAPTERS[c].district);
     const levels = all[c];
     const stars = starsFor(levels, p.stars);
-    // Светлячки: доля профиля с переносом ошибки.
     let ffErr = 0;
     const startDay = day;
     levels.forEach((l, k) => {
@@ -496,12 +614,12 @@ export function simulate3(ch1: ModelLevel[], p: Profile, extra: number, opts: { 
     const ev = events.filter((e) => e.chapter === c + 1 && e.tChapter <= 60);
     const times = [...new Set(ev.map((e) => e.tChapter))];
     const gaps = times.map((x, i) => x - (i ? times[i - 1] : 0));
-    // Промежуток с хотя бы одним законченным уровнем внутри (не на краях).
     const idle = times.map((x, i) => {
       const a = chapterStart + (i ? times[i - 1] : 0) + 0.05;
       const b = chapterStart + x - 0.05;
       return levelEnds.some((le) => le > a && le < b) ? gaps[i] : 0;
     });
+    const allDecor = (['valley', 'forest', 'mountain'] as const).reduce((sum, dd) => sum + dist[dd].decor.reduce((x, y) => x + y.length, 0), 0);
     chapters.push({
       chapter: c + 1,
       doneAt: Math.round(t),
@@ -510,11 +628,14 @@ export function simulate3(ch1: ModelLevel[], p: Profile, extra: number, opts: { 
       l2: d.level.filter((x) => x >= 2).length,
       share: (d.level.filter((x) => x >= 1).length + d.level.filter((x) => x >= 2).length) / 20,
       l3: d.level.filter((x) => x >= 3).length,
-      decor: d.decor.reduce((s, x) => s + x, 0),
-      decorTotal: Array.from({ length: DECOR_SLOTS }, (_, i) => decorVariants(i)).reduce((s, x) => s + x, 0),
-      streets: d.streets.reduce((s, x) => s + x, 0),
+      decorSlots: d.decor.filter((x) => x.length > 0).length,
+      decorBought: allDecor,
+      decorTotal: (c + 1) * Array.from({ length: DECOR_SLOTS }, (_, i) => decorVariants(i)).reduce((sum, x) => sum + x, 0),
+      streets: d.streets.reduce((sum, x) => sum + x, 0),
       streetsTotal: STREETS_PER_DISTRICT * 3,
-      wardrobe,
+      wardrobeBought: boughtLumo,
+      wardrobeRewards: rewardsLumo,
+      fieldBought: boughtField,
       abilities,
       maxGapFirstHour: Math.round(Math.max(0, ...idle) * 10) / 10,
       maxGapRaw: Math.round(Math.max(0, ...gaps) * 10) / 10,
@@ -526,17 +647,16 @@ export function simulate3(ch1: ModelLevel[], p: Profile, extra: number, opts: { 
     });
   }
   // Хвост: после главы 3 — только перепрохождения и задания, пока не куплено всё (или не вышел лимит дней).
-  const everything = () =>
-    open.every((d) => dist[d].level.every((x) => x === 3) && dist[d].streets.every((x) => x === 3) && dist[d].decor.every((x, i) => x === decorVariants(i))) &&
-    wardrobe === wardrobeList.length &&
-    abilities === ABILITY_ORDER.length;
+  const shopLeft = () => SHOP_ITEMS.some((w) => !owned.has(w.id));
+  const everything = () => open.every((d) => dist[d].level.every((x) => x === 3) && dist[d].streets.every((x) => x === 3) && dist[d].decor.every((x, i) => x.length === decorVariants(i))) && !shopLeft() && abilities === ABILITY_ORDER.length;
   let tailDays: number | null = null;
-  const ms: SimResult['milestones'] = { buildings: null, streets: null, decor: null, wardrobe: null, abilities: null };
+  const ms: SimResult['milestones'] = { buildings: null, streets: null, decorOne: null, decor: null, wardrobe: null, abilities: null };
   const mark = (k: number) => {
     if (ms.buildings === null && open.every((d) => dist[d].level.every((x) => x === 3))) ms.buildings = k;
     if (ms.streets === null && open.every((d) => dist[d].streets.every((x) => x === 3))) ms.streets = k;
-    if (ms.decor === null && open.every((d) => dist[d].decor.every((x, i) => x === decorVariants(i)))) ms.decor = k;
-    if (ms.wardrobe === null && wardrobe === wardrobeList.length) ms.wardrobe = k;
+    if (ms.decorOne === null && open.every((d) => dist[d].decor.every((x) => x.length > 0))) ms.decorOne = k;
+    if (ms.decor === null && open.every((d) => dist[d].decor.every((x, i) => x.length === decorVariants(i)))) ms.decor = k;
+    if (ms.wardrobe === null && !shopLeft()) ms.wardrobe = k;
     if (ms.abilities === null && abilities === ABILITY_ORDER.length) ms.abilities = k;
   };
   mark(0);
@@ -553,20 +673,32 @@ export function simulate3(ch1: ModelLevel[], p: Profile, extra: number, opts: { 
       }
     }
   }
-  return { profile: p.id, extra, chapters, events, tailDays, milestones: ms, extraMinutesTotal: Math.round(extraTotal), waits: waits.sort((a, b) => b.minutes - a.minutes) };
+  return { profile: p.id, extra, chapters, events, firstItemAt, tailDays, milestones: ms, extraMinutesTotal: Math.round(extraTotal), waits: waits.sort((a, b) => b.minutes - a.minutes) };
 }
 
-/** Итоговые суммы цен (для таблицы): постройки района по уровням, украшения, улицы, способности, гардероб. */
+/** Итоговые суммы цен (для таблицы): постройки района по уровням, украшения (монеты / свет), улицы. */
 export function priceTotals() {
   return CHAPTERS.map((c) => {
     const d = c.district;
     const lv = (n: 1 | 2 | 3) => DISTRICT_BUILDINGS[d].map((_, i) => buildingCost(d, i, n));
     const sum = (a: BuildingCost[], k: keyof BuildingCost) => a.reduce((s, x) => s + x[k], 0);
-    const decor = Array.from({ length: DECOR_SLOTS }, (_, i) => Array.from({ length: decorVariants(i) }, (_, v) => decorPrice(d, v)).reduce((s, x) => s + x, 0)).reduce((s, x) => s + x, 0);
+    let decorCoins = 0;
+    let decorLight = 0;
+    for (let i = 0; i < DECOR_SLOTS; i++) {
+      for (let v = 0; v < decorVariants(i); v++) {
+        const pr = decorPrice(d, v);
+        if (pr.currency === 'light') decorLight += pr.amount;
+        else decorCoins += pr.amount;
+      }
+    }
     const streets = STREETS_PER_DISTRICT * [0, 1, 2].reduce((s, k) => s + streetPrice(d, k), 0);
-    return { chapter: c.id, district: d, l1Light: sum(lv(1), 'light'), l2Coins: sum(lv(2), 'coins'), l3Coins: sum(lv(3), 'coins'), l3Light: sum(lv(3), 'light'), decor, streets };
+    return { chapter: c.id, district: d, l1Light: sum(lv(1), 'light'), l2Coins: sum(lv(2), 'coins'), l3Coins: sum(lv(3), 'coins'), l3Light: sum(lv(3), 'light'), decorCoins, decorLight, streets };
   });
 }
 
 export const abilitiesTotal = () => ABILITY_ORDER.reduce((s, a) => s + abilityPrice(a), 0);
-export const wardrobeTotal = () => WARDROBE_COIN_ITEMS.reduce((s, w) => s + w.price, 0);
+/** Гардероб «за монеты»: сколько монет и сколько света стоит всё. */
+export const wardrobeTotal = () => ({
+  coins: SHOP_ITEMS.filter((w) => w.currency === 'coins').reduce((s, w) => s + w.amount, 0),
+  light: SHOP_ITEMS.filter((w) => w.currency === 'light').reduce((s, w) => s + w.amount, 0),
+});

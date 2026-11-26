@@ -1,7 +1,7 @@
 // «Деревня 2.0» — действия поверх экономики (чистые функции): районы, улицы, украшения в слотах, уют.
 // Восстановление и улучшение построек — src/core/economy.ts (restore, upgradeBuilding), данные — villageData.ts.
 
-import { buildingLevel, coins, grant, type Economy } from './economy';
+import { buildingLevel, coins, discountCost, grant, pay, type Cost, type Economy } from './economy';
 import {
   BUILDINGS,
   COZY,
@@ -51,17 +51,31 @@ export const slotKey = (d: DistrictId, slot: number) => `${d}:${slot}`;
 export const decorOwned = (e: Economy, d: DistrictId, slot: number, variant: number) => e.decor.owned.includes(decorKey(d, slot, variant));
 /** Что стоит в слоте: номер варианта или −1 (пусто). */
 export const decorPlaced = (e: Economy, d: DistrictId, slot: number) => e.decor.placed[slotKey(d, slot)] ?? -1;
-/** Цена варианта со скидкой дома лесника. */
-export const decorCost = (e: Economy, d: DistrictId, variant: number) => discounted(decorPrice(d, variant), bonusesOf(e.buildings).decorDiscountPct);
+/** Цена варианта (монеты или свет) со скидкой дома лесника. */
+export const decorCost = (e: Economy, d: DistrictId, variant: number): Cost => discountCost(decorPrice(d, variant), bonusesOf(e.buildings).decorDiscountPct);
 
-/** Купить вариант (и сразу поставить) или поставить уже купленный. */
-export function placeDecor(e: Economy, d: DistrictId, slot: number, variant: number): { economy: Economy; bought: number } | VillageBuyError {
+/** Купить вариант (и сразу поставить) или поставить уже купленный; light — баланс света. */
+export function placeDecor(e: Economy, d: DistrictId, slot: number, variant: number, light = 0): { economy: Economy; bought: Cost | null } | VillageBuyError | 'notEnoughLight' {
   if (slot < 0 || slot >= DECOR_SLOTS || variant < 0 || variant >= decorVariants(slot)) return 'bad';
   const placed = { ...e.decor.placed, [slotKey(d, slot)]: variant };
-  if (decorOwned(e, d, slot, variant)) return { economy: { ...e, decor: { ...e.decor, placed } }, bought: 0 };
+  if (decorOwned(e, d, slot, variant)) return { economy: { ...e, decor: { ...e.decor, placed } }, bought: null };
   const price = decorCost(e, d, variant);
-  if (coins(e) < price) return 'notEnoughCoins';
-  return { economy: { ...e, coinsSpent: e.coinsSpent + price, decor: { owned: [...e.decor.owned, decorKey(d, slot, variant)], placed } }, bought: price };
+  const paid = pay(e, price, light);
+  if (typeof paid === 'string') return paid;
+  return { economy: { ...paid, decor: { owned: [...paid.decor.owned, decorKey(d, slot, variant)], placed } }, bought: price };
+}
+
+/** Бесплатный шаг улицы (награда уюта и задания недели): самая простая улица в открытых районах. */
+export function grantStreetStep(e: Economy, open: readonly DistrictId[]): { economy: Economy; street: string | null } {
+  let best: { key: string; step: number } | null = null;
+  for (const d of open) {
+    for (let i = 0; i < STREETS_PER_DISTRICT; i++) {
+      const step = streetStep(e, d, i);
+      if (step < 3 && (!best || step < best.step)) best = { key: streetKey(d, i), step };
+    }
+  }
+  if (!best) return { economy: e, street: null };
+  return { economy: { ...e, streets: { ...e.streets, [best.key]: best.step + 1 } }, street: best.key };
 }
 
 /** Убрать украшение из слота (купленное остаётся). */
@@ -100,17 +114,23 @@ export const cozyRewardAt = (n: number): CozyReward => COZY_REWARDS[n % COZY_REW
 const cozyItems = () => WARDROBE.filter((w) => w.source === 'cozy').map((w) => w.id);
 const CHEST_ITEMS = ['staff-crook', 'face-monocle', 'road-ember', 'acc-wings', 'trail-fireflies'];
 
-export type CozyGrant = { coins: number; light: number; item: string | null; chest: boolean };
+export type CozyGrant = { coins: number; light: number; item: string | null; chest: boolean; street: string | null };
 
-/** Забрать следующую награду уюта; монеты — × глава (по открытым районам). */
-export function claimCozy(e: Economy, mult: number): { economy: Economy; got: CozyGrant } | null {
+/** Забрать следующую награду уюта; монеты — × глава (по открытым районам); шаг улицы — в открытых районах. */
+export function claimCozy(e: Economy, mult: number, open: readonly DistrictId[] = ['valley']): { economy: Economy; got: CozyGrant } | null {
   const c = cozyLevel(e);
   if (c.pending <= 0) return null;
   const r = cozyRewardAt(e.cozyClaimed);
   let out: Economy = { ...e, cozyClaimed: e.cozyClaimed + 1 };
-  const got: CozyGrant = { coins: 0, light: 0, item: null, chest: false };
+  const got: CozyGrant = { coins: 0, light: 0, item: null, chest: false, street: null };
   if ('coins' in r) got.coins = Math.round((r.coins * mult) / 5) * 5;
   else if ('light' in r) got.light = r.light;
+  else if ('street' in r) {
+    const s = grantStreetStep(out, open);
+    out = s.economy;
+    got.street = s.street;
+    if (!s.street) got.coins = 100;
+  }
   else if ('item' in r) {
     got.item = cozyItems().find((id) => !out.wardrobe.owned.includes(id)) ?? null;
     if (!got.item) got.coins = 100;

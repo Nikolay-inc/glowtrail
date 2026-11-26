@@ -18,7 +18,7 @@ import {
   dailyDay,
   equip,
   grant,
-  itemPrice,
+  itemCost,
   nextLevelCost,
   upgradeBuilding,
   villageById,
@@ -32,6 +32,7 @@ import {
   useHint as useHintCore,
   UPGRADES,
   type BuyError,
+  type Cost,
   type DailyReward,
   type Economy,
   type Reward,
@@ -141,14 +142,21 @@ export function buyUpgrade(id: UpgradeId): MetaResult<number> {
   return { ok: true, value: res.upgrades[id] };
 }
 
+/** Хватает ли монет или света на цену. */
+export function canAfford(c: Cost): boolean {
+  const w = wallet();
+  return c.currency === 'coins' ? w.coins >= c.amount : w.light >= c.amount;
+}
+
+/** Купить вещь гардероба: обычные и часть редких — за свет, остальные — за монеты. */
 export function buyItem(id: string): MetaResult<string> {
-  const res = buyItemCore(getEconomy(), id);
+  const cost = itemCost(getEconomy(), id);
+  const res = buyItemCore(getEconomy(), id, wallet().light);
   if (typeof res === 'string') return { ok: false, error: res };
-  const price = itemPrice(getEconomy(), id);
   SaveService.update((d) => {
     d.economy = syncAvatar({ ...res, wardrobe: res.wardrobe }, d);
-    push(d, { ev: 'wardrobe_buy', item: id, amount: price });
-    push(d, { ev: 'currency_spend', currency: 'coins', amount: price, item: `wardrobe:${id}` });
+    push(d, { ev: 'wardrobe_buy', item: id, amount: cost.amount, currency: cost.currency });
+    push(d, { ev: 'currency_spend', currency: cost.currency, amount: cost.amount, item: `wardrobe:${id}` });
   });
   return { ok: true, value: id };
 }
@@ -358,6 +366,7 @@ export function buyStreet(d: DistrictId, i: number): MetaResult<number> {
 }
 
 /** Поставить украшение в слот (купить, если ещё не куплено); variant −1 — убрать. */
+/** Поставить украшение в слот (купить за монеты или свет, если ещё не куплено); variant −1 — убрать. value — потрачено (0 — уже было). */
 export function setDecor(d: DistrictId, slot: number, variant: number): MetaResult<number> {
   if (variant < 0) {
     SaveService.update((x) => {
@@ -365,26 +374,28 @@ export function setDecor(d: DistrictId, slot: number, variant: number): MetaResu
     });
     return { ok: true, value: 0 };
   }
-  const res = placeDecorCore(getEconomy(), d, slot, variant);
+  const res = placeDecorCore(getEconomy(), d, slot, variant, wallet().light);
   if (typeof res === 'string') return { ok: false, error: res === 'maxed' ? 'maxed' : res };
+  const b = res.bought;
   SaveService.update((x) => {
     x.economy = res.economy;
-    push(x, { ev: 'decor_place', item: `${d}:${slot}:${variant}`, amount: res.bought });
-    if (res.bought) push(x, { ev: 'currency_spend', currency: 'coins', amount: res.bought, item: `decor:${d}:${slot}:${variant}` });
+    push(x, { ev: 'decor_place', item: `${d}:${slot}:${variant}`, amount: b?.amount ?? 0, currency: b?.currency });
+    if (b) push(x, { ev: 'currency_spend', currency: b.currency, amount: b.amount, item: `decor:${d}:${slot}:${variant}` });
   });
-  return { ok: true, value: res.bought };
+  return { ok: true, value: b?.amount ?? 0 };
 }
 
 export const cozy = () => cozyLevel(getEconomy());
 
 export function claimCozy(): CozyGrant | null {
-  const res = claimCozyCore(getEconomy(), rewardMult());
+  const res = claimCozyCore(getEconomy(), rewardMult(), openDistricts().filter((d) => d !== 'mountain'));
   if (!res) return null;
   SaveService.update((x) => {
     x.economy = res.economy;
     push(x, { ev: 'cozy_level', amount: res.economy.cozyClaimed, item: JSON.stringify(res.got) });
     if (res.got.coins) push(x, { ev: 'currency_earn', currency: 'coins', amount: res.got.coins, source: 'cozy' });
     if (res.got.light) push(x, { ev: 'currency_earn', currency: 'light', amount: res.got.light, source: 'cozy' });
+    if (res.got.street) push(x, { ev: 'street_upgrade', item: `${res.got.street}:free`, amount: 0, source: 'cozy' });
   });
   return res.got;
 }
@@ -438,12 +449,13 @@ export function questEvent(ev: QuestEvent) {
 }
 
 export function claimQuest(id: string) {
-  const res = claimQuestCore(getEconomy(), id, villageBonuses(getEconomy()).questLight);
+  const res = claimQuestCore(getEconomy(), id, villageBonuses(getEconomy()).questLight, openDistricts().filter((d) => d !== 'mountain'));
   if (!res) return null;
   SaveService.update((x) => {
     x.economy = res.economy;
     push(x, { ev: 'quest_done', item: id, amount: res.coins || res.light });
     if (res.coins) push(x, { ev: 'currency_earn', currency: 'coins', amount: res.coins, source: 'quest' });
+    if (res.street) push(x, { ev: 'street_upgrade', item: `${res.street}:free`, amount: 0, source: 'quest' });
     if (res.light) push(x, { ev: 'currency_earn', currency: 'light', amount: res.light, source: 'quest' });
   });
   return res;

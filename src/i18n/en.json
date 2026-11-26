@@ -152,6 +152,7 @@
   "hints_descr": "Free today: {free} of {total}, saved up: {bank}",
   "hint_bought": "Hint bought",
   "buy_for": "Buy for {n} {coin}",
+  "buy_for_light": "Buy for {n} {light}",
   "for_ad": "Watch an ad",
   "ad_stub_hint": "Ads are coming later — the hint is yours anyway",
   "name_title": "What's your name?",
@@ -622,5 +623,8 @@
   "quest_done_toast": "{n, plural, one {Villager's quest done!} other {# villager quests done!}} Your reward is in the village.",
   "hint_quest": "Quest: {quest} — {reward}",
   "hint_daily_ready": "The daily reward is waiting on the map",
-  "daily_take": "Claim"
+  "daily_take": "Claim",
+  "cozy_reward_street": "Street upgrade",
+  "street_free": "Street improved: {name}",
+  "quest_street": "+ street upgrade"
 }

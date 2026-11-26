@@ -5,7 +5,7 @@ import {
   chapelLeft,
   coins,
   defaultEconomy,
-  itemPrice,
+  itemCost,
   lightBalance,
   lightSpent,
   mergeEconomy,
@@ -86,7 +86,7 @@ describe('постройки: три уровня', () => {
     expect(c3).toBe(c1 * 2);
     // Дом Lumo ур. 2 — скидка 10% на гардероб.
     const coinItem = WARDROBE.find((w) => w.source === 'coins')!;
-    expect(itemPrice(e, coinItem.id)).toBeLessThan(coinItem.price);
+    expect(itemCost(e, coinItem.id).amount).toBeLessThan(itemCost(rich(), coinItem.id).amount);
   });
 });
 
@@ -109,19 +109,25 @@ describe('улицы и украшения', () => {
     const e0 = rich(1000);
     const a = placeDecor(e0, 'valley', 3, 2);
     if (typeof a === 'string') throw new Error(a);
-    expect(a.bought).toBe(decorPrice('valley', 2));
+    expect(a.bought).toEqual(decorPrice('valley', 2));
     const b = placeDecor(a.economy, 'valley', 3, 0);
     if (typeof b === 'string') throw new Error(b);
     const back = placeDecor(b.economy, 'valley', 3, 2);
     if (typeof back === 'string') throw new Error(back);
-    expect(back.bought).toBe(0);
+    expect(back.bought).toBeNull();
     expect(back.economy.decor.placed['valley:3']).toBe(2);
     const cleared = clearDecor(back.economy, 'valley', 3);
     expect(cleared.decor.placed['valley:3']).toBeUndefined();
     expect(cleared.decor.owned).toContain('valley:3:2');
     expect(placeDecor(e0, 'valley', 3, 9)).toBe('bad');
-    expect(placeDecor(rich(0), 'valley', 3, 1)).toBe('notEnoughCoins');
-    expect(decorCost({ ...rich(), buildings: { forester: 2 } }, 'valley', 3)).toBeLessThan(decorPrice('valley', 3));
+    expect(placeDecor(rich(0), 'valley', 3, 2)).toBe('notEnoughCoins');
+    // Вариант 2 — за свет.
+    expect(decorPrice('valley', 1).currency).toBe('light');
+    expect(placeDecor(rich(0), 'valley', 3, 1, 0)).toBe('notEnoughLight');
+    const lit = placeDecor(rich(0), 'valley', 3, 1, 99);
+    if (typeof lit === 'string') throw new Error(lit);
+    expect(lit.economy.lightShop).toBe(decorPrice('valley', 1).amount);
+    expect(decorCost({ ...rich(), buildings: { forester: 2 } }, 'valley', 4).amount).toBeLessThan(decorPrice('valley', 4).amount);
   });
 });
 
@@ -144,6 +150,21 @@ describe('уют', () => {
     // Свет за уют идёт в баланс.
     const lightR = claimCozy({ ...many, cozyClaimed: 1 }, 1)!;
     expect(lightBalance(lightR.economy, best) - lightBalance({ ...many, cozyClaimed: 1 }, best)).toBe(6);
+  });
+});
+
+describe('шаг улицы в награду', () => {
+  it('уют (4-я награда) и задание недели улучшают самую простую улицу', () => {
+    const e: Economy = { ...rich(0), cozyClaimed: 3, streets: { 'valley:0': 2 }, buildings: Object.fromEntries(BUILDINGS.slice(0, 10).map((b) => [b.id, 3])) };
+    const r = claimCozy(e, 1, ['valley'])!;
+    expect(r.got.street).toBe('valley:1');
+    expect(r.economy.streets['valley:1']).toBe(1);
+    let w = ensureQuests(rich(0), '2026-11-26', ctx());
+    const wq = w.quests.weekly!;
+    w = { ...w, quests: { ...w.quests, weekly: { ...wq, progress: wq.target } } };
+    const got = claimQuest(w, wq.id, 0, ['valley'])!;
+    expect(got.street).toBe('valley:0');
+    expect(got.economy.streets['valley:0']).toBe(1);
   });
 });
 

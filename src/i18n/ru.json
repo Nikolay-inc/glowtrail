@@ -152,6 +152,7 @@
   "hints_descr": "Бесплатных сегодня {free} из {total}, в запасе {bank}",
   "hint_bought": "Подсказка куплена",
   "buy_for": "Купить за {n} {coin}",
+  "buy_for_light": "Купить за {n} {light}",
   "for_ad": "За рекламу",
   "ad_stub_hint": "Реклама появится позже — подсказка уже твоя",
   "name_title": "Как тебя зовут?",
@@ -622,5 +623,8 @@
   "quest_done_toast": "{n, plural, one {Задание жителя выполнено!} few {Выполнено # задания жителей!} many {Выполнено # заданий жителей!} other {Выполнено # задания жителей!}} Награда — в деревне.",
   "hint_quest": "Задание: {quest} — {reward}",
   "hint_daily_ready": "Награда дня ждёт на карте",
-  "daily_take": "Забрать"
+  "daily_take": "Забрать",
+  "cozy_reward_street": "Шаг улицы",
+  "street_free": "Улица стала лучше: {name}",
+  "quest_street": "+ шаг улицы"
 }

@@ -21,6 +21,7 @@ import {
   freeHintsLeft,
   grant,
   hintsAvailable,
+  itemCost,
   lightBalance,
   lightEarned,
   mergeEconomy,
@@ -33,6 +34,7 @@ import {
   VILLAGE_TOTAL,
   type Economy,
 } from '../src/core/economy';
+import { WARDROBE } from '../src/core/wardrobe';
 import { buildingCost, L1_LIGHT, priceTotals, PROFILES, simulate3, type ModelLevel } from '../src/core/economyModel';
 import { LEVELS } from '../src/levels/index';
 import { memoryBackend, migrate, SaveService, SAVE_VERSION } from '../src/save/SaveService';
@@ -121,8 +123,16 @@ describe('прокачка и скины', () => {
 
   it('гардероб: покупка, надеть, «особые» недоступны, деревенские не продаются', () => {
     let e = rich();
-    e = buyItem(e, 'hat-brim') as Economy;
-    expect(buyItem(e, 'hat-brim')).toBe('owned');
+    // Обычная вещь — за свет: свет списывается в lightShop (баланс считается из прогресса).
+    expect(itemCost(e, 'hat-brim').currency).toBe('light');
+    expect(buyItem(e, 'hat-brim', 0)).toBe('notEnoughLight');
+    e = buyItem(e, 'hat-brim', 999) as Economy;
+    expect(e.lightShop).toBe(itemCost(defaultEconomy(), 'hat-brim').amount);
+    expect(coins(e)).toBe(coins(rich()));
+    expect(buyItem(e, 'hat-brim', 999)).toBe('owned');
+    // Эпическая — за монеты.
+    const epic = WARDROBE.find((w) => w.source === 'coins' && w.rarity === 'epic')!;
+    expect(itemCost(e, epic.id)).toEqual({ currency: 'coins', amount: epic.price });
     expect(buyItem(e, 'hat-firefly-crown')).toBe('special');
     expect(buyItem(e, 'road-planks')).toBe('locked');
     e = equip(e, 'hat-brim');
@@ -227,13 +237,42 @@ describe('экономика на три главы (npm run sim-economy)', () =
     }
   });
 
-  it('в первый час каждой главы новая цель не реже раза в 5 минут', () => {
-    for (const r of [base, extra]) for (const c of r.chapters) expect(c.maxGapFirstHour, `+${r.extra}, глава ${c.chapter}`).toBeLessThanOrEqual(5);
+  it('в первый час каждой главы новая цель не реже раза в 5 минут (слабый и средний)', () => {
+    const weak = PROFILES.find((p) => p.id === 'weak')!;
+    for (const r of [base, extra, simulate3(ch1, weak, 0), simulate3(ch1, weak, 15)]) for (const c of r.chapters) expect(c.maxGapFirstHour, `${r.profile} +${r.extra}, глава ${c.chapter}`).toBeLessThanOrEqual(5);
+  });
+
+  it('слабый без перепрохождений — не меньше 75% построек и улучшений в каждой главе', () => {
+    const weak = simulate3(ch1, PROFILES.find((p) => p.id === 'weak')!, 0);
+    for (const c of weak.chapters) expect(c.share, `глава ${c.chapter}`).toBeGreaterThanOrEqual(0.75);
+  });
+
+  it('гардероб покупается: 3–4 вещи к главе 1, 10–12 к главе 3, с перепрохождениями — вдвое; первая — в первые 20 минут', () => {
+    const w = (c: (typeof base.chapters)[number]) => c.wardrobeBought + c.wardrobeRewards;
+    expect(w(base.chapters[0])).toBeGreaterThanOrEqual(3);
+    expect(w(base.chapters[0])).toBeLessThanOrEqual(4);
+    expect(w(base.chapters[2])).toBeGreaterThanOrEqual(10);
+    expect(w(base.chapters[2])).toBeLessThanOrEqual(12);
+    expect(w(extra.chapters[2])).toBeGreaterThanOrEqual(w(base.chapters[2]) * 1.6);
+    expect(base.firstItemAt).not.toBeNull();
+    expect(base.firstItemAt!).toBeLessThanOrEqual(20);
+  });
+
+  it('свет не копится: в конце главы ≤ 30 (с перепрохождениями ≤ 60)', () => {
+    for (const c of base.chapters) expect(c.lightLeft, `глава ${c.chapter}`).toBeLessThanOrEqual(30);
+    for (const c of extra.chapters) expect(c.lightLeft, `+15, глава ${c.chapter}`).toBeLessThanOrEqual(60);
+  });
+
+  it('короткий хвост: с 15 мин в день за ≤ 45 дней — все третьи уровни, все улицы, по украшению в каждом слоте', () => {
+    for (const k of ['buildings', 'streets', 'decorOne'] as const) {
+      expect(extra.milestones[k], k).not.toBeNull();
+      expect(extra.milestones[k]!, k).toBeLessThanOrEqual(45);
+    }
   });
 
   it('уровни не блокируются: все три профиля проходят все 90 уровней, перепрохождения добавляют покупок', () => {
     for (const p of PROFILES) expect(simulate3(ch1, p, 0).chapters).toHaveLength(3);
-    const v = (c: (typeof base.chapters)[number]) => c.l1 + c.l2 + c.l3 + c.abilities + c.wardrobe + c.streets;
+    const v = (c: (typeof base.chapters)[number]) => c.l1 + c.l2 + c.l3 + c.abilities + c.wardrobeBought + c.streets + c.decorBought;
     expect(v(extra.chapters[2])).toBeGreaterThan(v(base.chapters[2]));
     expect(extra.tailDays).not.toBeNull();
   });

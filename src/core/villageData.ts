@@ -77,12 +77,12 @@ export const DISTRICT_BUILDINGS: Record<DistrictId, readonly string[]> = {
 
 /** Уровень 1 «восстановить» — свет. Сумма ≈ свет среднего игрока за главу (2,4 звезды, 65% светлячков). */
 export const L1_LIGHT: Record<DistrictId, readonly number[]> = {
-  valley: [10, 12, 12, 12, 16, 20, 20, 20, 22, 24],
-  forest: [11, 13, 14, 15, 16, 17, 18, 19, 21, 24],
-  mountain: [12, 14, 15, 16, 17, 18, 19, 20, 21, 23],
+  valley: [8, 10, 10, 11, 12, 14, 15, 16, 17, 19],
+  forest: [9, 10, 11, 12, 13, 14, 15, 16, 17, 19],
+  mountain: [10, 11, 12, 13, 14, 15, 16, 17, 18, 19],
 };
 /** Уровень 2 «улучшить» — монеты (долина × 1,1; лес × 1,45; горы × 1,8 — бонусы построек растут с уровнями). */
-export const L2_MULT: Record<DistrictId, number> = { valley: 1.1, forest: 1.45, mountain: 1.8 };
+export const L2_MULT: Record<DistrictId, number> = { valley: 1, forest: 1.45, mountain: 1.8 };
 export const L2_COINS_BASE: readonly number[] = [45, 60, 70, 75, 85, 95, 105, 110, 120, 140];
 
 export interface BuildingCost {
@@ -170,33 +170,47 @@ export const discounted = (price: number, pct: number) => (pct > 0 ? Math.max(5,
 
 /** Улицы района: тропинка (0) → гравий (1) → брусчатка (2) → мощёная с фонарями (3). */
 export const STREETS_PER_DISTRICT = 4;
-export const STREET_PRICES: readonly number[] = [60, 120, 200];
+export const STREET_PRICES: readonly number[] = [40, 70, 110];
 export const streetPrice = (d: DistrictId, step: number) => Math.round((STREET_PRICES[step] * DISTRICT_COIN_MULT[d]) / 5) * 5;
 
-/** Украшения: слотов на район, вариантов в слоте (3–5), цена варианта; покупка один раз, смена бесплатна. */
+/**
+ * Украшения: слотов на район, вариантов в слоте (3–5), цена варианта; покупка один раз, смена бесплатна.
+ * Варианты 2 и 4 — за свет (свет не копится без дела), остальные — за монеты.
+ */
 export const DECOR_SLOTS = 24;
 export const DECOR_PRICES: readonly number[] = [15, 30, 55, 85, 120];
+export const DECOR_LIGHT: readonly (number | null)[] = [null, 6, null, 12, null];
 export type DecorType = 'bench' | 'flowers' | 'lamp' | 'tree' | 'sign' | 'cart' | 'statue' | 'birdhouse';
 export const DECOR_TYPE_ORDER: readonly DecorType[] = ['bench', 'flowers', 'lamp', 'tree', 'sign', 'cart', 'statue', 'birdhouse'];
 export const decorType = (slot: number): DecorType => DECOR_TYPE_ORDER[slot % DECOR_TYPE_ORDER.length];
 /** Сколько вариантов в слоте (3, 4 или 5 — по кругу). */
 export const decorVariants = (slot: number) => [3, 4, 3, 5, 4][slot % 5];
-/** Первый вариант слота — всегда 15 монет (мелкая радость между целями), остальные — × глава. */
-export const decorPrice = (d: DistrictId, variant: number) => (variant === 0 ? DECOR_PRICES[0] : Math.round((DECOR_PRICES[variant] * DISTRICT_COIN_MULT[d]) / 5) * 5);
+export type Currency = 'coins' | 'light';
+export interface Cost {
+  currency: Currency;
+  amount: number;
+}
+/** Цена варианта: первый — всегда 15 монет (мелкая радость между целями), варианты 2 и 4 — свет, остальные — монеты × глава. */
+export function decorPrice(d: DistrictId, variant: number): Cost {
+  const light = DECOR_LIGHT[variant];
+  if (light) return { currency: 'light', amount: light };
+  return { currency: 'coins', amount: variant === 0 ? DECOR_PRICES[0] : Math.round((DECOR_PRICES[variant] * DISTRICT_COIN_MULT[d]) / 5) * 5 };
+}
 
 // ---------------------------------------------------------------------------
 // Уют: очки за уровни построек, украшения и улицы; каждые COZY_STEP очков — награда по кругу
 
 export const COZY = { building: [5, 5, 10], decor: 1, street: 4 } as const;
 export const COZY_STEP = 30;
-export type CozyReward = { coins: number } | { light: number } | { item: true } | { chest: true };
-export const COZY_REWARDS: readonly CozyReward[] = [{ coins: 60 }, { light: 6 }, { item: true }, { coins: 80 }, { chest: true }, { light: 8 }];
+/** street — бесплатный шаг улицы (самой простой улицы в открытых районах). */
+export type CozyReward = { coins: number } | { light: number } | { item: true } | { chest: true } | { street: true };
+export const COZY_REWARDS: readonly CozyReward[] = [{ coins: 60 }, { light: 6 }, { item: true }, { street: true }, { chest: true }, { light: 8 }];
 
 // ---------------------------------------------------------------------------
-// Задания жителей: 3 в день (монеты, монеты, свет) и большое на неделю (монеты + сундук)
+// Задания жителей: 3 в день (монеты, монеты, свет) и большое на неделю (монеты + сундук + шаг улицы)
 
 export const DAILY_QUESTS: readonly ({ coins: number } | { light: number })[] = [{ coins: 25 }, { coins: 35 }, { light: 4 }];
-export const WEEKLY_QUEST = { coins: 200, chest: true } as const;
+export const WEEKLY_QUEST = { coins: 200, chest: true, street: true } as const;
 
 /** Сундук: монеты 20–40 (в среднем 30), каждый 4-й — вещь гардероба. */
 export const CHEST_AVG_COINS = 30;
