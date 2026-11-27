@@ -10,7 +10,7 @@
 import { spawn } from 'node:child_process';
 import { mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { chromium } from 'playwright';
+import { chromium, type Page } from 'playwright';
 import ru from '../src/i18n/ru.json';
 import en from '../src/i18n/en.json';
 import uk from '../src/i18n/uk.json';
@@ -186,25 +186,41 @@ async function layout(lang = flag('lang') ?? 'qps', only = flag('only')?.split('
   save.economy.streets = { 'valley:0': 2, 'valley:1': 1 };
   save.economy.decor = { owned: ['valley:0:0', 'valley:1:2', 'valley:7:1'], placed: { 'valley:0': 0, 'valley:1': 2, 'valley:7': 1 } };
   const browser = await chromium.launch();
-  const page = await browser.newPage({ viewport: { width: vw, height: vh }, deviceScaleFactor: 2 });
-  page.on('pageerror', (e) => errors.push(`ошибка на странице: ${e.message}`));
-  await page.addInitScript((s) => localStorage.setItem('glowtrail.save', s), JSON.stringify(save));
-  await page.goto(`http://localhost:${port}/?audit=1&lang=${lang}`);
-  await page.waitForFunction(() => !!(window as unknown as { __audit?: unknown }).__audit, null, { timeout: 30000 });
+  // Каждая вкладка — в своём контексте (своё localStorage), с тем же сохранением для проверки.
+  const openPage = async () => {
+    const ctx = await browser.newContext({ viewport: { width: vw, height: vh }, deviceScaleFactor: 2 });
+    const p = await ctx.newPage();
+    p.on('pageerror', (e) => errors.push(`ошибка на странице: ${e.message}`));
+    await p.addInitScript((s) => localStorage.setItem('glowtrail.save', s), JSON.stringify(save));
+    await p.goto(`http://localhost:${port}/?audit=1&lang=${lang}`);
+    await p.waitForFunction(() => !!(window as unknown as { __audit?: unknown }).__audit, null, { timeout: 30000 });
+    return p;
+  };
+  const page = await openPage();
   const names: string[] = await page.evaluate(() => (window as unknown as { __audit: { views: string[] } }).__audit.views);
+  const todo = names.filter((n) => !only || only.includes(n));
+  // Экраны проверяются в нескольких вкладках параллельно (I18N_WORKERS, по умолчанию 3): на медленной машине CI
+  // один проход по всем экранам шёл почти 10 минут. Каждый экран открывается с нуля, порядок не важен.
+  const workers = Math.max(1, Math.min(Number(process.env.I18N_WORKERS ?? 3) || 1, todo.length));
+  const pages = [page, ...(await Promise.all(Array.from({ length: workers - 1 }, openPage)))];
   const found: { view: string; key: string; text: string; reason: string; over: number }[] = [];
-  for (const name of names) {
-    if (only && !only.includes(name)) continue;
-    await page.evaluate((n) => (window as unknown as { __audit: { open: (n: string) => Promise<void> } }).__audit.open(n), name);
-    const v = await page.evaluate((n) => (window as unknown as { __audit: { check: (n: string) => unknown[] } }).__audit.check(n), name);
+  let next = 0;
+  const check = async (pg: Page, name: string) => {
+    await pg.evaluate((n) => (window as unknown as { __audit: { open: (n: string) => Promise<void> } }).__audit.open(n), name);
+    const v = await pg.evaluate((n) => (window as unknown as { __audit: { check: (n: string) => unknown[] } }).__audit.check(n), name);
     found.push(...(v as typeof found));
-    const el = await page.evaluate(() => (window as unknown as { __audit: { ellipsis: () => { text: string; key?: string }[] } }).__audit.ellipsis());
+    const el = await pg.evaluate(() => (window as unknown as { __audit: { ellipsis: () => { text: string; key?: string }[] } }).__audit.ellipsis());
     for (const e of el) warn.push(`${name}: многоточие ${e.key ?? ''} «${e.text.slice(0, 60)}»`);
-    const miss: string[] = await page.evaluate(() => (window as unknown as { __audit: { missing: () => string[] } }).__audit.missing());
+    const miss: string[] = await pg.evaluate(() => (window as unknown as { __audit: { missing: () => string[] } }).__audit.missing());
     for (const k of miss) errors.push(`нет перевода (показан ключ): ${name} · ${k}`);
-    await page.screenshot({ path: `${out}/${name}.png` });
+    await pg.screenshot({ path: `${out}/${name}.png` });
     process.stdout.write(`  ${name}: ${(v as unknown[]).length ? `✗ ${(v as unknown[]).length}` : '✓'}\n`);
-  }
+  };
+  await Promise.all(
+    pages.map(async (pg) => {
+      while (next < todo.length) await check(pg, todo[next++]);
+    }),
+  );
   // Касания: тап по рисунку и по подписи постройки открывает окно (на телефоне камера уменьшает раскладку —
   // экранные и мировые координаты касания различаются; раньше тап принимался за свайп).
   if (!only || only.includes('village-tap')) {

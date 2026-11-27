@@ -30,6 +30,16 @@ export interface Violation {
 type Any = Record<string, (...a: unknown[]) => unknown>;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/**
+ * Смена района: карта въезжает сбоку (320 мс). На медленной машине (CI) за фиксированную паузу анимация не успевает —
+ * ждём, пока карта и подписи встанут на место (не дольше 5 с), и ещё немного.
+ */
+async function settleMap(s: unknown) {
+  const v = s as { map?: { x: number }; labels?: { x: number } };
+  for (let n = 0; n < 50 && ((v.map?.x ?? 0) !== 0 || (v.labels?.x ?? 0) !== 0); n++) await sleep(100);
+  await sleep(400);
+}
+
 /** Экраны и окна для проверки: имя → как открыть. */
 function views(game: Phaser.Game): Record<string, () => Promise<void>> {
   const start = async (key: string, data?: object, wait = 900) => {
@@ -124,13 +134,13 @@ function views(game: Phaser.Game): Record<string, () => Promise<void>> {
     'village-forest-locked': async () => {
       const s = (await start('Village')) as unknown as Any;
       s.switchDistrict(1);
-      await sleep(700);
+      await settleMap(s);
     },
     'village-mountain': async () => {
       const s = (await start('Village')) as unknown as Any;
       s.switchDistrict(1);
       s.switchDistrict(1);
-      await sleep(700);
+      await settleMap(s);
     },
     workshop: async () => void (await start('Workshop')),
     'not-enough': async () => {
