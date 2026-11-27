@@ -21,6 +21,7 @@ import { drawBuilding, drawDecor, drawSilhouette, drawStreet, type BuildingView 
 import * as P from '../ui/villagePanels';
 import { BRIDGE_X, drawCrossing, drawRiver, RIVER_HW_BRIDGE, riverShape } from '../ui/villageRiver';
 import { currentView, edgeRows, stretchLayout } from '../ui/viewport';
+import { gestureOf, type Box } from '../ui/gesture';
 
 /** Какая постройка района — мост через реку: долина — мост (5-я), лес — мост-качели (9-я). */
 const BRIDGE_INDEX: Partial<Record<DistrictId, number>> = { valley: 4, forest: 8 };
@@ -33,33 +34,40 @@ export const districtName = (d: DistrictId) => tk(`district.${d}`);
 
 type Spot = { x: number; f: number; s: number };
 
-/** Где стоят постройки (x, доля высоты свободной области, масштаб) — по порядку восстановления. */
+/** Прямоугольник раскладки карты (для проверки перекрытий в ?audit=1): рисунок постройки, подпись/ценник, слот, знак улицы, Lumo. */
+export type LayoutBox = Box & { kind: 'art' | 'label' | 'slot' | 'street' | 'walker'; owner: number; id: string; road?: boolean };
+
+/**
+ * Где стоят постройки (x, доля высоты свободной области, масштаб) — по порядку восстановления. Подобраны так, чтобы на
+ * 375x667, 390x844 и 430x932 подписи и ценники не попадали под соседние постройки (лопасти мельницы — под ценник
+ * маяка), а слоты украшений и знаки улиц — ни на что (проверка — i18n-check, `villageOverlaps` в src/debug/audit.ts).
+ */
 const LAYOUT: Record<DistrictId, Spot[]> = {
   // колодец, пекарня, мастерская, мельница, мост, сад, часовня, площадь, дом Lumo, маяк
   valley: [
-    { x: 390, f: 1, s: 0.85 },
-    { x: 210, f: 0.81, s: 0.78 },
-    { x: 870, f: 0.81, s: 0.72 },
-    { x: 800, f: 0.43, s: 0.66 },
+    { x: 420, f: 1.01, s: 0.77 },
+    { x: 170, f: 0.81, s: 0.74 },
+    { x: 940, f: 0.8, s: 0.61 },
+    { x: 770, f: 0.41, s: 0.63 },
     { x: 540, f: 0.58, s: 0.85 },
-    { x: 545, f: 0.83, s: 0.76 },
-    { x: 220, f: 0.2, s: 0.78 },
-    { x: 250, f: 0.41, s: 0.8 },
-    { x: 545, f: 0.2, s: 0.78 },
-    { x: 870, f: 0.2, s: 0.7 },
+    { x: 660, f: 0.84, s: 0.61 },
+    { x: 220, f: 0.15, s: 0.78 },
+    { x: 260, f: 0.38, s: 0.76 },
+    { x: 575, f: 0.18, s: 0.78 },
+    { x: 950, f: 0.18, s: 0.63 },
   ],
   // травница, обсерватория, совиная почта, грибная ферма, лесопилка, мастерская фонарей, чайная, лесник, мост-качели, озеро
   forest: [
-    { x: 390, f: 1, s: 0.82 },
-    { x: 870, f: 0.2, s: 0.7 },
+    { x: 230, f: 1, s: 0.66 },
+    { x: 910, f: 0.17, s: 0.7 },
     { x: 870, f: 0.81, s: 0.72 },
-    { x: 210, f: 0.81, s: 0.76 },
-    { x: 800, f: 0.43, s: 0.66 },
-    { x: 250, f: 0.41, s: 0.78 },
-    { x: 545, f: 0.83, s: 0.74 },
-    { x: 220, f: 0.2, s: 0.76 },
+    { x: 210, f: 0.73, s: 0.61 },
+    { x: 810, f: 0.41, s: 0.56 },
+    { x: 250, f: 0.43, s: 0.74 },
+    { x: 565, f: 0.89, s: 0.59 },
+    { x: 190, f: 0.15, s: 0.76 },
     { x: 540, f: 0.58, s: 0.85 },
-    { x: 545, f: 0.2, s: 0.8 },
+    { x: 575, f: 0.2, s: 0.8 },
   ],
   mountain: [
     { x: 390, f: 1, s: 0.85 },
@@ -75,15 +83,33 @@ const LAYOUT: Record<DistrictId, Spot[]> = {
   ],
 };
 
-/** 24 слота украшений: между постройками, у тропинок и по краям (x, доля высоты). */
-const SLOTS: [number, number][] = [
-  [70, 0.24], [380, 0.24], [700, 0.24], [1005, 0.26],
-  [415, 0.34], [690, 0.35],
-  [60, 0.43], [430, 0.42], [650, 0.43], [1000, 0.44],
-  [140, 0.67], [300, 0.67], [780, 0.67], [940, 0.67],
-  [60, 0.84], [350, 0.85], [725, 0.85], [1015, 0.84],
-  [120, 1.03], [245, 1.04], [600, 1.04], [735, 1.04], [880, 1.03], [1005, 1.01],
+/** 24 слота украшений района (x, доля высоты): между постройками, у тропинок и по краям — не на постройках и подписях. */
+const VALLEY_SLOTS: [number, number][] = [
+  [70, 0.24], [380, 0.24], [770, 0.21], [1000, 0.37], [410, 0.46], [910, 0.37],
+  [60, 0.44], [410, 0.62], [670, 0.62], [1000, 0.46], [120, 0.48], [380, 0.71],
+  [780, 0.66], [940, 0.65], [40, 0.89], [380, 0.81], [720, 0.73], [1050, 0.88],
+  [120, 1.03], [230, 1.04], [650, 0.73], [950, 1.04], [1010, 1.03], [1000, 0.65],
 ];
+const SLOTS: Record<DistrictId, [number, number][]> = {
+  valley: VALLEY_SLOTS,
+  forest: [
+    [50, 0.24], [30, 0.33], [760, 0.26], [1030, 0.26], [660, 0.47], [940, 0.47],
+    [30, 0.43], [420, 0.62], [660, 0.62], [1000, 0.44], [60, 0.79], [410, 0.71],
+    [710, 0.67], [1030, 0.67], [40, 0.88], [350, 0.83], [660, 0.71], [1030, 0.84],
+    [40, 1.03], [420, 1.04], [420, 0.95], [950, 1.04], [1000, 1.03], [1050, 1.01],
+  ],
+  mountain: VALLEY_SLOTS,
+};
+
+/** Где на каждой улице табличка в режиме «Украсить»: доля длины отрезка и сдвиг вбок от тропинки. */
+const STREET_SIGN: Record<DistrictId, [number, number][]> = {
+  valley: [[0.14, 120], [0.19, -50], [0.75, 0], [0.6, 0]],
+  forest: [[0.23, 0], [0.72, 0], [0.75, 0], [0.52, 0]],
+  mountain: [[0.45, 0], [0.25, 0], [0.75, 0], [0.6, 0]],
+};
+
+/** Масштаб построек и украшений по высоте свободной области (на коротких экранах — помельче, без наложений). */
+const mapScale = (h: number) => Phaser.Math.Clamp(h / 1100, 0.8, 1.25);
 
 const DISTRICT_ORDER: DistrictId[] = ['valley', 'forest', 'mountain'];
 
@@ -110,6 +136,10 @@ export class VillageScene extends Phaser.Scene implements P.VillageHost {
   private yTop = 430;
   private yBot = 1450;
   private swipe: { x: number; y: number; t: number } | null = null;
+  /** Режим «Украсить»: выбранный участок (постройка, к которой ближе всего слоты) — его слоты подсвечены. */
+  plot: number | null = null;
+  /** Раскладка карты района (прямоугольники) — для проверки перекрытий. */
+  boxes: LayoutBox[] = [];
 
   constructor() {
     super('Village');
@@ -118,6 +148,7 @@ export class VillageScene extends Phaser.Scene implements P.VillageHost {
   init(data: { district?: DistrictId; panel?: 'quests' | 'cozy' }) {
     this.district = data?.district && districtOpen(data.district) ? data.district : this.district;
     this.editMode = false;
+    this.plot = null;
     this.registry.set('villagePanel', data?.panel ?? null);
   }
 
@@ -325,6 +356,7 @@ export class VillageScene extends Phaser.Scene implements P.VillageHost {
   private toggleEdit() {
     sfx.tap();
     this.editMode = !this.editMode;
+    this.plot = null;
     this.drawMap(0);
     this.drawBottom();
   }
@@ -337,19 +369,59 @@ export class VillageScene extends Phaser.Scene implements P.VillageHost {
       if (this.modal || p.worldY < this.yTop - 120 || p.worldY > this.yBot + 140) return;
       this.swipe = { x: p.worldX, y: p.worldY, t: this.time.now };
     });
-    this.input.on('pointerup', (p: Phaser.Input.Pointer) => {
+    this.input.on('pointerup', (p: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => {
       const s = this.swipe;
       this.swipe = null;
       if (!s || this.modal) return;
-      const dx = p.worldX - s.x;
-      const dy = p.worldY - s.y;
-      if (Math.abs(dx) > 140 && Math.abs(dx) > Math.abs(dy) * 1.5 && this.time.now - s.t < 800) this.switchDistrict(dx < 0 ? 1 : -1);
+      const g = gestureOf(s, { x: p.worldX, y: p.worldY }, this.time.now - s.t);
+      if (g === 'swipe-left' || g === 'swipe-right') return this.switchDistrict(g === 'swipe-left' ? 1 : -1);
+      // «Украсить»: тап по пустой земле — подсветить слоты ближайшего участка.
+      if (g === 'tap' && this.editMode && !over.length && districtOpen(this.district)) this.selectPlot(this.nearestBuilding(p.worldX, p.worldY));
     });
   }
 
-  /** Касание было свайпом (не тапом по постройке). */
+  /**
+   * Касание было свайпом/сдвигом, а не тапом. Точка касания (downX/downY) — в координатах экрана, отпускания
+   * (worldX/worldY) — мира: сравниваем в мире (на телефоне камера уменьшает раскладку примерно втрое).
+   */
   private wasSwipe(p: Phaser.Input.Pointer) {
-    return Math.abs(p.worldX - p.downX) > 30 || Math.abs(p.worldY - p.downY) > 30;
+    const down = this.cameras.main.getWorldPoint(p.downX, p.downY);
+    return gestureOf(down, { x: p.worldX, y: p.worldY }, p.upTime - p.downTime) !== 'tap';
+  }
+
+  /** Тап по постройке или её подписи: окно постройки (в режиме «Украсить» — слоты её участка). */
+  private tapBuilding(p: Phaser.Input.Pointer, i: number, open: boolean) {
+    if (this.wasSwipe(p) || this.modal) return;
+    if (!open) return this.lockedTap();
+    if (this.editMode) return this.selectPlot(i);
+    sfx.tap();
+    const id = districtBuildings(this.district)[i].id;
+    this.showBuilding({ id, cost: P.restoreCostOf(id), reward: districtBuildings(this.district)[i].reward });
+  }
+
+  /** Постройка, к которой ближе всего точка (по центру рисунка). */
+  private nearestBuilding(x: number, y: number) {
+    let best = 0;
+    let bestD = Infinity;
+    for (let i = 0; i < LAYOUT[this.district].length; i++) {
+      const sp = this.spot(i);
+      const d = Math.hypot(sp.x - x, sp.y - 70 - y);
+      if (d < bestD) (best = i), (bestD = d);
+    }
+    return best;
+  }
+
+  /** Участок слота — ближайшая постройка. */
+  slotPlot(s: number) {
+    const p = this.slotPos(s);
+    return this.nearestBuilding(p.x, p.y);
+  }
+
+  /** Подсветить слоты участка (повторный тап — снять подсветку). */
+  selectPlot(i: number) {
+    sfx.tap();
+    this.plot = this.plot === i ? null : i;
+    this.drawMap(0);
   }
 
   switchDistrict(dir: -1 | 1) {
@@ -358,6 +430,7 @@ export class VillageScene extends Phaser.Scene implements P.VillageHost {
     sfx.tap();
     this.district = DISTRICT_ORDER[i];
     this.editMode = false;
+    this.plot = null;
     this.drawMap(dir);
     this.drawHeader();
     this.drawBottom();
@@ -368,8 +441,7 @@ export class VillageScene extends Phaser.Scene implements P.VillageHost {
 
   private spot(i: number) {
     const l = LAYOUT[this.district][i];
-    // Чем выше свободная область, тем крупнее постройки (на коротких экранах — помельче, без наложений).
-    const k = Phaser.Math.Clamp((this.yBot - this.yTop) / 1000, 0.85, 1.25);
+    const k = mapScale(this.yBot - this.yTop);
     // Мост (5-я постройка долины и леса) стоит поперёк реки: точка постройки — ближний конец на южном берегу.
     if (this.isBridge(i)) return { x: BRIDGE_X, y: this.riverCY() + RIVER_HW_BRIDGE + 16, s: 1 };
     return { x: l.x, y: this.yTop + (this.yBot - this.yTop) * l.f, s: l.s * k };
@@ -395,8 +467,8 @@ export class VillageScene extends Phaser.Scene implements P.VillageHost {
   }
 
   private slotPos(i: number) {
-    const [x, f] = SLOTS[i];
-    const k = Phaser.Math.Clamp((this.yBot - this.yTop) / 1000, 0.85, 1.25);
+    const [x, f] = SLOTS[this.district][i];
+    const k = mapScale(this.yBot - this.yTop);
     return { x, y: this.yTop + (this.yBot - this.yTop) * f, s: 0.8 * k };
   }
 
@@ -421,6 +493,7 @@ export class VillageScene extends Phaser.Scene implements P.VillageHost {
     const oldLabels = this.labels;
     this.map = this.add.container(0, 0).setDepth(5);
     this.labels = this.add.container(0, 0).setDepth(30);
+    this.boxes = [];
     const d = this.district;
     const open = districtOpen(d);
     this.drawGround(d);
@@ -432,7 +505,11 @@ export class VillageScene extends Phaser.Scene implements P.VillageHost {
       const step = open ? streetStep(e, d, i) : 0;
       const res = drawStreet(sg, pts, step as 0 | 1 | 2 | 3, 44);
       for (const l of res.lamps) this.map.add(this.add.image(l.x, l.y - 40, 'glow').setTint(0xffd27a).setBlendMode(Phaser.BlendModes.ADD).setScale(0.9).setAlpha(0.55));
-      if (this.editMode && open) this.streetMarker(pts[Math.floor(pts.length * [0.45, 0.25, 0.75, 0.6][i])], i, step);
+      if (this.editMode && open) {
+        const [f, dx] = STREET_SIGN[d][i];
+        const p = pts[Math.floor(pts.length * f)];
+        this.streetMarker(new Phaser.Math.Vector2(p.x + dx, p.y), i, step);
+      }
     });
     // Река поверх тропинки (под мостом тропинки не видно), на всю видимую ширину — за края экрана.
     if (this.hasRiver()) {
@@ -457,7 +534,12 @@ export class VillageScene extends Phaser.Scene implements P.VillageHost {
         }
         if (this.editMode) this.slotMarker(s, p, v >= 0);
       }
-      if (d === 'valley' || d === 'forest') items.push({ y: this.spot(0).y + 30, obj: this.addWalker() });
+      if (d === 'valley' || d === 'forest') {
+        items.push({ y: this.spot(0).y + 30, obj: this.addWalker() });
+        // Где гуляет Lumo (с питомцем): x от 520 до 900.
+        const wy = this.spot(0).y + 30;
+        this.boxes.push({ kind: 'walker', owner: -1, id: 'lumo', x: 500, y: wy - 120, w: 420, h: 130 });
+      }
     } else {
       this.lockedPlaque(d);
     }
@@ -539,12 +621,16 @@ export class VillageScene extends Phaser.Scene implements P.VillageHost {
     // Подпись под постройкой — отдельным слоем поверх всех построек.
     const lab = this.add.container(sp.x, sp.y);
     this.labels.add(lab);
+    let labelBox: Box | null = null;
     if (open) {
       const next = nextInDistrict(e, this.district);
       const isNext = !lit && next?.id === id;
       const name = uiText(this, 0, 22, buildingName(id), { w: 250, lines: 2, size: 26, color: lit ? '#ffd36b' : isNext ? C.text : '#9aa3d6', bold: true, originY: 0 });
       lab.add(name);
       const below = 22 + name.height * name.scaleY + 22;
+      const nameW = name.width * name.scaleX;
+      // Подпись целиком: название и под ним огоньки уровня (со стрелкой) или ценник.
+      labelBox = { x: sp.x - Math.max(nameW / 2, lit ? 75 : 56), y: sp.y + 22, w: Math.max(nameW, lit ? 150 : 112), h: below - 22 + (lit ? 16 : 30) };
       if (lit) {
         // Уровень постройки — три огонька; можно улучшить — стрелка вверх.
         const pg = this.add.graphics();
@@ -583,15 +669,25 @@ export class VillageScene extends Phaser.Scene implements P.VillageHost {
         if (isNext) this.tweens.add({ targets: tag, scale: 1.08, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
       }
     }
-    // Касание постройки (вместе с подписью)
-    const zone = this.add.zone(0, -b.height * sp.s * 0.4, Math.max(200, (b.width ?? 220) * sp.s), b.height * sp.s + 120).setInteractive({ useHandCursor: true });
-    zone.on('pointerup', (p: Phaser.Input.Pointer) => {
-      if (this.wasSwipe(p) || this.modal) return;
-      if (!open) return this.lockedTap();
-      sfx.tap();
-      this.showBuilding({ id, cost: P.restoreCostOf(id), reward: districtBuildings(this.district)[i].reward });
-    });
+    // Касание постройки: по рисунку и по подписи (у подписи — своя зона в слое подписей, поверх соседей).
+    const artW = Math.max(200, (b.width ?? 220) * sp.s);
+    const artH = b.height * sp.s;
+    const zone = this.add.zone(0, -artH / 2, artW, artH + 20).setInteractive({ useHandCursor: true });
+    zone.on('pointerup', (p: Phaser.Input.Pointer) => this.tapBuilding(p, i, open));
     c.add(zone);
+    // Рисунок (с лопастями; без жителей-силуэтов у входа) — для проверки перекрытий.
+    const rr = (b.rotorR ?? 0) * sp.s;
+    const halfW = Math.max(((b.width ?? 200) * sp.s) / 2, rr);
+    const top = Math.min(-artH, b.rotor ? b.rotor.y * sp.s - rr : -artH);
+    // Мост — часть тропинки: знак улицы на нём допустим (road).
+    this.boxes.push({ kind: 'art', owner: i, id, x: sp.x - halfW, y: sp.y + top, w: halfW * 2, h: -top + 8, road: this.isBridge(i) });
+    if (labelBox) {
+      const lb = labelBox as Box;
+      this.boxes.push({ kind: 'label', owner: i, id, ...lb });
+      const lz = this.add.zone(lb.x + lb.w / 2 - sp.x, lb.y + lb.h / 2 - sp.y, lb.w + 24, lb.h + 16).setInteractive({ useHandCursor: true });
+      lz.on('pointerup', (p: Phaser.Input.Pointer) => this.tapBuilding(p, i, open));
+      lab.add(lz);
+    }
     c.once('destroy', () => lab.destroy());
     return c;
   }
@@ -632,51 +728,61 @@ export class VillageScene extends Phaser.Scene implements P.VillageHost {
     this.labels.add(c);
   }
 
-  /** Маркер слота украшения в режиме «Украсить»: «+» для пустого, кольцо — для занятого. */
+  /**
+   * Маркер слота украшения в режиме «Украсить»: маленький полупрозрачный кружок («+» — пусто, кисть — занято),
+   * не закрывает постройки и подписи. Слоты выбранного участка — ярче и крупнее, остальные — бледнее.
+   */
   private slotMarker(slot: number, p: { x: number; y: number }, filled: boolean) {
-    const c = this.add.container(p.x, p.y - (filled ? 60 : 20));
+    const mine = this.plot !== null && this.slotPlot(slot) === this.plot;
+    const y = p.y - (filled ? 46 : 14);
+    const r = mine ? 24 : 19;
+    const c = this.add.container(p.x, y);
     const g = this.add.graphics();
-    if (filled) {
-      g.lineStyle(4, 0xffd36b, 0.9);
-      g.strokeCircle(0, 0, 34);
-      g.fillStyle(0x3a2a10, 0.9);
-      g.fillCircle(24, -24, 16);
-      drawIconAt(g, 'brush', 24, -24, 20, 0xffd36b);
-    } else {
-      g.fillStyle(0x000000, 0.5);
-      g.fillCircle(0, 0, 32);
-      g.lineStyle(4, 0xffd36b, 0.95);
-      g.strokeCircle(0, 0, 32);
-      drawIconAt(g, 'plus', 0, 0, 34, 0xffd36b);
+    if (mine) {
+      c.add(this.add.image(0, 0, 'glow').setTint(0xffd36b).setBlendMode(Phaser.BlendModes.ADD).setScale(1.1).setAlpha(0.7));
     }
+    g.fillStyle(0x000000, filled ? 0.35 : 0.5);
+    g.fillCircle(0, 0, r);
+    g.lineStyle(3, 0xffd36b, 0.95);
+    g.strokeCircle(0, 0, r);
+    drawIconAt(g, filled ? 'brush' : 'plus', 0, 0, r * 1.05, 0xffd36b);
     c.add(g);
-    this.tweens.add({ targets: c, scale: 1.08, duration: 650 + (slot % 4) * 80, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
-    const z = this.add.zone(0, filled ? 20 : 0, 96, filled ? 140 : 96).setInteractive({ useHandCursor: true });
+    c.setAlpha(mine ? 1 : this.plot === null ? 0.6 : 0.3);
+    if (mine) this.tweens.add({ targets: c, scale: 1.12, duration: 600 + (slot % 4) * 70, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+    // Зона касания крупнее кружка (палец).
+    const z = this.add.zone(0, 0, 76, 76).setInteractive({ useHandCursor: true });
     z.on('pointerup', (ptr: Phaser.Input.Pointer) => !this.wasSwipe(ptr) && !this.modal && P.showDecor(this, slot));
     c.add(z);
     this.labels.add(c);
+    const R = 25;
+    this.boxes.push({ kind: 'slot', owner: slot, id: `slot ${slot + 1}`, x: p.x - R, y: y - R, w: R * 2, h: R * 2 });
   }
 
-  /** Знак улицы в режиме «Украсить» — круглая табличка прямо на тропинке: шаг улицы, тап — окно улицы. */
+  /**
+   * Знак улицы в режиме «Украсить» — другой формы и цвета, чем слоты: бирюзовая табличка на столбике с шагами
+   * улицы (три точки). Тап — окно улицы.
+   */
   private streetMarker(p: Phaser.Math.Vector2, i: number, step: number) {
     const c = this.add.container(p.x, p.y);
     const g = this.add.graphics();
-    g.fillStyle(0x000000, 0.4);
-    g.fillCircle(0, 4, 34);
-    g.fillStyle(0x6a4a2a, 1);
-    g.fillCircle(0, 0, 34);
-    g.lineStyle(4, 0xffd36b, 0.95);
-    g.strokeCircle(0, 0, 34);
+    g.fillStyle(0x3a2a1a, 1);
+    g.fillRect(-3, -6, 6, 28);
+    g.fillStyle(0x000000, 0.35);
+    g.fillRoundedRect(-42, -34, 84, 40, 10);
+    g.fillStyle(0x12363a, 0.95);
+    g.fillRoundedRect(-42, -38, 84, 40, 10);
+    g.lineStyle(3, 0x5ad6c8, 1);
+    g.strokeRoundedRect(-42, -38, 84, 40, 10);
     for (let k = 0; k < 3; k++) {
-      g.fillStyle(k < step ? 0xffd36b : 0x000000, k < step ? 1 : 0.5);
-      g.fillCircle((k - 1) * 18, 0, 7);
+      g.fillStyle(k < step ? 0x9dfff0 : 0x000000, k < step ? 1 : 0.55);
+      g.fillRoundedRect((k - 1) * 22 - 8, -24, 16, 12, 4);
     }
     c.add(g);
-    this.tweens.add({ targets: c, scale: 1.08, duration: 700 + i * 60, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
-    const z = this.add.zone(0, 0, 100, 100).setInteractive({ useHandCursor: true });
+    const z = this.add.zone(0, -14, 100, 76).setInteractive({ useHandCursor: true });
     z.on('pointerup', (ptr: Phaser.Input.Pointer) => !this.wasSwipe(ptr) && !this.modal && P.showStreet(this, i));
     c.add(z);
     this.labels.add(c);
+    this.boxes.push({ kind: 'street', owner: i, id: `street ${i + 1}`, x: p.x - 42, y: p.y - 38, w: 84, h: 60 });
   }
 
   /** Lumo в надетом образе (с питомцем) прогуливается по тропинке у первой постройки. */

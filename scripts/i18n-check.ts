@@ -139,10 +139,11 @@ console.log(`Ключей: ${keys.length} × ${Object.keys(TABLES).length} яз�
 // ---------------------------------------------------------------------------
 // 2. Вёрстка в браузере
 
-async function layout() {
-  const lang = flag('lang') ?? 'qps';
-  const [vw, vh] = (flag('size') ?? '375x667').split('x').map(Number);
-  const only = flag('only')?.split(',');
+/** Экраны деревни для проверки перекрытий подписей на настоящих языках (в qps подписи искусственно длинные). */
+const VILLAGE_VIEWS = ['village', 'village-edit', 'village-all', 'village-all-edit', 'village-forest', 'village-forest-edit'];
+
+async function layout(lang = flag('lang') ?? 'qps', only = flag('only')?.split(','), size = flag('size') ?? '375x667') {
+  const [vw, vh] = size.split('x').map(Number);
   const port = 5199;
   const out = `artifacts/i18n${lang === 'qps' ? '' : `-${lang}`}`;
   mkdirSync(out, { recursive: true });
@@ -204,20 +205,50 @@ async function layout() {
     await page.screenshot({ path: `${out}/${name}.png` });
     process.stdout.write(`  ${name}: ${(v as unknown[]).length ? `✗ ${(v as unknown[]).length}` : '✓'}\n`);
   }
+  // Касания: тап по рисунку и по подписи постройки открывает окно (на телефоне камера уменьшает раскладку —
+  // экранные и мировые координаты касания различаются; раньше тап принимался за свайп).
+  if (!only || only.includes('village-tap')) {
+    type A = { tapTargets: (id: string, d?: string) => Promise<Record<string, { x: number; y: number } | null>>; modalOpen: () => boolean };
+    for (const [id, d] of [['mill', 'valley'], ['well', 'valley'], ['lighthouse', 'valley'], ['observatory', 'forest']] as const) {
+      const pts = await page.evaluate(([id, d]) => (window as unknown as { __audit: A }).__audit.tapTargets(id, d), [id, d] as const);
+      for (const where of ['art', 'label'] as const) {
+        const p = pts[where];
+        if (!p) {
+          errors.push(`касание: нет ${where} у ${id}`);
+          continue;
+        }
+        await page.mouse.click(p.x, p.y);
+        await page.waitForTimeout(250);
+        const open = await page.evaluate(() => (window as unknown as { __audit: A }).__audit.modalOpen());
+        if (!open) errors.push(`касание: тап по ${where === 'art' ? 'рисунку' : 'подписи'} «${id}» не открыл окно постройки (${vw}x${vh})`);
+      }
+    }
+    process.stdout.write('  village-tap: проверено\n');
+  }
   await browser.close();
   stopVite();
+  // Порт освобождается не сразу — следующий проход запускает vite на том же порту.
+  await new Promise((r) => setTimeout(r, 1500));
   // Один и тот же ключ на одном экране — одной строкой.
   const seen = new Set<string>();
   for (const f of found) {
     const id = `${f.view}|${f.key}|${f.reason}`;
     if (seen.has(id)) continue;
     seen.add(id);
-    errors.push(f.reason === 'rawid' ? `id вместо названия: ${f.view} · ${f.key} «${f.text}»` : `вёрстка: ${f.view} · ${f.key} · ${f.reason} +${f.over}px «${f.text}»`);
+    errors.push(f.reason === 'overlap' ? `перекрытие на карте деревни: ${f.view} · ${f.key} (${f.text})` : f.reason === 'rawid' ? `id вместо названия: ${f.view} · ${f.key} «${f.text}»` : `вёрстка: ${f.view} · ${f.key} · ${f.reason} +${f.over}px «${f.text}»`);
   }
   console.log(`Экранов: ${names.filter((n) => !only || only.includes(n)).length}, скриншоты — ${out}/`);
 }
 
-if (!args.includes('--static')) await layout();
+if (!args.includes('--static')) {
+  await layout();
+  // Без --lang/--only: ещё карта деревни на русском и английском — подписи и ценники не под соседними постройками.
+  if (!flag('lang') && !flag('only')) {
+    for (const l of ['ru', 'en']) await layout(l, VILLAGE_VIEWS);
+    // Касания — и на высоком экране: там камера сдвигает раскладку, и экранные координаты касания расходятся с мировыми.
+    await layout('qps', ['village-tap'], '390x844');
+  }
+}
 for (const w of warn) console.log(`⚠ ${w}`);
 if (errors.length) {
   for (const e of errors) console.log(`✗ ${e}`);

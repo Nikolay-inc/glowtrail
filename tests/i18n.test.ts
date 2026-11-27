@@ -73,3 +73,16 @@ describe('UIText: перенос, уменьшение, многоточие', (
     expect(cut.lines[1].endsWith('…')).toBe(true);
   });
 });
+
+describe('единое название мира', () => {
+  afterEach(() => setLocale('ru'));
+
+  it('на карте (world.valley) и в деревне (district.valley) — одно и то же название на всех языках', () => {
+    const want: Record<string, string> = { ru: 'Долина', en: 'The Valley', uk: 'Долина' };
+    for (const lang of ['ru', 'en', 'uk'] as Lang[]) {
+      setLocale(lang);
+      expect(tk('world.valley'), lang).toBe(want[lang]);
+      expect(tk('district.valley'), lang).toBe(tk('world.valley'));
+    }
+  });
+});

@@ -37,6 +37,8 @@ export interface BuildingView {
   residents: number;
   /** Лопасти мельницы / водяное колесо — крутятся, когда постройка восстановлена. */
   rotor?: Phaser.GameObjects.Graphics;
+  /** Радиус лопастей / колеса (для раскладки: чтобы ничто не попадало под лопасти). */
+  rotorR?: number;
   /** Где луч маяка. */
   beam?: { x: number; y: number };
 }
@@ -1055,6 +1057,7 @@ function valley(b: B, id: string): Up | null {
       rotor.fillCircle(0, 0, 9);
       v.objects.push(rotor);
       v.rotor = rotor;
+      v.rotorR = 132;
       return {
         l: -64,
         r: 64,
@@ -1872,6 +1875,7 @@ function forest(b: B, id: string): Up | null {
       rotor.fillCircle(0, 0, 8);
       v.objects.push(rotor);
       v.rotor = rotor;
+      v.rotorR = 70;
       if (!lit) {
         cobweb(g, -39, -74, 16, 1, 1);
         g.fillStyle(p.wood, 1);

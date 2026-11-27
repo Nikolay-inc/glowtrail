@@ -15,13 +15,14 @@ import { showCurrencyIntro, showDailyDialog } from '../ui/meta';
 import { showNameDialog } from '../ui/NameDialog';
 import { showNotEnough } from '../ui/notEnough';
 import { showBloomGift } from '../ui/bloomGift';
+import { overlap, type Box } from '../ui/gesture';
 import { ellipsisLog, type UIBox } from '../ui/UIText';
 
 export interface Violation {
   view: string;
   key: string;
   text: string;
-  reason: 'box' | 'button' | 'panel' | 'screen' | 'rawid';
+  reason: 'box' | 'button' | 'panel' | 'screen' | 'rawid' | 'overlap';
   over: number;
 }
 
@@ -197,6 +198,20 @@ function views(game: Phaser.Game): Record<string, () => Promise<void>> {
     await sleep(500);
     SaveService.update((d) => (d.economy.buildings = keep));
   };
+  // Все постройки долины восстановлены (подписи с огоньками уровня) — обычный вид и «Украсить» с участком.
+  const allLit = async (edit: boolean, plot: number | null) => {
+    const keep = { ...getEconomy().buildings };
+    SaveService.update((d) => (d.economy.buildings = { ...keep, well: 3, bakery: 2, workshop: 2, mill: 1, bridge: 3, garden: 1, chapel: 2, square: 1, lumo: 1, lighthouse: 1 }));
+    const s = (await start('Village')) as unknown as Any & { plot: number | null };
+    if (edit) {
+      s.toggleEdit();
+      if (plot !== null) s.selectPlot(plot);
+    }
+    await sleep(500);
+    SaveService.update((d) => (d.economy.buildings = keep));
+  };
+  v['village-all'] = () => allLit(false, null);
+  v['village-all-edit'] = () => allLit(true, 3);
   // Открытый лесной квартал (последним: отмечает уровень 30 пройденным в сохранении проверки).
   v['village-forest'] = async () => {
     SaveService.update((d) => {
@@ -204,6 +219,11 @@ function views(game: Phaser.Game): Record<string, () => Promise<void>> {
       d.economy.buildings = { ...d.economy.buildings, herbalist: 1, observatory: 2, 'swing-bridge': 3 };
     });
     await start('Village', { district: 'forest' }, 1000);
+  };
+  v['village-forest-edit'] = async () => {
+    const s = (await start('Village', { district: 'forest' }, 1000)) as unknown as Any;
+    s.toggleEdit();
+    await sleep(500);
   };
   return v;
 }
@@ -245,9 +265,39 @@ const RAW_IDS = new Set<string>([...BUILDINGS.map((b) => b.id), ...DISTRICTS, ..
 /** В псевдо-языке все переведённые буквы с акцентами: «голое» слово-id значит, что надпись мимо i18n. */
 const rawIdIn = (s: string) => s.split(/[^a-z0-9-]+/).find((w) => w.length > 2 && RAW_IDS.has(w));
 
+type LBox = Box & { kind: string; owner: number; id: string; road?: boolean };
+/** Что с чем не должно перекрываться на карте деревни. */
+const CLASH: Record<string, string[]> = { label: ['label', 'art'], slot: ['label', 'art', 'walker', 'street', 'slot'], street: ['label', 'art', 'street'] };
+
+/** Карта деревни: подписи и ценники не под соседними постройками (лопастями), слоты и знаки улиц — ни на чём. */
+export function villageOverlaps(boxes: LBox[], view: string, labels = true): Violation[] {
+  const out: Violation[] = [];
+  for (let i = 0; i < boxes.length; i++) {
+    for (let j = 0; j < boxes.length; j++) {
+      if (i === j) continue;
+      const a = boxes[i];
+      const b = boxes[j];
+      if (!CLASH[a.kind]?.includes(b.kind)) continue;
+      if (!labels && (a.kind === 'label' || b.kind === 'label')) continue;
+      if (a.kind === b.kind && j < i) continue;
+      // Своя подпись — под своим рисунком: это не перекрытие.
+      if (a.kind === 'label' && b.kind === 'art' && a.owner === b.owner) continue;
+      // Знак улицы на мосту — мост и есть улица.
+      if (a.kind === 'street' && b.road) continue;
+      if (overlap(a, b, 2)) out.push({ view, key: `${a.id} × ${b.id}`, text: `${a.kind} × ${b.kind}`, reason: 'overlap', over: 0 });
+    }
+  }
+  return out;
+}
+
 /** Надписи активных сцен, которые вылезают за свой контейнер, кнопку, окно или экран, и надписи с id вместо названия. */
 export function check(game: Phaser.Game, view: string): Violation[] {
   const out: Violation[] = [];
+  for (const scene of game.scene.getScenes(true)) {
+    const boxes = (scene as unknown as { boxes?: LBox[]; modal?: unknown }).boxes;
+    // Подписи в псевдо-языке искусственно длинные: их перекрытия проверяются на настоящих языках (второй проход i18n-check).
+    if (scene.scene.key === 'Village' && boxes) out.push(...villageOverlaps(boxes, view, getLocale() !== 'qps'));
+  }
   for (const scene of game.scene.getScenes(true)) {
     const cam = scene.cameras.main;
     const screen: Rect = { x: cam.worldView.x, y: cam.worldView.y, w: cam.worldView.width, h: cam.worldView.height };
@@ -306,6 +356,47 @@ export function install(game: Phaser.Game) {
     open: (name: string) => v[name](),
     check: (name: string) => check(game, name),
     ellipsis: () => ellipsisLog.splice(0),
+    /**
+     * Проверка касаний: открыть деревню и вернуть экранные точки (CSS px) центра рисунка и подписи постройки —
+     * i18n-check нажимает туда мышью и ждёт окно постройки (`modalOpen`).
+     */
+    tapTargets: async (id: string, district = 'valley') => {
+      for (const sc of game.scene.getScenes(true)) if (sc.scene.key !== 'Village') sc.scene.stop();
+      // Лесной квартал открывается после уровня 30.
+      if (district === 'forest') SaveService.update((d) => (d.progress.stars[LEVELS[29].id] = Math.max(1, d.progress.stars[LEVELS[29].id] ?? 0)));
+      game.scene.start('Village', { district });
+      await sleep(900);
+      // Ждём, пока сцена запустится и нарисует карту (камера есть только у работающей сцены).
+      let s = game.scene.getScene('Village') as unknown as { boxes: LBox[]; cameras: Phaser.Cameras.Scene2D.CameraManager; sys: Phaser.Scenes.Systems };
+      for (let n = 0; n < 100 && !(s?.sys.isActive() && s.cameras?.main && s.boxes?.length); n++) {
+        await sleep(100);
+        s = game.scene.getScene('Village') as unknown as typeof s;
+      }
+      const cam = s.cameras.main;
+      const r = game.canvas.getBoundingClientRect();
+      const k = r.width / game.scale.width;
+      const toScreen = (x: number, y: number) => ({ x: r.left + (x - cam.worldView.x) * cam.zoom * k, y: r.top + (y - cam.worldView.y) * cam.zoom * k });
+      const at = (kind: string) => {
+        const b = s.boxes.find((x) => x.kind === kind && x.id === id);
+        // Рисунок — чуть ниже середины (у лопастей мельницы середина прямоугольника — в небе), подпись — по центру.
+        return b ? toScreen(b.x + b.w / 2, kind === 'art' ? b.y + b.h * 0.7 : b.y + b.h / 2) : null;
+      };
+      return { art: at('art'), label: at('label') };
+    },
+    /** Что под указателем в деревне (отладка касаний). */
+    hit: () => {
+      const s = game.scene.getScene('Village');
+      return s.input.hitTestPointer(game.input.activePointer).map((o) => `${o.type} d${(o as unknown as { depth: number }).depth} w${(o as unknown as { width: number }).width}`);
+    },
+    /** Открыто ли окно в деревне (и закрыть его). */
+    modalOpen: () => {
+      const s = game.scene.getScene('Village') as unknown as { modal?: { close: (silent?: boolean) => void; root: Phaser.GameObjects.Container } };
+      const m = s?.modal;
+      // Убрать сразу (без анимации закрытия): затемнение окна иначе перехватит следующее нажатие проверки.
+      m?.close(true);
+      m?.root.destroy();
+      return !!m;
+    },
     /** Ключи без перевода, показанные с прошлого вызова. */
     missing: () => {
       const out = [...missingKeys];
