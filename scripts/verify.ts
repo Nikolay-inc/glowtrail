@@ -13,7 +13,7 @@ import { featuresOf } from '../src/core/generator';
 import type { Level } from '../src/core/types';
 import { portalSides } from '../src/core/portal';
 import { TIP_TEXT } from '../src/tutorial';
-import { ALL_SLOTS, BREATHER_MAX_RATING, BREATHER_MIN_ROADS, EASY_MAX_RATING, EASY_MIN_ROADS, mustBeEasy, FIREFLY_FROM, MAX_H, MAX_W, NOVELTY, RATING_TOLERANCE, slotOf, type NoveltyTest, type Role } from '../src/levels/curve';
+import { ALL_SLOTS, MEDIUM_MIN_ROADS, needsChoice, BREATHER_MAX_RATING, BREATHER_MIN_ROADS, EASY_MAX_RATING, EASY_MIN_ROADS, mustBeEasy, FIREFLY_FROM, MAX_H, MAX_W, NOVELTY, RATING_TOLERANCE, slotOf, type NoveltyTest, type Role } from '../src/levels/curve';
 import { fogFair } from '../src/core/fog';
 import { WORLDS, worldOf } from '../src/levels/worlds';
 
@@ -128,6 +128,8 @@ for (const [i, level] of LEVELS.entries()) {
     if (level.stars.two !== want.two || level.stars.three !== want.three) {
       err.push(`звёзды ${level.stars.two}/${level.stars.three}, по формуле нужно ${want.two}/${want.three}`);
     }
+    // 2★ и 3★ должны требовать разного: иначе вторая звезда ничего не значит (нужен запас хотя бы 3 плитки).
+    if (level.stars.two >= level.stars.three) err.push(`пороги звёзд 2★ (${level.stars.two}) и 3★ (${level.stars.three}) не различаются — нужен больший запас`);
     // Колоды незаметного облегчения: +1 и +2 плитки к исходной, обе решаемы.
     if (!level.easeDecks || level.easeDecks.length < 2) {
       err.push('нет колод облегчения — запусти npm run ease');
@@ -170,6 +172,7 @@ for (const [i, level] of LEVELS.entries()) {
   } else if (slot) {
     plan = `${slot.intro ? 'знакомство' : ROLE_RU[slot.role]} ~${slot.rating}${slot.goal === 'fireflies' ? ', светлячки' : slot.goal === 'escape' ? ', побег' : ''}`;
     if (r.roads < 2) err.push('одно решение — по плану мира таких уровней нет');
+    if (needsChoice(slot) && r.roads < MEDIUM_MIN_ROADS) err.push(`${ROLE_RU[slot.role]} — нужно решений ≥ ${MEDIUM_MIN_ROADS} (сейчас ${r.roads})`);
     if (level.goal !== (slot.goal ?? 'classic')) warn.push(`цель ${level.goal}, по плану ${slot.goal ?? 'classic'}`);
     if (mustBeEasy(slot) && (m.rating > EASY_MAX_RATING || r.roads < EASY_MIN_ROADS)) {
       err.push(`${slot.intro ? 'знакомство с механикой' : 'лёгкий'} — нужен рейтинг ≤ ${EASY_MAX_RATING} и решений ≥ ${EASY_MIN_ROADS} (сейчас ${m.rating} и ${r.roads})`);

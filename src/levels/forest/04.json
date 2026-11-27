@@ -2,59 +2,86 @@
   "id": "forest-04",
   "name": "Через ручей",
   "grid": [
-    ".....#",
-    "#....S",
-    "....b#",
+    "..LL..",
+    "..L...",
+    "b..#.#",
+    "......",
+    "E..a.b",
     "~~~~~~",
-    ".a...a",
-    ".Eb...",
-    "..L..."
+    "#.a..S"
   ],
-  "startDir": "W",
+  "startDir": "N",
   "deck": [
+    "bridge",
+    "straight2",
     "right",
-    "left",
+    "straight",
     "straight",
     "right",
+    "straight2",
+    "right",
     "left",
     "right",
+    "left",
+    "straight2",
+    "straight2",
     "right",
-    "right"
+    "straight2",
+    "straight2",
+    "straight2"
   ],
   "stars": {
-    "two": 1,
-    "three": 2
+    "two": 3,
+    "three": 5
   },
   "easeDecks": [
     [
+      "bridge",
+      "straight2",
+      "right",
+      "straight",
+      "straight2",
+      "straight",
+      "right",
+      "straight2",
       "right",
       "left",
-      "straight",
       "right",
       "left",
       "straight2",
+      "straight2",
       "right",
-      "right",
-      "right"
+      "straight2",
+      "straight2",
+      "straight2"
     ],
     [
+      "bridge",
+      "straight2",
+      "right",
+      "straight",
+      "straight2",
+      "straight",
+      "straight2",
+      "right",
+      "straight2",
       "right",
       "left",
-      "straight",
       "right",
       "left",
       "straight2",
-      "straight",
+      "straight2",
       "right",
-      "right",
-      "right"
+      "straight2",
+      "straight2",
+      "straight2"
     ]
   ],
   "metrics": {
-    "rating": 3.5,
-    "roads": 3,
-    "minTiles": 5,
-    "reserve": 3,
-    "trap": 0.28
+    "rating": 3.6,
+    "roads": 10,
+    "minTiles": 11,
+    "reserve": 6,
+    "trap": 0.21
   }
 }

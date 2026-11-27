@@ -261,6 +261,9 @@ export function forestDrops(scene: Phaser.Scene, area: { x: number; y: number; w
 // ---------------------------------------------------------------------------
 // Тень
 
+/** Табличка отсчёта тени — в углу клетки старта (доля клетки от центра по x и y). */
+export const SHADOW_BADGE_OFFSET = 0.37;
+
 /** Точка дороги для тени: центр клетки; gap — сюда тень «перепрыгивает» через кольцо. */
 interface ShadowPt {
   x: number;
@@ -288,17 +291,18 @@ export class ShadowView {
   ) {
     const { cell } = geom;
     const s = geom.center(level.start.y * level.width + level.start.x);
-    // Табличка на старте: через сколько ходов появится тень.
+    // Табличка на старте: через сколько ходов появится тень. В верхнем левом углу клетки — не на фигурке Lumo
+    // (Lumo стоит по центру, шляпа и посох не доходят до угла).
     const bg = scene.add.graphics();
-    const r = cell * 0.19;
+    const r = cell * 0.135;
     bg.fillStyle(0x000000, 0.4);
     bg.fillCircle(0, r * 0.15, r);
     bg.fillStyle(0x24123c, 1);
     bg.fillCircle(0, 0, r);
     bg.lineStyle(cell * 0.025, 0xb98cff, 1);
     bg.strokeCircle(0, 0, r);
-    this.badgeText = scene.add.text(0, 0, String(level.shadow), { fontFamily: FONT, fontSize: `${Math.round(cell * 0.22)}px`, color: '#e8d8ff', fontStyle: 'bold' }).setOrigin(0.5);
-    this.badge = scene.add.container(s.x - cell * 0.3, s.y - cell * 0.3, [bg, this.badgeText]).setDepth(6.93);
+    this.badgeText = scene.add.text(0, 0, String(level.shadow), { fontFamily: FONT, fontSize: `${Math.round(cell * 0.17)}px`, color: '#e8d8ff', fontStyle: 'bold' }).setOrigin(0.5);
+    this.badge = scene.add.container(s.x - cell * SHADOW_BADGE_OFFSET, s.y - cell * SHADOW_BADGE_OFFSET, [bg, this.badgeText]).setDepth(7.02);
     this.trail = scene.add.graphics().setDepth(2.2);
     this.blob = this.makeBlob(cell).setPosition(s.x, s.y).setVisible(false).setDepth(6.94);
   }

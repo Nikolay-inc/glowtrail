@@ -15,7 +15,7 @@ import Phaser from 'phaser';
 import { addTabBar, addWallet, showCurrencyIntro, showDailyDialog } from '../ui/meta';
 import { dailyAvailable, syncChallenges } from '../meta';
 import { currentView, edgeRows, stretchLayout, type ViewRect } from '../ui/viewport';
-import { isChallenge, LEVELS, numberInWorld, WORLDS, worldById, worldOpen, type World } from '../levels/index';
+import { isChallenge, LEVELS, WORLDS, worldById, worldOpen, type World } from '../levels/index';
 import type { Level } from '../core/types';
 import { setMusicMood, sfx } from '../audio';
 import { hasEnteredWorld, isUnlocked, loadProgress, type Progress } from '../storage';
@@ -916,7 +916,7 @@ export class MenuScene extends Phaser.Scene {
     }
     c.add(g);
     if (unlocked) {
-      c.add(text(this, 0, -2, String(numberInWorld(level)), challenge ? 64 : 54, passed ? '#ffe6a8' : C.text));
+      c.add(text(this, 0, -2, String(level.num), challenge ? 64 : 54, passed ? '#ffe6a8' : C.text));
     } else {
       const lg = this.add.graphics();
       drawIcon(lg, 'lock', challenge ? 56 : 46, C.iconDisabled);

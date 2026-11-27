@@ -2,25 +2,28 @@
   "id": "forest-25",
   "name": "Грибной обход",
   "grid": [
-    ".....E",
-    "...a..",
-    "......",
-    "#..#..",
-    "a..L..",
-    "......",
-    ".S#..."
+    "...LE.",
+    "..b...",
+    "...L..",
+    "....a.",
+    "...b.#",
+    "a..#..",
+    "L.S..."
   ],
   "startDir": "N",
   "deck": [
+    "left",
+    "left",
+    "right",
+    "right",
+    "left",
+    "right",
+    "right",
+    "left",
+    "straight2",
+    "left",
     "straight",
-    "left",
-    "right",
-    "left",
-    "right",
-    "right",
-    "right",
-    "left",
-    "straight"
+    "straight2"
   ],
   "stars": {
     "two": 1,
@@ -31,35 +34,41 @@
   "easeDecks": [
     [
       "straight2",
+      "left",
+      "left",
+      "right",
+      "right",
+      "left",
+      "right",
+      "right",
+      "left",
+      "straight2",
+      "left",
       "straight",
-      "left",
-      "right",
-      "left",
-      "right",
-      "right",
-      "right",
-      "left",
-      "straight"
+      "straight2"
     ],
     [
-      "straight2",
       "straight",
-      "left",
-      "right",
-      "left",
-      "right",
       "straight2",
+      "left",
+      "left",
       "right",
       "right",
       "left",
-      "straight"
+      "right",
+      "right",
+      "left",
+      "straight2",
+      "left",
+      "straight",
+      "straight2"
     ]
   ],
   "metrics": {
-    "rating": 4.9,
-    "roads": 2,
-    "minTiles": 6,
+    "rating": 4.4,
+    "roads": 7,
+    "minTiles": 9,
     "reserve": 3,
-    "trap": 0.39
+    "trap": 0.238
   }
 }

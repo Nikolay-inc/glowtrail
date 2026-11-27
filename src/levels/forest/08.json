@@ -2,73 +2,76 @@
   "id": "forest-08",
   "name": "Фонари в тумане",
   "grid": [
-    "...###",
-    ".E#...",
-    "...LL.",
-    "....L.",
-    "...#..",
+    "....S.",
     "......",
+    "......",
+    ".....L",
     "~~~~~~",
-    "...S.."
+    "..L#..",
+    ".E....",
+    "....#."
   ],
-  "startDir": "N",
+  "startDir": "S",
   "deck": [
-    "bridge",
     "straight",
     "right",
     "left",
-    "right",
     "straight2",
+    "right",
+    "bridge",
     "left",
-    "straight2",
+    "straight",
+    "bridge",
+    "left",
+    "straight",
     "right",
-    "straight2",
-    "right",
-    "left"
+    "right"
   ],
   "stars": {
-    "two": 2,
-    "three": 3
+    "two": 1,
+    "three": 2
   },
   "fog": true,
   "easeDecks": [
     [
-      "bridge",
       "straight",
       "right",
       "left",
-      "right",
       "straight2",
+      "right",
+      "bridge",
+      "right",
       "left",
+      "straight",
+      "bridge",
       "left",
-      "straight2",
+      "straight",
       "right",
-      "straight2",
-      "right",
-      "left"
+      "right"
     ],
     [
+      "straight",
+      "right",
+      "left",
+      "straight2",
+      "right",
       "bridge",
       "straight",
       "right",
       "left",
-      "right",
-      "straight2",
       "straight",
+      "bridge",
       "left",
-      "left",
-      "straight2",
+      "straight",
       "right",
-      "straight2",
-      "right",
-      "left"
+      "right"
     ]
   ],
   "metrics": {
-    "rating": 4.5,
-    "roads": 2,
-    "minTiles": 8,
-    "reserve": 4,
-    "trap": 0.278
+    "rating": 4.6,
+    "roads": 8,
+    "minTiles": 10,
+    "reserve": 3,
+    "trap": 0.262
   }
 }

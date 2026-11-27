@@ -7,7 +7,7 @@ import { geoMinBounded, geoMinTiles } from '../src/core/geo';
 import { solutionOf, solveLevel, TooManyStates } from '../src/core/solver';
 import type { LevelData, TileKind } from '../src/core/types';
 import { isChallenge, LEVELS, levelById, nextLevelOf, numberInWorld, WORLDS } from '../src/levels/index';
-import { ALL_SLOTS, BREATHER_MAX_RATING, BREATHER_MIN_ROADS, EASY_MAX_RATING, EASY_MIN_ROADS, FOREST_PLAN, mustBeEasy, MAX_H, MAX_W, NOVELTY, VALLEY_PLAN } from '../src/levels/curve';
+import { ALL_SLOTS, MEDIUM_MIN_ROADS, needsChoice, BREATHER_MAX_RATING, BREATHER_MIN_ROADS, EASY_MAX_RATING, EASY_MIN_ROADS, FOREST_PLAN, mustBeEasy, MAX_H, MAX_W, NOVELTY, VALLEY_PLAN } from '../src/levels/curve';
 import { fogFair } from '../src/core/fog';
 import { featuresOf } from '../src/core/generator';
 
@@ -274,5 +274,24 @@ describe('мир «Туманный лес»', () => {
     expect(avg(41)).toBeLessThan(avg(51));
     const last = LEVELS.slice(50, 60).map((l) => l.metrics!.rating);
     expect(last[9]).toBe(Math.max(...last));
+  });
+});
+
+describe('правила кривой для всех миров', () => {
+  it('средние и «сложнее» (не испытания) — не меньше 4 решений', () => {
+    for (const slot of ALL_SLOTS) {
+      if (!needsChoice(slot)) continue;
+      const l = LEVELS[slot.num - 1];
+      expect(l.metrics!.roads, `${slot.num} ${l.id}`).toBeGreaterThanOrEqual(MEDIUM_MIN_ROADS);
+    }
+  });
+
+  it('пороги звёзд 2★ и 3★ различаются на всех уровнях с колодой', () => {
+    for (const l of LEVELS) if (!l.tileSet) expect(l.stars.two, `${l.num} ${l.id}: ${l.stars.two}/${l.stars.three}`).toBeLessThan(l.stars.three);
+  });
+
+  it('номера сквозные во всей игре: лес начинается с 31 (на поле, карте, в победе и аналитике — level.num)', () => {
+    LEVELS.forEach((l, i) => expect(l.num).toBe(i + 1));
+    expect(LEVELS.find((l) => l.id === 'forest-05')!.num).toBe(35);
   });
 });

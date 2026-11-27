@@ -2,76 +2,67 @@
   "id": "forest-24",
   "name": "Болото",
   "grid": [
-    "L.E...",
+    "...L#.",
     "......",
-    "......",
-    "~~~~~~",
-    "....#.",
+    "E.....",
+    "....L.",
+    "~~.~~~",
     ".#....",
-    ".#L.S."
+    "..#S.L"
   ],
   "startDir": "N",
   "deck": [
-    "bridge",
-    "right",
-    "left",
-    "left",
-    "right",
-    "straight",
-    "left",
-    "right",
     "straight",
     "right",
-    "bridge",
     "left",
-    "straight2"
+    "straight",
+    "right",
+    "left",
+    "straight2",
+    "left",
+    "left",
+    "straight"
   ],
   "stars": {
     "two": 2,
-    "three": 4
+    "three": 3
   },
   "shadow": 4,
   "goal": "escape",
   "easeDecks": [
     [
       "bridge",
-      "right",
-      "left",
-      "left",
-      "right",
       "straight",
+      "right",
+      "left",
+      "straight",
+      "right",
+      "left",
       "straight2",
       "left",
-      "right",
-      "straight",
-      "right",
-      "bridge",
       "left",
-      "straight2"
+      "straight"
     ],
     [
-      "straight",
       "bridge",
-      "right",
-      "left",
-      "left",
-      "right",
       "straight",
+      "right",
+      "left",
+      "straight2",
+      "straight",
+      "right",
+      "left",
       "straight2",
       "left",
-      "right",
-      "straight",
-      "right",
-      "bridge",
       "left",
-      "straight2"
+      "straight"
     ]
   ],
   "metrics": {
     "rating": 4.5,
-    "roads": 2,
-    "minTiles": 8,
-    "reserve": 5,
-    "trap": 0.308
+    "roads": 7,
+    "minTiles": 6,
+    "reserve": 4,
+    "trap": 0.412
   }
 }

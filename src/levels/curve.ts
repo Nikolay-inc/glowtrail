@@ -48,6 +48,11 @@ export const BREATHER_MIN_ROADS = 10;
 export const EASY_MAX_RATING = 3;
 export const EASY_MIN_ROADS = 10;
 
+/** Средние и «сложнее» (кроме испытаний): решений не меньше — у таких уровней должен быть выбор пути. */
+export const MEDIUM_MIN_ROADS = 4;
+/** Роль требует выбора пути (не меньше MEDIUM_MIN_ROADS решений). */
+export const needsChoice = (slot: Slot) => slot.role === 'medium' || slot.role === 'harder';
+
 /** Уровень должен быть лёгким: роль «лёгкий» или знакомство с механикой. */
 export const mustBeEasy = (slot: Slot) => slot.role === 'easy' || !!slot.intro;
 
@@ -110,7 +115,7 @@ export const VALLEY_PLAN: Slot[] = [
   S(26, 'medium', 5, '6x8', ['fade', 'rock'], ['lantern', 'water', 'firefly'], 'Тающий свет'),
   S(27, 'medium', 5, '6x8', ['fade', 'water'], ['lantern', 'rock', 'firefly'], 'Туманная лощина'),
   S(28, 'breather', 3, '5x7', ['fade'], ['rock', 'firefly'], 'Тихий луг'),
-  S(29, 'harder', 6, '6x8', ['fade', 'lantern'], [...BASIC, 'jump'], 'Ночная переправа', { night: true }),
+  S(29, 'harder', 5.5, '6x8', ['fade', 'lantern'], [...BASIC, 'jump'], 'Ночная переправа', { night: true }),
   // 30: испытание — всё вместе
   S(30, 'challenge', 6.5, '6x8', ['jump', 'turnbridge', 'fade'], BASIC, 'Сердце долины', { night: true }),
 ];

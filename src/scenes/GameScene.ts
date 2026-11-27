@@ -40,7 +40,7 @@ import { buttonRichLabel, drawCoin, drawLight, toast } from '../ui/meta';
 import { coins, freeHintsPerDay, HINT_PRICE, villageBonuses } from '../core/economy';
 import { easeDeck, findExtraTiles, findHint, nearestSolvable } from '../core/solver';
 import type { Level, TileKind } from '../core/types';
-import { LEVELS, nextLevelOf, numberInWorld, worldOf } from '../levels/index';
+import { LEVELS, nextLevelOf, worldOf } from '../levels/index';
 import { sfx, duckMusic, setMusicMood } from '../audio';
 import type { Quest } from '../core/quests';
 import { hasEnteredWorld, loadProgress, logEvent, lossStreak, recordLoss, recordSkip, startAttempt, type LogEvent } from '../storage';
@@ -239,7 +239,7 @@ export class GameScene extends Phaser.Scene {
 
     // Верхняя панель: уровень и строка цели (арка + фонари «зажжено/всего»)
     new Button(this, 90, this.topY, { w: 130, h: 130, icon: 'menu', onClick: () => this.leave('Menu') });
-    text(this, W / 2, this.topY - 22, this.custom ? t('custom_level') : t('level_n', { n: numberInWorld(level) }), 50, C.text, true, { w: 460 });
+    text(this, W / 2, this.topY - 22, this.custom ? t('custom_level') : t('level_n', { n: level.num }), 50, C.text, true, { w: 460 });
     this.badgesG = this.add.graphics().setDepth(1);
     this.goalText = text(this, 0, this.topY + 58, '', 40).setOrigin(0, 0.5).setDepth(2);
     this.ffText = text(this, 0, this.topY + 58, '', 40).setOrigin(0, 0.5).setDepth(2);
@@ -1556,7 +1556,7 @@ export class GameScene extends Phaser.Scene {
     const top = top0;
     // Аватарка игрока — значком на верхнем краю окна.
     o.add(createAvatarBadge(this, W / 2, top, 86, currentLook(), { selected: true, animate: true }).setData('avatarBadge', true));
-    o.add(text(this, W / 2, top + 130, isLast ? t('all_lit') : this.custom ? t('custom_level') : t('level_n', { n: numberInWorld(this.level) }), isLast ? 56 : 46, C.textDim, true, { w: 860 }));
+    o.add(text(this, W / 2, top + 130, isLast ? t('all_lit') : this.custom ? t('custom_level') : t('level_n', { n: this.level.num }), isLast ? 56 : 46, C.textDim, true, { w: 860 }));
     o.add(text(this, W / 2, top + 205, t('passed'), 84, C.text, true, { w: 860 }));
     const starG = this.add.graphics();
     o.add(starG);

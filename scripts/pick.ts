@@ -16,7 +16,7 @@ import { easeDeck, TooManyStates } from '../src/core/solver';
 import type { DifficultyReport } from '../src/core/difficulty';
 import { starThresholds } from '../src/core/game';
 import type { LevelData } from '../src/core/types';
-import { BREATHER_MAX_RATING, BREATHER_MIN_ROADS, EASY_MAX_RATING, EASY_MIN_ROADS, mustBeEasy, WORLD_PLANS, type Slot } from '../src/levels/curve';
+import { BREATHER_MAX_RATING, BREATHER_MIN_ROADS, EASY_MAX_RATING, EASY_MIN_ROADS, MEDIUM_MIN_ROADS, mustBeEasy, needsChoice, WORLD_PLANS, type Slot } from '../src/levels/curve';
 
 const dry = process.argv.includes('--dry');
 const onlyArg = process.argv.indexOf('--only');
@@ -58,6 +58,9 @@ function fits(slot: Slot, c: Candidate): boolean {
   if ((c.data.goal ?? 'classic') !== (slot.goal ?? 'classic')) return false;
   if (slot.role === 'breather' && (c.metrics.rating > BREATHER_MAX_RATING || c.metrics.roads < BREATHER_MIN_ROADS)) return false;
   if (mustBeEasy(slot) && (c.metrics.rating > EASY_MAX_RATING || c.metrics.roads < EASY_MIN_ROADS)) return false;
+  // Средние и «сложнее» — не меньше 4 решений; пороги звёзд 2★ и 3★ различаются (запас хотя бы 3 плитки).
+  if (needsChoice(slot) && c.metrics.roads < MEDIUM_MIN_ROADS) return false;
+  if (c.data.stars.two >= c.data.stars.three) return false;
   const f = featuresOf(parseLevel(c.data));
   if (!slot.needs.every((x) => f.includes(x))) return false;
   if (!f.every((x) => slot.needs.includes(x) || slot.allows.includes(x))) return false;
