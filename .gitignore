@@ -10,3 +10,7 @@ dist
 # Кандидаты генератора уровней (npm run gen) — воспроизводятся по seed
 generated/
 artifacts/
+
+# Конфигурация Firebase для приложения (кладёт пользователь, в git не идёт)
+ios/App/App/GoogleService-Info.plist
+android/app/google-services.json

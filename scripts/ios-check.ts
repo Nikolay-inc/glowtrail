@@ -1,7 +1,7 @@
 // npm run ios:check — проверка iOS-проекта перед архивом для TestFlight: версия и номер сборки, команда и Bundle ID,
 // имя под иконкой,
 // автоматическая подпись, privacy manifest в ресурсах, ITSAppUsesNonExemptEncryption, иконка 1024×1024 без
-// прозрачности, адрес для отзывов задан.
+// прозрачности, адрес для отзывов задан, Firebase (GoogleService-Info.plist) и Sentry (DSN) подключены.
 
 import { existsSync, readFileSync } from 'node:fs';
 
@@ -31,6 +31,13 @@ ok(w === 1024 && h === 1024, `иконка ${w}×${h}`);
 ok(icon[25] === 2 || icon[25] === 0, 'иконка без прозрачности');
 const env = ['.env.local', '.env.app.local', '.env.app'].map((f) => (existsSync(f) ? readFileSync(f, 'utf8') : '')).join('\n');
 ok(/^VITE_CONTACT_EMAIL=.+@.+/m.test(env) || /.+@.+/.test(process.env.VITE_CONTACT_EMAIL ?? ''), 'адрес для отзывов (VITE_CONTACT_EMAIL в .env.local)');
+
+// Аналитика и ошибки (Р5): GoogleService-Info.plist лежит в ios/App/App и добавлен в ресурсы App (перетащить в Xcode),
+// DSN Sentry задан для сборки приложения. Без них игра работает, но статистики и отчётов о сбоях не будет.
+ok(existsSync('ios/App/App/GoogleService-Info.plist') && pbx.includes('GoogleService-Info.plist in Resources'), 'GoogleService-Info.plist в ресурсах App (Firebase)');
+const appEnv = ['.env.app', '.env.app.local', '.env.local', '.env.production'].map((f) => (existsSync(f) ? readFileSync(f, 'utf8') : '')).join('\n');
+ok(/^VITE_SENTRY_DSN=https:\/\/.+/m.test(appEnv), 'VITE_SENTRY_DSN для сборки приложения (.env.app или .env.local)');
+ok(/<key>FIREBASE_ANALYTICS_COLLECTION_ENABLED<\/key>\s*<false\/>/.test(plist), 'Firebase Analytics выключен до согласия (Info.plist)');
 
 if (errors.length) {
   console.error(`\n✗ Не готово:\n${errors.map((e) => `  - ${e}`).join('\n')}`);

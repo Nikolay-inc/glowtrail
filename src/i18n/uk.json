@@ -642,5 +642,12 @@
   "building.hot-springs.name": "Гарячі джерела",
   "building.stone-bridge.name": "Кам’яний міст",
   "building.star-temple.name": "Зоряний храм",
-  "building.summit-beacon.name": "Маяк на вершині"
+  "building.summit-beacon.name": "Маяк на вершині",
+  "consent_title": "Допомагати покращувати гру?",
+  "consent_text": "Можна надсилати анонімну статистику: які рівні проходять, де застрягають, що купують у селі. Без імені, пошти та реклами.",
+  "consent_note": "Вибір можна змінити будь-коли в профілі.",
+  "consent_yes": "Так, допомагати",
+  "consent_no": "Ні, дякую",
+  "set_analytics_on": "Анонімна статистика: увімк.",
+  "set_analytics_off": "Анонімна статистика: вимк."
 }

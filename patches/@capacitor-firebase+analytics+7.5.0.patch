@@ -1,0 +1,140 @@
+diff --git a/node_modules/@capacitor-firebase/analytics/Package.swift b/node_modules/@capacitor-firebase/analytics/Package.swift
+index 8e6f916..13e59ef 100644
+--- a/node_modules/@capacitor-firebase/analytics/Package.swift
++++ b/node_modules/@capacitor-firebase/analytics/Package.swift
+@@ -11,7 +11,7 @@ let package = Package(
+     ],
+     dependencies: [
+         .package(url: "https://github.com/ionic-team/capacitor-swift-pm.git", from: "7.0.0"),
+-        .package(url: "https://github.com/firebase/firebase-ios-sdk.git", .upToNextMajor(from: "11.7.0"))
++        .package(url: "https://github.com/firebase/firebase-ios-sdk.git", .upToNextMajor(from: "11.15.0"))
+     ],
+     targets: [
+         .target(
+@@ -19,9 +19,8 @@ let package = Package(
+             dependencies: [
+                 .product(name: "Capacitor", package: "capacitor-swift-pm"),
+                 .product(name: "Cordova", package: "capacitor-swift-pm"),
+-                .product(name: "FirebaseAnalytics", package: "firebase-ios-sdk"),
+-                .product(name: "FirebaseCore", package: "firebase-ios-sdk"),
+-                .product(name: "FirebaseAnalyticsOnDeviceConversion", package: "firebase-ios-sdk")
++                .product(name: "FirebaseAnalyticsCore", package: "firebase-ios-sdk"),
++                .product(name: "FirebaseCore", package: "firebase-ios-sdk")
+             ],
+             path: "ios/Plugin"),
+         .testTarget(
+diff --git a/node_modules/@capacitor-firebase/analytics/ios/Plugin/FirebaseAnalyticsPlugin.swift b/node_modules/@capacitor-firebase/analytics/ios/Plugin/FirebaseAnalyticsPlugin.swift
+index 27b8e18..8b3fe49 100644
+--- a/node_modules/@capacitor-firebase/analytics/ios/Plugin/FirebaseAnalyticsPlugin.swift
++++ b/node_modules/@capacitor-firebase/analytics/ios/Plugin/FirebaseAnalyticsPlugin.swift
+@@ -43,10 +43,13 @@ public class FirebaseAnalyticsPlugin: CAPPlugin, CAPBridgedPlugin {
+     private var implementation: FirebaseAnalytics?
+ 
+     override public func load() {
++        // Glowtrail: without GoogleService-Info.plist Firebase stays off (configure() would crash the app).
++        guard FirebaseApp.app() != nil || Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") != nil else { return }
+         implementation = FirebaseAnalytics()
+     }
+ 
+     @objc func getAppInstanceId(_ call: CAPPluginCall) {
++        guard implementation != nil else { call.reject("Firebase is not configured."); return }
+         let appInstanceId = implementation?.getAppInstanceId()
+         var result = JSObject()
+         if appInstanceId != nil {
+@@ -56,6 +59,7 @@ public class FirebaseAnalyticsPlugin: CAPPlugin, CAPBridgedPlugin {
+     }
+ 
+     @objc func setConsent(_ call: CAPPluginCall) {
++        guard implementation != nil else { call.reject("Firebase is not configured."); return }
+         guard let consentType = FirebaseAnalyticsHelper.mapStringToConsentType(call.getString("type")) else {
+             call.reject(errorConsentTypeMissing)
+             return
+@@ -69,12 +73,14 @@ public class FirebaseAnalyticsPlugin: CAPPlugin, CAPBridgedPlugin {
+     }
+ 
+     @objc func setUserId(_ call: CAPPluginCall) {
++        guard implementation != nil else { call.reject("Firebase is not configured."); return }
+         let userId = call.getString("userId")
+         implementation?.setUserId(userId)
+         call.resolve()
+     }
+ 
+     @objc func setUserProperty(_ call: CAPPluginCall) {
++        guard implementation != nil else { call.reject("Firebase is not configured."); return }
+         guard let key = call.getString("key") else {
+             call.reject(errorKeyMissing)
+             return
+@@ -85,6 +91,7 @@ public class FirebaseAnalyticsPlugin: CAPPlugin, CAPBridgedPlugin {
+     }
+ 
+     @objc func setCurrentScreen(_ call: CAPPluginCall) {
++        guard implementation != nil else { call.reject("Firebase is not configured."); return }
+         let screenName = call.getString("screenName")
+         let screenClass = call.getString("screenClassOverride")
+         implementation?.setCurrentScreen(screenName, screenClass)
+@@ -92,6 +99,7 @@ public class FirebaseAnalyticsPlugin: CAPPlugin, CAPBridgedPlugin {
+     }
+ 
+     @objc func logEvent(_ call: CAPPluginCall) {
++        guard implementation != nil else { call.reject("Firebase is not configured."); return }
+         guard let name = call.getString("name") else {
+             call.reject(errorNameMissing)
+             return
+@@ -102,12 +110,14 @@ public class FirebaseAnalyticsPlugin: CAPPlugin, CAPBridgedPlugin {
+     }
+ 
+     @objc func setSessionTimeoutDuration(_ call: CAPPluginCall) {
++        guard implementation != nil else { call.reject("Firebase is not configured."); return }
+         let duration = call.getInt("duration") ?? 1800
+         implementation?.setSessionTimeoutDuration(duration)
+         call.resolve()
+     }
+ 
+     @objc func setEnabled(_ call: CAPPluginCall) {
++        guard implementation != nil else { call.reject("Firebase is not configured."); return }
+         guard let enabled = call.getBool("enabled") else {
+             call.reject(errorEnabledMissing)
+             return
+@@ -117,15 +127,18 @@ public class FirebaseAnalyticsPlugin: CAPPlugin, CAPBridgedPlugin {
+     }
+ 
+     @objc func isEnabled(_ call: CAPPluginCall) {
++        guard implementation != nil else { call.reject("Firebase is not configured."); return }
+         call.unimplemented("Not implemented on iOS.")
+     }
+ 
+     @objc func resetAnalyticsData(_ call: CAPPluginCall) {
++        guard implementation != nil else { call.reject("Firebase is not configured."); return }
+         implementation?.resetAnalyticsData()
+         call.resolve()
+     }
+ 
+     @objc func initiateOnDeviceConversionMeasurementWithEmailAddress(_ call: CAPPluginCall) {
++        guard implementation != nil else { call.reject("Firebase is not configured."); return }
+         guard let emailAddress = call.getString("emailAddress") else {
+             call.reject(errorEmailAddressMissing)
+             return
+@@ -139,6 +152,7 @@ public class FirebaseAnalyticsPlugin: CAPPlugin, CAPBridgedPlugin {
+     }
+ 
+     @objc func initiateOnDeviceConversionMeasurementWithPhoneNumber(_ call: CAPPluginCall) {
++        guard implementation != nil else { call.reject("Firebase is not configured."); return }
+         guard let phoneNumber = call.getString("phoneNumber") else {
+             call.reject(errorPhoneNumberMissing)
+             return
+@@ -152,6 +166,7 @@ public class FirebaseAnalyticsPlugin: CAPPlugin, CAPBridgedPlugin {
+     }
+ 
+     @objc func initiateOnDeviceConversionMeasurementWithHashedEmailAddress(_ call: CAPPluginCall) {
++        guard implementation != nil else { call.reject("Firebase is not configured."); return }
+         guard let email = call.getString("emailAddressToHash") else {
+             call.reject(errorEmailAddressToHashMissing)
+             return
+@@ -167,6 +182,7 @@ public class FirebaseAnalyticsPlugin: CAPPlugin, CAPBridgedPlugin {
+     }
+ 
+     @objc func initiateOnDeviceConversionMeasurementWithHashedPhoneNumber(_ call: CAPPluginCall) {
++        guard implementation != nil else { call.reject("Firebase is not configured."); return }
+         guard let phone = call.getString("phoneNumberToHash") else {
+             call.reject(errorPhoneNumberToHashMissing)
+             return

@@ -1,0 +1,115 @@
+diff --git a/node_modules/@capacitor-firebase/remote-config/Package.swift b/node_modules/@capacitor-firebase/remote-config/Package.swift
+index 8813e29..e47a389 100644
+--- a/node_modules/@capacitor-firebase/remote-config/Package.swift
++++ b/node_modules/@capacitor-firebase/remote-config/Package.swift
+@@ -11,7 +11,7 @@ let package = Package(
+     ],
+     dependencies: [
+         .package(url: "https://github.com/ionic-team/capacitor-swift-pm.git", from: "7.0.0"),
+-        .package(url: "https://github.com/firebase/firebase-ios-sdk.git", .upToNextMajor(from: "11.7.0"))
++        .package(url: "https://github.com/firebase/firebase-ios-sdk.git", .upToNextMajor(from: "11.15.0"))
+     ],
+     targets: [
+         .target(
+diff --git a/node_modules/@capacitor-firebase/remote-config/ios/Plugin/FirebaseRemoteConfigPlugin.swift b/node_modules/@capacitor-firebase/remote-config/ios/Plugin/FirebaseRemoteConfigPlugin.swift
+index 5a4aa54..987070a 100644
+--- a/node_modules/@capacitor-firebase/remote-config/ios/Plugin/FirebaseRemoteConfigPlugin.swift
++++ b/node_modules/@capacitor-firebase/remote-config/ios/Plugin/FirebaseRemoteConfigPlugin.swift
+@@ -1,5 +1,6 @@
+ import Foundation
+ import Capacitor
++import FirebaseCore
+ 
+ /**
+  * Please read the Capacitor iOS Plugin Development Guide
+@@ -33,10 +34,13 @@ public class FirebaseRemoteConfigPlugin: CAPPlugin, CAPBridgedPlugin {
+     private var pluginCallMap: [String: CAPPluginCall] = [:]
+ 
+     override public func load() {
++        // Glowtrail: without GoogleService-Info.plist Firebase stays off (configure() would crash the app).
++        guard FirebaseApp.app() != nil || Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") != nil else { return }
+         implementation = FirebaseRemoteConfig(plugin: self)
+     }
+ 
+     @objc func activate(_ call: CAPPluginCall) {
++        guard implementation != nil else { call.reject("Firebase is not configured."); return }
+         implementation?.activate(completion: { _, errorMessage in
+             if let errorMessage = errorMessage {
+                 call.reject(errorMessage)
+@@ -47,6 +51,7 @@ public class FirebaseRemoteConfigPlugin: CAPPlugin, CAPBridgedPlugin {
+     }
+ 
+     @objc func fetchAndActivate(_ call: CAPPluginCall) {
++        guard implementation != nil else { call.reject("Firebase is not configured."); return }
+         implementation?.fetchAndActivate(completion: { _, errorMessage in
+             if let errorMessage = errorMessage {
+                 call.reject(errorMessage)
+@@ -57,6 +62,7 @@ public class FirebaseRemoteConfigPlugin: CAPPlugin, CAPBridgedPlugin {
+     }
+ 
+     @objc func fetchConfig(_ call: CAPPluginCall) {
++        guard implementation != nil else { call.reject("Firebase is not configured."); return }
+         let minimumFetchIntervalInSeconds = call.getDouble("minimumFetchIntervalInSeconds") ?? defaultMinimumFetchIntervalInSeconds
+         implementation?.fetchConfig(minimumFetchIntervalInSeconds: minimumFetchIntervalInSeconds, completion: { errorMessage in
+             if let errorMessage = errorMessage {
+@@ -68,6 +74,7 @@ public class FirebaseRemoteConfigPlugin: CAPPlugin, CAPBridgedPlugin {
+     }
+ 
+     @objc func getBoolean(_ call: CAPPluginCall) {
++        guard implementation != nil else { call.reject("Firebase is not configured."); return }
+         guard let key = call.getString("key") else {
+             call.reject(errorKeyMissing)
+             return
+@@ -80,6 +87,7 @@ public class FirebaseRemoteConfigPlugin: CAPPlugin, CAPBridgedPlugin {
+     }
+ 
+     @objc func getNumber(_ call: CAPPluginCall) {
++        guard implementation != nil else { call.reject("Firebase is not configured."); return }
+         guard let key = call.getString("key") else {
+             call.reject(errorKeyMissing)
+             return
+@@ -92,6 +100,7 @@ public class FirebaseRemoteConfigPlugin: CAPPlugin, CAPBridgedPlugin {
+     }
+ 
+     @objc func getString(_ call: CAPPluginCall) {
++        guard implementation != nil else { call.reject("Firebase is not configured."); return }
+         guard let key = call.getString("key") else {
+             call.reject(errorKeyMissing)
+             return
+@@ -104,10 +113,12 @@ public class FirebaseRemoteConfigPlugin: CAPPlugin, CAPBridgedPlugin {
+     }
+ 
+     @objc func setMinimumFetchInterval(_ call: CAPPluginCall) {
++        guard implementation != nil else { call.reject("Firebase is not configured."); return }
+         call.reject("Not available on iOS.")
+     }
+ 
+     @objc func setSettings(_ call: CAPPluginCall) {
++        guard implementation != nil else { call.reject("Firebase is not configured."); return }
+         let fetchTimeoutInSeconds = call.getDouble("fetchTimeoutInSeconds") ?? defaultFetchTimeoutInSeconds
+         let minimumFetchIntervalInSeconds = call.getDouble("minimumFetchIntervalInSeconds") ?? defaultMinimumFetchIntervalInSeconds
+         implementation?.setSettings(fetchTimeoutInSeconds: fetchTimeoutInSeconds, minimumFetchIntervalInSeconds: minimumFetchIntervalInSeconds)
+@@ -115,6 +126,7 @@ public class FirebaseRemoteConfigPlugin: CAPPlugin, CAPBridgedPlugin {
+     }
+ 
+     @objc func getInfo(_ call: CAPPluginCall) {
++        guard implementation != nil else { call.reject("Firebase is not configured."); return }
+         implementation?.getInfo(completion: { lastFetchTime, lastFetchStatus, errorMessage in
+             if let errorMessage = errorMessage {
+                 call.reject(errorMessage)
+@@ -128,6 +140,7 @@ public class FirebaseRemoteConfigPlugin: CAPPlugin, CAPBridgedPlugin {
+     }
+ 
+     @objc func addConfigUpdateListener(_ call: CAPPluginCall) {
++        guard implementation != nil else { call.reject("Firebase is not configured."); return }
+         call.keepAlive = true
+ 
+         guard let callbackId = call.callbackId else {
+@@ -152,6 +165,7 @@ public class FirebaseRemoteConfigPlugin: CAPPlugin, CAPBridgedPlugin {
+     }
+ 
+     @objc func removeConfigUpdateListener(_ call: CAPPluginCall) {
++        guard implementation != nil else { call.reject("Firebase is not configured."); return }
+         guard let callbackId = call.getString("callbackId") else {
+             call.reject(errorCallbackIdMissing)
+             return

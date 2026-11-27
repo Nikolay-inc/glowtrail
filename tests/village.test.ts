@@ -25,7 +25,7 @@ import { applyQuestEvent, claimQuest, dailyQuests, ensureQuests, rerollQuest, we
 import { bloomCandidates, bloomsPending, CHALLENGE_STREET_COINS, claimCozy, cozyLevel, cozyPoints, decorCost, earnChallenge, freeBloom, placeDecor, clearDecor, streetNextPrice, upgradeStreet } from '../src/core/village';
 import { BUILDINGS, buildingCost, costOf, COZY_STEP, decorPrice, streetPrice } from '../src/core/villageData';
 import { CHEST_ITEMS, COZY_ITEMS, FIELD_SLOTS, itemBaseCost, QUEST_ITEMS, WARDROBE } from '../src/core/wardrobe';
-import { migrate } from '../src/save/SaveService';
+import { migrate, SAVE_VERSION } from '../src/save/SaveService';
 
 const rich = (n = 5000): Economy => ({ ...defaultEconomy(), coinsEarned: n });
 const best = { stars: {}, fireflies: {} };
@@ -223,7 +223,7 @@ describe('сохранение v7', () => {
   it('v6: список восстановленных → уровни 1, chapelDay → счётчик часовни', () => {
     const v6 = { version: 6, profile: {}, progress: { unlocked: [], stars: {}, attempts: {}, lossStreak: {}, skipped: {}, fireflies: {} }, economy: { coinsEarned: 100, village: ['well', 'bakery'], chapelDay: '2026-11-25' }, log: [] };
     const d = migrate(v6);
-    expect(d.version).toBe(8);
+    expect(d.version).toBe(SAVE_VERSION);
     expect(d.economy.buildings).toEqual({ well: 1, bakery: 1 });
     expect(d.economy.chapel).toEqual({ day: '2026-11-25', used: 1 });
     expect(d.economy.streets).toEqual({});
@@ -283,7 +283,7 @@ describe('награда испытания (уровни 10, 20, 30)', () => {
   it('сохранение v8: старое — пусто; нормализация и слияние (объединение, выбранное — с этого устройства)', () => {
     const v7 = { version: 7, profile: {}, progress: { unlocked: [], stars: {}, attempts: {}, lossStreak: {}, skipped: {}, fireflies: {} }, economy: { coinsEarned: 10, buildings: { well: 2 } }, log: [] };
     const d = migrate(v7);
-    expect(d.version).toBe(8);
+    expect(d.version).toBe(SAVE_VERSION);
     expect(d.economy.challenges).toEqual({ earned: [], bloomed: {} });
     const n = normalizeEconomy({ challenges: { earned: ['valley-10', 'valley-10', 5], bloomed: { 'valley-10': 'well', 'valley-20': 'mill', 'valley-30': 'nope' } } });
     expect(n.challenges).toEqual({ earned: ['valley-10'], bloomed: { 'valley-10': 'well' } });

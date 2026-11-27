@@ -152,6 +152,8 @@ export class GameScene extends Phaser.Scene {
   private hintKey = '';
   /** В этой попытке была подсказка (задание «пройди без подсказок»). */
   private usedHint = false;
+  /** Подсказок за эту попытку (в лог победы, поражения и выхода). */
+  private hintsUsed = 0;
   /** Задания жителей, выполненные этой победой (показываем на экране победы). */
   private questsDone: Quest[] = [];
   /** Награда испытания этой победы (уровни 10, 20, 30): шаг улицы выдан, расцвет — на выбор в окне. */
@@ -292,7 +294,7 @@ export class GameScene extends Phaser.Scene {
     // Игрок закрыл вкладку посреди уровня — всё равно запишем время попытки.
     const onHide = () => {
       if (this.ended) return;
-      this.log({ ev: 'abandon', level: this.state.level.id, attempt: this.attempt, ms: this.elapsed(), moves: this.state.moves });
+      this.log({ ev: 'abandon', level: this.state.level.id, attempt: this.attempt, ms: this.elapsed(), moves: this.state.moves, ...this.attemptStats(0) });
       this.ended = true;
     };
     window.addEventListener('pagehide', onHide);
@@ -331,6 +333,7 @@ export class GameScene extends Phaser.Scene {
     this.state = createGame(level, deck, Math.floor(Math.random() * 2 ** 31), { stashSlots: ab.stashSlots, rotations: ab.rotations });
     const m = level.metrics;
     this.usedHint = false;
+    this.hintsUsed = 0;
     this.attempt = this.custom ? 1 : startAttempt(level.id, { ...(m ? { rating: m.rating, trap: m.trap, roads: m.roads } : {}), goal_type: level.goal });
     if (extra > 0) this.log({ ev: 'auto_ease', level: level.id, attempt: this.attempt, added: extra, streak: this.streak });
     this.t0 = Date.now();
@@ -790,6 +793,7 @@ export class GameScene extends Phaser.Scene {
   private spendHint(rollback: number) {
     this.log({ ev: 'hint_used', level: this.state.level.id, attempt: this.attempt, rollback: rollback || undefined });
     this.usedHint = true;
+    this.hintsUsed++;
     countHint();
     if (!this.freeHints) spendHint();
     this.hintBtn.setLabel(this.hintLabel());
@@ -1277,9 +1281,15 @@ export class GameScene extends Phaser.Scene {
     return Date.now() - this.t0;
   }
 
+  /** Итог попытки для лога (и аналитики): звёзды, плиток осталось (у бесконечной колоды — нет), подсказки, отмены. */
+  private attemptStats(stars: number): Pick<LogEvent, 'stars' | 'tilesLeft' | 'hints' | 'undos'> {
+    const s = this.state;
+    return { stars, tilesLeft: isInfinite(s.level) ? undefined : tilesLeft(s), hints: this.hintsUsed, undos: s.undosUsed };
+  }
+
   private logAbandon() {
     if (this.ended) return;
-    this.log({ ev: 'abandon', level: this.state.level.id, attempt: this.attempt, ms: this.elapsed(), moves: this.state.moves });
+    this.log({ ev: 'abandon', level: this.state.level.id, attempt: this.attempt, ms: this.elapsed(), moves: this.state.moves, ...this.attemptStats(0) });
     this.ended = true;
   }
 
@@ -1327,9 +1337,7 @@ export class GameScene extends Phaser.Scene {
       attempt: this.attempt,
       ms: this.elapsed(),
       moves: s.moves,
-      stars,
-      tilesLeft: isInfinite(s.level) ? undefined : tilesLeft(s),
-      undos: s.undosUsed,
+      ...this.attemptStats(stars),
     });
     if (s.level.fireflies.length > 0) {
       this.log({ ev: 'fireflies_collected', level: s.level.id, attempt: this.attempt, fireflies: ff, firefliesTotal: s.level.fireflies.length });
@@ -1362,7 +1370,7 @@ export class GameScene extends Phaser.Scene {
     this.ended = true;
     const s = this.state;
     this.streak = this.custom ? this.streak + 1 : recordLoss(s.level.id);
-    this.log({ ev: 'lose', level: s.level.id, attempt: this.attempt, ms: this.elapsed(), moves: s.moves, streak: this.streak });
+    this.log({ ev: 'lose', level: s.level.id, attempt: this.attempt, ms: this.elapsed(), moves: s.moves, streak: this.streak, ...this.attemptStats(0) });
     if (this.streak >= STUCK.pulseHint) this.pulse(this.hintBtn);
     this.time.delayedCall(450, () => {
       if (this.state !== s) return;

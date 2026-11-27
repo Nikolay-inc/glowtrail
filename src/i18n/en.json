@@ -642,5 +642,12 @@
   "building.hot-springs.name": "Hot springs",
   "building.stone-bridge.name": "Stone bridge",
   "building.star-temple.name": "Star temple",
-  "building.summit-beacon.name": "Summit beacon"
+  "building.summit-beacon.name": "Summit beacon",
+  "consent_title": "Help improve the game?",
+  "consent_text": "You can send anonymous statistics: which levels people finish, where they get stuck, what they buy in the village. No name, no email, no ads.",
+  "consent_note": "You can change this at any time in your profile.",
+  "consent_yes": "Yes, help",
+  "consent_no": "No, thanks",
+  "set_analytics_on": "Anonymous statistics: on",
+  "set_analytics_off": "Anonymous statistics: off"
 }

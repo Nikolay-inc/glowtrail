@@ -1,6 +1,7 @@
 /// <reference types="vitest/config" />
 import { existsSync, readFileSync } from 'node:fs';
 import { defineConfig, loadEnv, type Plugin } from 'vite';
+import { sentryVitePlugin } from '@sentry/vite-plugin';
 
 // Версия и номер сборки (scripts/app-version.ts) — показываем в профиле и прикладываем к отзыву.
 const pkg = JSON.parse(readFileSync('package.json', 'utf8')) as { version: string };
@@ -33,13 +34,39 @@ function privacyPage(mode: string): Plugin {
   };
 }
 
-export default defineConfig(({ command, mode }) => ({
-  plugins: [privacyPage(mode)],
+/**
+ * Source maps для Sentry: при сборке с SENTRY_AUTH_TOKEN, SENTRY_ORG и SENTRY_PROJECT (в .env.local или в окружении CI)
+ * карты собираются скрытыми, загружаются в Sentry под релизом glowtrail@<версия>+<сборка> и удаляются из dist —
+ * на сайт и в приложение не попадают. Без токена — обычная сборка без карт.
+ */
+function sentrySourceMaps(command: string, mode: string): Plugin[] {
+  const env = loadEnv(mode, process.cwd(), '');
+  if (command !== 'build' || !env.SENTRY_AUTH_TOKEN || !env.SENTRY_ORG || !env.SENTRY_PROJECT) return [];
+  return sentryVitePlugin({
+    org: env.SENTRY_ORG,
+    project: env.SENTRY_PROJECT,
+    authToken: env.SENTRY_AUTH_TOKEN,
+    url: env.SENTRY_URL || undefined,
+    release: { name: `glowtrail@${pkg.version}+${appBuild}`, dist: String(appBuild) },
+    sourcemaps: { filesToDeleteAfterUpload: ['./dist/**/*.map'] },
+    telemetry: false,
+  });
+}
+
+export default defineConfig(({ command, mode }) => {
+  const maps = sentrySourceMaps(command, mode);
+  return config(command, mode, maps);
+});
+
+const config = (command: string, mode: string, maps: Plugin[]) => ({
+  plugins: [privacyPage(mode), ...maps],
   // GitHub Pages: игра живёт по адресу /glowtrail/. Приложение (Capacitor, mode app): относительные пути.
   // Локально — в корне.
   base: command !== 'build' ? '/' : mode === 'app' ? './' : '/glowtrail/',
   build: {
     chunkSizeWarningLimit: 2000,
+    // Скрытые карты — только для загрузки в Sentry (см. sentrySourceMaps), иначе без карт.
+    sourcemap: maps.length ? ('hidden' as const) : false,
   },
   // npm run i18n-check: без перезагрузки страницы при правке файлов во время проверки.
   server: process.env.GLOW_NO_HMR ? { hmr: false, watch: { ignored: ['**/*'] } } : undefined,
@@ -52,4 +79,4 @@ export default defineConfig(({ command, mode }) => ({
     // Тесты с решателем проходят все 30 уровней — на CI это дольше стандартных 5 с.
     testTimeout: 60_000,
   },
-}));
+});

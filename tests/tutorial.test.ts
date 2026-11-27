@@ -70,7 +70,7 @@ describe('подсказки Lumo и обучение', () => {
     completeTutorial();
     expect(isTutorialDone()).toBe(true);
     expect(isTutorialActive(1)).toBe(false);
-    expect(SaveService.load().log.at(-1)).toMatchObject({ ev: 'tutorial_step', step: 'done' });
+    expect(SaveService.load().log.slice(-2)).toMatchObject([{ ev: 'tutorial_step', step: 'done' }, { ev: 'tutorial_complete' }]);
   });
 
   it('«Пройти обучение заново» сбрасывает обучение и подсказки, но не прогресс', () => {

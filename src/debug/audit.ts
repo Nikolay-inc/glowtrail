@@ -15,6 +15,7 @@ import { showCurrencyIntro, showDailyDialog } from '../ui/meta';
 import { showNameDialog } from '../ui/NameDialog';
 import { showNotEnough } from '../ui/notEnough';
 import { showBloomGift } from '../ui/bloomGift';
+import { showConsent } from '../scenes/ConsentScene';
 import { overlap, type Box } from '../ui/gesture';
 import { ellipsisLog, type UIBox } from '../ui/UIText';
 
@@ -42,6 +43,11 @@ function views(game: Phaser.Game): Record<string, () => Promise<void>> {
     daily: async () => {
       const s = await start('Menu');
       showDailyDialog(s, () => undefined);
+      await sleep(500);
+    },
+    consent: async () => {
+      const s = await start('Menu');
+      showConsent(s, () => undefined);
       await sleep(500);
     },
     currency: async () => {

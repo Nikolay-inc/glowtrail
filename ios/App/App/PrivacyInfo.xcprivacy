@@ -8,8 +8,10 @@
 	<key>NSPrivacyTrackingDomains</key>
 	<array/>
 	<!-- «Required reason» API: UserDefaults — @capacitor/preferences хранит сохранение игры и сессию входа
-	     (данные только этого приложения, CA92.1). Сам Capacitor и остальные плагины (app, haptics, splash-screen,
-	     status-bar) таких API не используют; Supabase работает внутри WebView. -->
+	     (данные только этого приложения, CA92.1). Sentry (статическая библиотека): время загрузки системы (35F9.1)
+	     и даты файлов своих отчётов (C617.1). Firebase приносит свой манифест в пакете SPM.
+	     Сам Capacitor и остальные плагины (app, haptics, splash-screen, status-bar) таких API не используют;
+	     Supabase работает внутри WebView. -->
 	<key>NSPrivacyAccessedAPITypes</key>
 	<array>
 		<dict>
@@ -20,9 +22,28 @@
 				<string>CA92.1</string>
 			</array>
 		</dict>
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategorySystemBootTime</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>35F9.1</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryFileTimestamp</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>C617.1</string>
+			</array>
+		</dict>
 	</array>
-	<!-- Собираемые данные: почта (аккаунт), ID игрока, игровой прогресс (облачное сохранение),
-	     игровая статистика (только если игрок сам отправит отзыв). Всё связано с аккаунтом, без трекинга. -->
+	<!-- Собираемые данные: почта (аккаунт), ID игрока, игровой прогресс (облачное сохранение) — связаны с аккаунтом;
+	     взаимодействие с игрой — анонимная статистика Firebase Analytics (с согласия) и отзыв со статистикой (если игрок
+	     сам отправит); ID устройства — идентификатор установки Firebase (Analytics, Remote Config), приблизительное
+	     местоположение — страна/город по IP в Firebase Analytics; отчёты о сбоях и диагностика — Sentry, без
+	     персональных данных. Ничего не используется для трекинга и рекламы. -->
 	<key>NSPrivacyCollectedDataTypes</key>
 	<array>
 		<dict>
@@ -71,6 +92,55 @@
 			<key>NSPrivacyCollectedDataTypePurposes</key>
 			<array>
 				<string>NSPrivacyCollectedDataTypePurposeAnalytics</string>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeDeviceID</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAnalytics</string>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeCoarseLocation</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAnalytics</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeCrashData</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeOtherDiagnosticData</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
 				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
 			</array>
 		</dict>

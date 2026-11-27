@@ -88,10 +88,12 @@ appId: `com.severgames.glowtrail`. Его нельзя менять после �
    просто «Glowtrail» — это `CFBundleDisplayName` и `appName`), основной язык — русский, Bundle ID `com.severgames.glowtrail`
    (если его нет в списке — зарегистрируй в developer.apple.com → Identifiers), SKU — например `glowtrail`.
 3. Там же в приложении: «Конфиденциальность приложения» → ссылка на политику
-   `https://nikolay-inc.github.io/glowtrail/privacy.html` и ответы «Какие данные собираются»:
-   адрес электронной почты, идентификатор пользователя, игровой контент, взаимодействие с продуктом —
-   все связаны с пользователем, для функциональности (взаимодействие — ещё и аналитика), без отслеживания.
+   `https://nikolay-inc.github.io/glowtrail/privacy.html` и ответы «Какие данные собираются» — см. раздел
+   «Аналитика и ошибки» ниже (почта, ID пользователя, игровой контент — связаны с пользователем; взаимодействие,
+   ID устройства, приблизительное местоположение, сбои и диагностика — не связаны; отслеживания нет).
    Это совпадает с `ios/App/App/PrivacyInfo.xcprivacy`.
+4. Firebase и Sentry (раздел «Аналитика и ошибки»): `GoogleService-Info.plist` перетащи в Xcode в папку App
+   (галочка «Copy items if needed», цель App), DSN Sentry — в `.env.app`.
 
 **Каждая сборка**
 
@@ -104,7 +106,8 @@ npm run ios:check
 ```
 
 1. `npm run cap:sync` собирает игру (номер сборки +1) и копирует её в `ios/`. `npm run ios:check` проверяет
-   версию, номер сборки, команду и Bundle ID, privacy manifest, флаг шифрования, иконку и адрес для отзывов.
+   версию, номер сборки, команду и Bundle ID, privacy manifest, флаг шифрования, иконку, адрес для отзывов,
+   `GoogleService-Info.plist` и DSN Sentry. С `SENTRY_AUTH_TOKEN` в `.env.local` сборка сама загружает source maps.
 2. Открой проект: `npm run cap:ios` (или `open ios/App/App.xcodeproj`).
 3. В Xcode вверху выбери схему **App** и устройство **Any iOS Device (arm64)**.
 4. Signing & Capabilities (цель App): Team — твоя команда (R457T4MLSR), «Automatically manage signing» включено.
@@ -149,3 +152,80 @@ npm run cap:android
 - **Сохранение** в приложении хранится в `@capacitor/preferences`, в браузере — в localStorage. Вход в
   аккаунт и синхронизация с Supabase работают и там, и там.
 - **Вибрация:** лёгкая при постановке плитки, короткая при ошибке, радостная при победе. Выключается в меню.
+
+## Аналитика и ошибки (Firebase, Sentry)
+
+Код — `src/analytics/`: `events.ts` (события и свойства игрока, согласие — чистые функции с тестами),
+`firebase.ts` (Analytics и Remote Config: в приложении — `@capacitor-firebase/*`, в вебе — Firebase JS SDK),
+`sentry.ts` (`@sentry/capacitor`: ошибки JS, необработанные исключения и нативные сбои), `remoteConfig.ts`
+(значения по умолчанию), `index.ts` (связка с логом событий). Экран согласия — `src/scenes/ConsentScene.ts`.
+
+- **Без ключей всё выключено**, игра работает как раньше. В iOS без `GoogleService-Info.plist` плагины Firebase не
+  запускаются (патч в `patches/`, ставится сам при `npm install`: иначе `FirebaseApp.configure()` роняет приложение).
+- **Без рекламного идентификатора и трекинга:** в iOS — `FirebaseAnalyticsCore` (без IDFA, без on-device conversion),
+  в `Info.plist` выключены сбор, IDFV, рекламные сигналы и регистрация в рекламных сетях; в Android удалено разрешение
+  `AD_ID`; рекламные согласия всегда «запрещено», Google Signals выключены. Запрос ATT не нужен.
+- **Согласие:** в ЕС/ЕЭЗ, Великобритании и Швейцарии (по часовому поясу, иначе по региону языка) при первом запуске —
+  окно «Помогать улучшать игру?»; без «да» статистика не собирается. В других странах включена по умолчанию.
+  Выбор — `progress.analytics` в сохранении (v9), меняется в профиле («Анонимная статистика»). Sentry работает и без
+  согласия — без персональных данных (это сказано в политике).
+- **События:** каждая новая запись лога (`SaveService.onLog`) уходит в Firebase с теми же именами и параметрами
+  (+ `level_num` — номер уровня). Переименованы только `start/win/lose/abandon` → `level_start/level_win/level_lose/
+  level_abandon` и `session` → `game_session_start` (`session_start` в Firebase зарезервировано и пишется само).
+  У попыток: `level`, `level_num`, `attempt`, `stars`, `tilesLeft`, `hints`, `undos`, `ms` (время), `moves`.
+  Новые события: `tutorial_complete`, `settings_change` (`item`: music/sounds/vibration/analytics, `value`), `skin_buy`
+  (стили поля), `wardrobe_buy` (вещи Lumo).
+- **Свойства игрока:** `chapter`, `total_stars`, `cozy_level`, `game_language`, `game_version`.
+- **Remote Config** (заготовки, пока ни на что не влияют): `ads_interstitial_from_level` 15,
+  `ads_interstitial_every_n_levels` 3, `ads_rewarded_daily_cap` 5, `economy_coin_multiplier` 1, `quests_enabled` true.
+  Загружаются при старте параллельно со шрифтами, ждём не дольше 2 с. В коде — `remote('quests_enabled')`.
+- **Локальная статистика** («Статистика» → «Скопировать», «Отправить отзыв») осталась как была.
+
+### Ключи: куда что положить
+
+| Что | Куда | В git? |
+| --- | --- | --- |
+| Веб-конфиг Firebase (`VITE_FIREBASE_*`, 7 значений) | `.env.production` (сайт) и `.env.app` (приложение) | да, значения публичные |
+| `GoogleService-Info.plist` | `ios/App/App/` + перетащить в Xcode в цель App | нет (`.gitignore`) |
+| `google-services.json` | `android/app/` | нет (`.gitignore`) |
+| `VITE_SENTRY_DSN` | `.env.production` и `.env.app` | да, DSN публичный |
+| `SENTRY_ORG`, `SENTRY_PROJECT` | `.env.production` и `.env.app` | да, не секрет |
+| `SENTRY_AUTH_TOKEN` (source maps) | `.env.local` и секрет репозитория `SENTRY_AUTH_TOKEN` | **нет, секрет** |
+
+Чтобы сайт тоже загружал source maps, в `.github/workflows/deploy.yml` в шаг `npm run build` добавь
+`SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}` рядом с `VITE_CONTACT_EMAIL` (без токена сайт собирается без карт).
+Карты собираются скрытыми, загружаются в Sentry и удаляются из `dist` — на сайт и в приложение не попадают.
+
+В Firebase: Analytics → Admin → Data settings → **Data retention — 2 months** (как в политике), Google Signals — выкл.
+В Sentry: Project settings → Security & Privacy → **Prevent Storing of IP Addresses** — вкл., Data Scrubber — вкл.
+
+### Проверка событий (DebugView)
+
+- **Веб:** открой игру с `?analytics_debug=1` (например, `https://nikolay-inc.github.io/glowtrail/?analytics_debug=1`) →
+  Firebase → Analytics → DebugView. В `npm run dev` события ещё и печатаются в консоль (`[analytics] level_start …`).
+- **iOS:** Xcode → Product → Scheme → Edit Scheme → Run → Arguments → `-FIRDebugEnabled`, запусти на телефоне.
+- **Android:** `adb shell setprop debug.firebase.analytics.app com.severgames.glowtrail`.
+- Пройди обучение и уровень: должны прийти `game_session_start`, `tutorial_step`, `level_start`, `level_win`,
+  `currency_earn`, `tutorial_complete`; в свойствах пользователя — `chapter`, `total_stars` и т. д.
+  Sentry: в консоли браузера `setTimeout(() => { throw new Error('sentry test') })` → Issues.
+
+### Дашборды
+
+Сначала: Admin → Custom definitions → зарегистрируй параметры событий как **custom dimensions** (`level`, `level_num`,
+`step`, `item`, `source`, `currency`, `value`) и **custom metrics** (`stars`, `tilesLeft`, `hints`, `undos`, `ms`,
+`amount`, `attempt`), свойства пользователя `chapter`, `total_stars`, `cozy_level`, `game_language`, `game_version` —
+как user-scoped dimensions. Данные в отчётах появляются через сутки после регистрации.
+
+1. **Воронка: обучение → уровень 10 → 30 → 31.** Explore → Funnel exploration, шаги: `first_open` (в вебе
+   `first_visit`) → `tutorial_complete` → `level_win` с `level_num = 10` → `level_win` с `level_num = 30` →
+   `level_start` с `level_num = 31` (глава 2, когда появится). Разбивка — по `game_version` или платформе.
+   Внутри обучения смотри `tutorial_step` по `step` (rule_*, done).
+2. **Доля проигрышей по уровням.** Explore → Free form: строки — `level_num`, столбцы — Event name (фильтр
+   `level_start`, `level_win`, `level_lose`, `level_abandon`), значение — Event count. Доля проигрышей =
+   `level_lose / level_start`, бросили — `level_abandon / level_start`. Рядом — `hint_used`, `auto_ease`,
+   `level_skipped` по `level_num`: где застревают. Средние `ms`, `hints`, `undos` на `level_win` — сложность.
+3. **Удержание D1/D7.** Reports → Engagement → Retention (или Firebase → Analytics → Dashboard → Retention cohorts);
+   точнее — Explore → Cohort exploration: включение — `first_open`, возврат — `game_session_start`, шаг — по дням,
+   смотри столбцы Day 1 и Day 7. Разбивка — по `chapter` или `game_version`.
+
+Для своих запросов без ограничений GA4 — бесплатный экспорт в BigQuery (Project settings → Integrations → BigQuery).

@@ -11,6 +11,8 @@ import { StatsScene } from './scenes/StatsScene';
 import { ProfileScene } from './scenes/ProfileScene';
 import { IntroScene } from './scenes/IntroScene';
 import { RulesScene } from './scenes/RulesScene';
+import { ConsentScene } from './scenes/ConsentScene';
+import { consentScreenDue, initTelemetry } from './analytics/index';
 import { isTutorialDone, markTutorialDoneForReturningPlayer } from './tutorial';
 import { recordPlayDay } from './profile';
 import { Account } from './cloud/account';
@@ -50,10 +52,11 @@ class BootScene extends Phaser.Scene {
     }
     // ?level=N — открыть уровень сразу (удобно для проверки и видео).
     const fromUrl = Number(params.get('level'));
-    if (fromUrl >= 1) this.scene.start('Game', { levelIndex: fromUrl - 1 });
-    else if (firstTime && !isTutorialDone()) this.scene.start('Intro');
-    else if (!isTutorialDone()) this.scene.start('Game', { levelIndex: tutorialIndex });
-    else this.scene.start('Menu');
+    if (fromUrl >= 1) return void this.scene.start('Game', { levelIndex: fromUrl - 1 });
+    const [next, data] = firstTime && !isTutorialDone() ? ['Intro'] : !isTutorialDone() ? ['Game', { levelIndex: tutorialIndex }] : ['Menu'];
+    // ЕС/ЕЭЗ, Великобритания, Швейцария: сначала спрашиваем про анонимную статистику (один раз).
+    if (consentScreenDue() && !params.has('audit')) this.scene.start('Consent', { next, data });
+    else this.scene.start(next, data);
   }
 }
 
@@ -85,7 +88,8 @@ async function boot() {
   }
 
   initLocale();
-  await loadFonts();
+  // Sentry, Firebase и Remote Config (таймаут 2 с) — параллельно со шрифтами.
+  await Promise.all([loadFonts(), initTelemetry()]);
 
   const game = new Phaser.Game({
     type: Phaser.AUTO,
@@ -102,7 +106,7 @@ async function boot() {
     // DOM-элементы поверх холста — для поля ввода имени (масштабируются вместе с игрой).
     dom: { createContainer: true },
     render: { antialias: true },
-    scene: [BootScene, MenuScene, GameScene, StatsScene, ProfileScene, IntroScene, RulesScene, VillageScene, WorkshopScene, ShopScene],
+    scene: [BootScene, ConsentScene, MenuScene, GameScene, StatsScene, ProfileScene, IntroScene, RulesScene, VillageScene, WorkshopScene, ShopScene],
   });
 
   initLifecycle(game);

@@ -48,6 +48,7 @@ export function mergeSaves(local: SaveData, cloud: CloudPayload | null): SaveDat
     music: lp.music, // музыка — тоже
     vibration: lp.vibration, // вибрация — тоже
     language: lp.language, // язык — тоже
+    analytics: lp.analytics, // согласие на статистику — выбор на этом устройстве
   };
 
   const l = local.profile;

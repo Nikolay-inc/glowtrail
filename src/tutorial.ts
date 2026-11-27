@@ -126,7 +126,8 @@ export function completeTutorial() {
   if (isTutorialDone()) return;
   SaveService.update((d) => {
     d.profile.tutorialDone = true;
-    d.log.push({ t: new Date().toISOString(), ev: 'tutorial_step', step: 'done' });
+    const t = new Date().toISOString();
+    d.log.push({ t, ev: 'tutorial_step', step: 'done' }, { t, ev: 'tutorial_complete' });
   });
 }
 

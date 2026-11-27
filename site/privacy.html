@@ -24,25 +24,39 @@
 
   <section id="ru">
     <h1>Политика конфиденциальности Glowtrail</h1>
-    <p class="muted">Последнее обновление: 25 ноября 2026 г.</p>
+    <p class="muted">Последнее обновление: 27 ноября 2026 г.</p>
 
     <h2>Кратко</h2>
-    <p>Glowtrail — игра-головоломка. Играть можно без аккаунта. Мы не показываем рекламу, не отслеживаем вас и не передаём данные третьим лицам для рекламы.</p>
+    <p>Glowtrail — игра-головоломка. Играть можно без аккаунта. Мы не показываем рекламу, не отслеживаем вас и не передаём данные третьим лицам для рекламы. С вашего согласия игра отправляет анонимную статистику (как проходят уровни), а при сбоях — отчёты об ошибках без персональных данных.</p>
 
     <h2>Какие данные мы собираем и зачем</h2>
     <ul>
       <li><b>Адрес электронной почты</b> — только если вы создаёте аккаунт. Нужен для входа, восстановления пароля и сохранения прогресса в облаке.</li>
       <li><b>ID игрока</b> — случайный идентификатор, который создаётся при первом запуске. Связывает ваше сохранение с аккаунтом.</li>
       <li><b>Игровой прогресс</b> — пройденные уровни, звёзды, светлячки, монеты, свет, деревня, улучшения, скины, имя и выбранный костюм. Если вы вошли в аккаунт, прогресс хранится в облаке, чтобы продолжить игру на другом устройстве.</li>
-      <li><b>Игровая статистика</b> — журнал событий игры (попытки, время, подсказки) хранится только на вашем устройстве. Мы получаем его, только если вы сами нажмёте «Отправить отзыв» и отправите письмо.</li>
+      <li><b>Анонимная статистика игры</b> (Google Firebase Analytics) — только если она включена: события игры (начало, победа, поражение и выход с уровня, попытка, звёзды, оставшиеся плитки, подсказки, отмены, время; шаги обучения; заработанные и потраченные монеты и свет; действия в деревне и магазине; изменение настроек и языка) и общие сведения: глава, сумма звёзд, уровень уюта, язык, версия игры, модель устройства и версия системы, приблизительное местоположение (страна или город — определяется по IP-адресу, сам адрес не хранится) и случайный идентификатор установки. Статистика <b>не связана</b> с вашей почтой, аккаунтом или ID игрока. Зачем: понять, где уровни слишком сложные, где игроки бросают обучение, и улучшить игру.</li>
+      <li><b>Отчёты об ошибках</b> (Sentry) — при сбое или ошибке в игре: текст ошибки и место в коде, версия и номер сборки, платформа, модель устройства, версия системы и браузера, последние действия в игре перед ошибкой. Без почты, имени, ID игрока и IP-адреса (адреса почты автоматически вырезаются из отчётов). Зачем: находить и исправлять сбои. Отчёты об ошибках отправляются и без согласия на статистику — это нужно, чтобы игра работала стабильно, и они не содержат персональных данных.</li>
+      <li><b>Настройки игры</b> (Firebase Remote Config) — при запуске игра запрашивает настройки (например, экономики). Передаются идентификатор установки, версия игры и язык; это не статистика и не связано с вами.</li>
+      <li><b>Журнал событий на устройстве</b> — те же события игры хранятся и на вашем устройстве (для экрана «Статистика»). Мы получаем его, только если вы сами нажмёте «Отправить отзыв» и отправите письмо.</li>
     </ul>
-    <p>Облачное сохранение и вход работают на сервисе <a href="https://supabase.com/privacy">Supabase</a> (обработчик данных). Доступ к записям защищён: каждый игрок видит только своё сохранение.</p>
+
+    <h2>Согласие и как выключить статистику</h2>
+    <p>В странах ЕС и ЕЭЗ, в Великобритании и Швейцарии при первом запуске игра спрашивает, можно ли отправлять анонимную статистику; без вашего «да» статистика не собирается. В других странах она включена по умолчанию. В любой момент её можно выключить или включить: <b>Профиль → «Анонимная статистика»</b>. В веб-версии при включённой статистике Firebase использует cookie и локальное хранилище браузера.</p>
+    <p>Основания обработки (для ЕЭЗ и Великобритании): аккаунт и облачное сохранение — исполнение договора (вы сами создаёте аккаунт); статистика — ваше согласие; отчёты об ошибках — законный интерес (стабильная работа игры).</p>
+
+    <h2>Кто обрабатывает данные</h2>
+    <ul>
+      <li><a href="https://supabase.com/privacy">Supabase</a> — вход и облачное сохранение. Доступ к записям защищён: каждый игрок видит только своё сохранение.</li>
+      <li><a href="https://firebase.google.com/support/privacy">Google Firebase</a> (Analytics, Remote Config) — статистика и настройки игры. Без рекламного идентификатора, рекламных сигналов и Google Signals; данные не используются для рекламы. Подробные события хранятся 2 месяца.</li>
+      <li><a href="https://sentry.io/privacy/">Sentry</a> — отчёты об ошибках; хранятся до 90 дней.</li>
+    </ul>
+    <p>Эти сервисы могут обрабатывать данные за пределами вашей страны (в том числе в США) по стандартным договорным условиям.</p>
 
     <h2>Чего мы не делаем</h2>
     <ul>
-      <li>Не отслеживаем вас в других приложениях и на сайтах, не используем рекламные идентификаторы.</li>
-      <li>Не продаём и не передаём данные третьим лицам (кроме хранения у Supabase, описанного выше).</li>
-      <li>Не собираем местоположение, контакты, фото и другие данные устройства.</li>
+      <li>Не отслеживаем вас в других приложениях и на сайтах, не используем рекламные идентификаторы (IDFA, рекламный ID Android) и не просим разрешения на отслеживание.</li>
+      <li>Не продаём данные и не передаём их третьим лицам, кроме сервисов, перечисленных выше.</li>
+      <li>Не собираем точное местоположение, контакты, фото и другие данные устройства.</li>
     </ul>
 
     <h2>Как удалить данные</h2>
@@ -60,25 +74,39 @@
 
   <section id="en" lang="en">
     <h1>Glowtrail Privacy Policy</h1>
-    <p class="muted">Last updated: November 25, 2026</p>
+    <p class="muted">Last updated: November 27, 2026</p>
 
     <h2>Summary</h2>
-    <p>Glowtrail is a puzzle game. You can play without an account. We show no ads, do not track you and do not share data with third parties for advertising.</p>
+    <p>Glowtrail is a puzzle game. You can play without an account. We show no ads, do not track you and do not share data with third parties for advertising. With your consent the game sends anonymous statistics (how levels are played), and if something breaks it sends error reports without personal data.</p>
 
     <h2>What we collect and why</h2>
     <ul>
       <li><b>Email address</b> — only if you create an account. Used to sign in, reset your password and keep your progress in the cloud.</li>
       <li><b>Player ID</b> — a random identifier created on first launch. Links your save to your account.</li>
       <li><b>Game progress</b> — completed levels, stars, fireflies, coins, light, village, upgrades, skins, name and chosen costume. When you are signed in, progress is stored in the cloud so you can continue on another device.</li>
-      <li><b>Game statistics</b> — the in-game event log (attempts, time, hints) stays on your device. We receive it only if you tap “Send feedback” and send the email yourself.</li>
+      <li><b>Anonymous game statistics</b> (Google Firebase Analytics) — only when enabled: game events (starting, winning, losing and leaving a level, attempt, stars, tiles left, hints, undos, time; tutorial steps; coins and light earned and spent; village and shop actions; settings and language changes) and general information: chapter, total stars, coziness level, language, game version, device model and OS version, approximate location (country or city, derived from the IP address, which is not stored) and a random installation identifier. Statistics are <b>not linked</b> to your email, account or player ID. Why: to see where levels are too hard or where players quit the tutorial, and to improve the game.</li>
+      <li><b>Error reports</b> (Sentry) — when the game crashes or hits an error: error message and code location, version and build number, platform, device model, OS and browser version, recent in-game actions before the error. No email, name, player ID or IP address (email addresses are automatically removed from reports). Why: to find and fix crashes. Error reports are sent even without consent to statistics — they are needed to keep the game stable and contain no personal data.</li>
+      <li><b>Game settings</b> (Firebase Remote Config) — on launch the game requests its settings (for example, economy). The installation identifier, game version and language are sent; this is not statistics and is not linked to you.</li>
+      <li><b>On-device event log</b> — the same game events are also kept on your device (for the “Statistics” screen). We receive it only if you tap “Send feedback” and send the email yourself.</li>
     </ul>
-    <p>Cloud saves and sign-in are provided by <a href="https://supabase.com/privacy">Supabase</a> (data processor). Access is restricted: each player can only read their own save.</p>
+
+    <h2>Consent and how to turn statistics off</h2>
+    <p>In the EU/EEA, the UK and Switzerland the game asks on first launch whether it may send anonymous statistics; nothing is collected without your “yes”. In other countries statistics are on by default. You can turn them off or on at any time: <b>Profile → “Anonymous statistics”</b>. In the web version, when statistics are on, Firebase uses cookies and browser storage.</p>
+    <p>Legal bases (EEA and UK): account and cloud save — performance of a contract (you create the account); statistics — your consent; error reports — legitimate interest (keeping the game stable).</p>
+
+    <h2>Who processes the data</h2>
+    <ul>
+      <li><a href="https://supabase.com/privacy">Supabase</a> — sign-in and cloud saves. Access is restricted: each player can only read their own save.</li>
+      <li><a href="https://firebase.google.com/support/privacy">Google Firebase</a> (Analytics, Remote Config) — statistics and game settings. No advertising identifier, ad signals or Google Signals; data is not used for advertising. Detailed events are kept for 2 months.</li>
+      <li><a href="https://sentry.io/privacy/">Sentry</a> — error reports, kept for up to 90 days.</li>
+    </ul>
+    <p>These services may process data outside your country (including the USA) under standard contractual clauses.</p>
 
     <h2>What we don’t do</h2>
     <ul>
-      <li>No tracking across other apps or websites, no advertising identifiers.</li>
-      <li>We don’t sell or share your data with third parties (other than storage at Supabase described above).</li>
-      <li>We don’t collect location, contacts, photos or other device data.</li>
+      <li>No tracking across other apps or websites, no advertising identifiers (IDFA, Android advertising ID), and we never ask for tracking permission.</li>
+      <li>We don’t sell your data or share it with third parties other than the services listed above.</li>
+      <li>We don’t collect precise location, contacts, photos or other device data.</li>
     </ul>
 
     <h2>How to delete your data</h2>

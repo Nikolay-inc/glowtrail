@@ -147,7 +147,7 @@ class AccountService {
   /** Гостевое сохранение с нуля; лог событий и настройка звука остаются на устройстве. */
   private resetToGuest() {
     const current = SaveService.load();
-    SaveService.replace({ ...emptySave(), progress: { ...defaultProgress(), muted: current.progress.muted }, log: current.log });
+    SaveService.replace({ ...emptySave(), progress: { ...defaultProgress(), muted: current.progress.muted, analytics: current.progress.analytics }, log: current.log });
   }
 
   /** Ссылка из письма могла устареть — Supabase кладёт ошибку в адрес страницы. */

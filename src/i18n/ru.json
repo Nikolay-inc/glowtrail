@@ -642,5 +642,12 @@
   "building.hot-springs.name": "Горячие источники",
   "building.stone-bridge.name": "Каменный мост",
   "building.star-temple.name": "Звёздный храм",
-  "building.summit-beacon.name": "Маяк на вершине"
+  "building.summit-beacon.name": "Маяк на вершине",
+  "consent_title": "Помогать улучшать игру?",
+  "consent_text": "Можно отправлять анонимную статистику: какие уровни проходят, где застревают, что покупают в деревне. Без имени, почты и рекламы.",
+  "consent_note": "Выбор можно поменять в любой момент в профиле.",
+  "consent_yes": "Да, помогать",
+  "consent_no": "Нет, спасибо",
+  "set_analytics_on": "Анонимная статистика: вкл.",
+  "set_analytics_off": "Анонимная статистика: выкл."
 }

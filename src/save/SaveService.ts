@@ -5,7 +5,7 @@
 import { avatarIndex } from '../core/wardrobe';
 import { defaultEconomy, economyFromProgress, normalizeEconomy, type Economy } from '../core/economy';
 
-export const SAVE_VERSION = 8;
+export const SAVE_VERSION = 9;
 export const SAVE_KEY = 'glowtrail.save';
 /** Старый формат (до SaveService): прогресс и лог лежали в двух ключах. */
 export const LEGACY_KEYS = { progress: 'glowtrail.progress.v1', log: 'glowtrail.log.v1' } as const;
@@ -33,7 +33,14 @@ export interface Progress {
   vibration: boolean;
   /** Язык интерфейса (ru / en / uk); пусто — язык системы. Настройка устройства. */
   language: string;
+  /**
+   * Анонимная статистика (Firebase Analytics): '' — ещё не спрашивали, 'yes' / 'no' — выбор игрока
+   * (экран согласия при первом запуске в ЕС, переключатель в профиле). Настройка устройства.
+   */
+  analytics: AnalyticsChoice;
 }
+
+export type AnalyticsChoice = '' | 'yes' | 'no';
 
 /**
  * Профиль игрока. Локальный, но готов к привязке облачного аккаунта: playerId — постоянный
@@ -63,7 +70,7 @@ export interface Profile {
   bestDayStreak: number;
 }
 
-export type EventType = 'session' | 'start' | 'win' | 'lose' | 'abandon' | 'hint_used' | 'extra_tiles' | 'auto_ease' | 'level_skipped' | 'signup' | 'login' | 'logout' | 'auth_prompt' | 'tutorial_step' | 'tip_shown' | 'drag_place' | 'tap_place' | 'door_locked_attempt' | 'fireflies_collected' | 'tile_jump_used' | 'bridge_rotated_blocked' | 'lantern_expired' | 'currency_earn' | 'currency_spend' | 'village_restore' | 'upgrade_buy' | 'skin_buy' | 'daily_reward' | 'wardrobe_buy' | 'outfit_save' | 'building_upgrade' | 'decor_place' | 'street_upgrade' | 'quest_done' | 'cozy_level' | 'not_enough_hint_click' | 'language_change' | 'chest_open' | 'challenge_reward';
+export type EventType = 'session' | 'start' | 'win' | 'lose' | 'abandon' | 'hint_used' | 'extra_tiles' | 'auto_ease' | 'level_skipped' | 'signup' | 'login' | 'logout' | 'auth_prompt' | 'tutorial_step' | 'tip_shown' | 'drag_place' | 'tap_place' | 'door_locked_attempt' | 'fireflies_collected' | 'tile_jump_used' | 'bridge_rotated_blocked' | 'lantern_expired' | 'currency_earn' | 'currency_spend' | 'village_restore' | 'upgrade_buy' | 'skin_buy' | 'daily_reward' | 'wardrobe_buy' | 'outfit_save' | 'building_upgrade' | 'decor_place' | 'street_upgrade' | 'quest_done' | 'cozy_level' | 'not_enough_hint_click' | 'language_change' | 'chest_open' | 'challenge_reward' | 'tutorial_complete' | 'settings_change';
 
 export interface LogEvent {
   /** Время события, ISO. */
@@ -107,6 +114,10 @@ export interface LogEvent {
   amount?: number;
   source?: string;
   item?: string;
+  /** Сколько подсказок взято за попытку (win / lose / abandon). */
+  hints?: number;
+  /** Новое значение настройки (settings_change: on / off, yes / no). */
+  value?: string;
 }
 
 export interface SaveData {
@@ -166,7 +177,7 @@ export function memoryBackend(initial: Record<string, string> = {}): SaveBackend
 /** Первый уровень игры — открыт всегда. */
 export const FIRST_LEVEL_ID = 'valley-01';
 
-export const defaultProgress = (): Progress => ({ unlocked: [FIRST_LEVEL_ID], stars: {}, attempts: {}, lossStreak: {}, skipped: {}, fireflies: {}, muted: false, music: true, vibration: true, language: '' });
+export const defaultProgress = (): Progress => ({ unlocked: [FIRST_LEVEL_ID], stars: {}, attempts: {}, lossStreak: {}, skipped: {}, fireflies: {}, muted: false, music: true, vibration: true, language: '', analytics: '' });
 
 /**
  * До версии 4 уровни хранились по номеру 1, 2, 3… Это уровни первого мира «Долина» — они остались на своих местах,
@@ -260,6 +271,7 @@ export function normalizeProgress(raw: unknown): Progress {
   if (typeof raw.music === 'boolean') p.music = raw.music;
   if (typeof raw.vibration === 'boolean') p.vibration = raw.vibration;
   if (raw.language === 'ru' || raw.language === 'en' || raw.language === 'uk') p.language = raw.language;
+  if (raw.analytics === 'yes' || raw.analytics === 'no') p.analytics = raw.analytics;
   return p;
 }
 
@@ -308,7 +320,8 @@ function normalizeLog(raw: unknown): LogEvent[] {
  *      украшения в слотах, уют, задания жителей, свет за задания и уют; часовня — счётчик за день.
  * v8 — награды испытаний (`economy.challenges`: шаг улицы и расцвет на выбор за уровни 10/20/30 главы). Поле
  *      начинается пустым; за уже пройденные испытания награда выдаётся при следующем заходе (`syncChallenges`).
- * Шаги идут цепочкой: v1 → … → v8, поэтому любое старое сохранение доходит до текущей версии.
+ * v9 — выбор про анонимную статистику (`progress.analytics`: '' — не спрашивали, 'yes' / 'no'); старые сохранения — ''.
+ * Шаги идут цепочкой: v1 → … → v9, поэтому любое старое сохранение доходит до текущей версии.
  */
 export function migrate(raw: unknown, legacy?: { progress: unknown; log: unknown }): SaveData {
   let data: Record<string, unknown> | null = null;
@@ -340,6 +353,7 @@ export function migrate(raw: unknown, legacy?: { progress: unknown; log: unknown
   // v6 → v7: список восстановленных построек `village` → уровни `buildings` (все — уровень 1), `chapelDay` →
   // `chapel` (тоже в normalizeEconomy); улицы, украшения, уют и задания начинаются с нуля.
   // v7 → v8: `challenges` пустое (normalizeEconomy); награды за пройденные испытания — syncChallenges в meta.
+  // v8 → v9: `progress.analytics` = '' (normalizeProgress) — экран согласия покажется, если он нужен в этой стране.
   profile.avatar = avatarIndex(economy.wardrobe.look);
   return {
     version: SAVE_VERSION,
@@ -354,6 +368,16 @@ class SaveServiceImpl {
   private backend: SaveBackend = localStorageBackend;
   private cache: SaveData | null = null;
   private listeners = new Set<(data: SaveData) => void>();
+  private logListeners = new Set<(events: LogEvent[], data: SaveData) => void>();
+
+  /**
+   * Подписка на новые записи лога (аналитика дублирует их в Firebase). Срабатывает на любое сохранение,
+   * в котором лог дописан, — неважно, через logEvent или d.log.push. Возвращает функцию отписки.
+   */
+  onLog(fn: (events: LogEvent[], data: SaveData) => void): () => void {
+    this.logListeners.add(fn);
+    return () => this.logListeners.delete(fn);
+  }
 
   /** Подписка на каждое сохранение (облачная синхронизация). Возвращает функцию отписки. */
   subscribe(fn: (data: SaveData) => void): () => void {
@@ -392,10 +416,12 @@ class SaveServiceImpl {
   }
 
   save(data: SaveData) {
+    const added = newLogEntries(this.cache?.log ?? null, data.log);
     const d = { ...data, version: SAVE_VERSION, log: data.log.slice(-MAX_LOG) };
     this.cache = d;
     this.write(d);
     for (const fn of this.listeners) fn(d);
+    if (added.length) for (const fn of this.logListeners) fn(added, d);
   }
 
   /** Изменить сохранение функцией и записать. */
@@ -422,6 +448,20 @@ class SaveServiceImpl {
   private write(d: SaveData) {
     this.backend.write(SAVE_KEY, JSON.stringify(d));
   }
+}
+
+/**
+ * Новые записи лога: `next` — это `prev` с дописанным хвостом (update клонирует сохранение и дописывает лог).
+ * Если лог заменён целиком (слияние с облаком, выход из аккаунта, сброс) — новых записей нет.
+ */
+export function newLogEntries(prev: readonly LogEvent[] | null, next: readonly LogEvent[]): LogEvent[] {
+  if (!prev || next.length <= prev.length) return [];
+  if (prev.length > 0) {
+    const a = prev[prev.length - 1];
+    const b = next[prev.length - 1];
+    if (!b || a.t !== b.t || a.ev !== b.ev) return [];
+  }
+  return next.slice(prev.length);
 }
 
 function structuredCloneSafe<T>(v: T): T {

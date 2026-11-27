@@ -10,6 +10,7 @@ import { WARDROBE } from '../core/wardrobe';
 import { getLocale, LANGS, setLocale, systemLang, t, type Lang } from '../i18n';
 import { getEconomy } from '../meta';
 import { logEvent } from '../storage';
+import { analyticsOn, setAnalyticsChoice } from '../analytics/index';
 import { SaveService } from '../save/SaveService';
 import { Modal } from '../ui/Modal';
 import { uiText } from '../ui/UIText';
@@ -76,7 +77,7 @@ export class ProfileScene extends Phaser.Scene {
 
     // Настройки: звук, вибрация, статистика, «Как играть»
     const sy = topY + 740;
-    const toggle = (i: number, on: () => boolean, set: (v: boolean) => void, iconOn: IconName, iconOff: IconName) => {
+    const toggle = (i: number, setting: string, on: () => boolean, set: (v: boolean) => void, iconOn: IconName, iconOff: IconName) => {
       const b: Button = new Button(this, W / 2 + (i - 2) * 200, sy, {
         w: 176,
         h: 116,
@@ -84,13 +85,14 @@ export class ProfileScene extends Phaser.Scene {
         onClick: () => {
           set(!on());
           b.setIcon(on() ? iconOn : iconOff);
+          logEvent({ ev: 'settings_change', item: setting, value: on() ? 'on' : 'off' });
           sfx.tap();
         },
       });
     };
-    toggle(0, isMusicOn, setMusicOn, 'music', 'nomusic');
-    toggle(1, () => !isMuted(), (v) => setMuted(!v), 'sound', 'mute');
-    toggle(2, isVibrationOn, setVibration, 'vibrate', 'novibrate');
+    toggle(0, 'music', isMusicOn, setMusicOn, 'music', 'nomusic');
+    toggle(1, 'sounds', () => !isMuted(), (v) => setMuted(!v), 'sound', 'mute');
+    toggle(2, 'vibration', isVibrationOn, setVibration, 'vibrate', 'novibrate');
     new Button(this, W / 2 + 200, sy, { w: 176, h: 116, icon: 'stats', onClick: () => this.go('Stats') });
     new Button(this, W / 2 + 400, sy, {
       w: 176,
@@ -121,6 +123,21 @@ export class ProfileScene extends Phaser.Scene {
 
     // Язык интерфейса
     new Button(this, W / 2, cy + 150, { w: 520, h: 96, icon: 'globe', label: t('language_button', { lang: t(`lang_${getLocale() === 'qps' ? 'en' : getLocale()}` as 'lang_en') }), fontSize: 34, onClick: () => this.chooseLanguage() });
+
+    // Анонимная статистика (Firebase Analytics): выбор с экрана согласия или по умолчанию — меняется здесь.
+    const statsLabel = () => t(analyticsOn() ? 'set_analytics_on' : 'set_analytics_off');
+    const statsBtn: Button = new Button(this, W / 2, (cy + 150 + rowY - 320) / 2, {
+      w: 640,
+      h: 88,
+      icon: 'stats',
+      label: statsLabel(),
+      fontSize: 30,
+      onClick: () => {
+        sfx.tap();
+        setAnalyticsChoice(analyticsOn() ? 'no' : 'yes', 'profile');
+        statsBtn.setLabel(statsLabel());
+      },
+    });
 
     // Аккаунт: гость — предложение войти; вошёл — email и управление аккаунтом.
     const user = Account.user;

@@ -41,7 +41,7 @@ import {
 import { applyQuestEvent, claimQuest as claimQuestCore, ensureQuests, questsReady, rerollQuest, type QuestContext, type QuestEvent, type Seen } from './core/quests';
 import { bloomCandidates, bloomsPending, chapterMult, claimCozy as claimCozyCore, clearDecor, cozyLevel, earnChallenge, freeBloom, placeDecor as placeDecorCore, upgradeStreet, type CozyGrant } from './core/village';
 import { BUILDINGS, type DistrictId } from './core/villageData';
-import { avatarIndex, loadLook, saveLook, wearSet, type WardrobeState } from './core/wardrobe';
+import { avatarIndex, FIELD_SLOTS, itemById, loadLook, saveLook, wearSet, type WardrobeState } from './core/wardrobe';
 import { isChallenge, LEVELS } from './levels/index';
 import { localDay } from './profile';
 import { SaveService, type LogEvent, type SaveData } from './save/SaveService';
@@ -156,7 +156,9 @@ export function buyItem(id: string): MetaResult<string> {
   if (typeof res === 'string') return { ok: false, error: res };
   SaveService.update((d) => {
     d.economy = syncAvatar({ ...res, wardrobe: res.wardrobe }, d);
-    push(d, { ev: 'wardrobe_buy', item: id, amount: cost.amount, currency: cost.currency });
+    // Стили поля (фонари, дороги, арки) — «скины» магазина, вещи Lumo — гардероб.
+    const field = (FIELD_SLOTS as readonly string[]).includes(itemById(id)?.slot ?? '');
+    push(d, { ev: field ? 'skin_buy' : 'wardrobe_buy', item: id, amount: cost.amount, currency: cost.currency });
     push(d, { ev: 'currency_spend', currency: cost.currency, amount: cost.amount, item: `wardrobe:${id}` });
   });
   return { ok: true, value: id };
