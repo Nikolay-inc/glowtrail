@@ -103,6 +103,9 @@ async function boot() {
       autoCenter: Phaser.Scale.CENTER_BOTH,
     },
     input: { activePointers: 2 },
+    // ?audit=1 (npm run i18n-check): 15 кадров в секунду — анимации идут по времени и доходят до конца так же,
+    // а программный WebGL на машине CI не тратит процессор на 60 кадров.
+    fps: new URLSearchParams(location.search).has('audit') ? { limit: 15 } : undefined,
     // DOM-элементы поверх холста — для поля ввода имени (масштабируются вместе с игрой).
     dom: { createContainer: true },
     render: { antialias: true },
