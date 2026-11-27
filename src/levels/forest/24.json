@@ -1,0 +1,77 @@
+{
+  "id": "forest-24",
+  "name": "Болото",
+  "grid": [
+    "L.E...",
+    "......",
+    "......",
+    "~~~~~~",
+    "....#.",
+    ".#....",
+    ".#L.S."
+  ],
+  "startDir": "N",
+  "deck": [
+    "bridge",
+    "right",
+    "left",
+    "left",
+    "right",
+    "straight",
+    "left",
+    "right",
+    "straight",
+    "right",
+    "bridge",
+    "left",
+    "straight2"
+  ],
+  "stars": {
+    "two": 2,
+    "three": 4
+  },
+  "shadow": 4,
+  "goal": "escape",
+  "easeDecks": [
+    [
+      "bridge",
+      "right",
+      "left",
+      "left",
+      "right",
+      "straight",
+      "straight2",
+      "left",
+      "right",
+      "straight",
+      "right",
+      "bridge",
+      "left",
+      "straight2"
+    ],
+    [
+      "straight",
+      "bridge",
+      "right",
+      "left",
+      "left",
+      "right",
+      "straight",
+      "straight2",
+      "left",
+      "right",
+      "straight",
+      "right",
+      "bridge",
+      "left",
+      "straight2"
+    ]
+  ],
+  "metrics": {
+    "rating": 4.5,
+    "roads": 2,
+    "minTiles": 8,
+    "reserve": 5,
+    "trap": 0.308
+  }
+}

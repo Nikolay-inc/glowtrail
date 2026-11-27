@@ -1,0 +1,74 @@
+{
+  "id": "forest-08",
+  "name": "Фонари в тумане",
+  "grid": [
+    "...###",
+    ".E#...",
+    "...LL.",
+    "....L.",
+    "...#..",
+    "......",
+    "~~~~~~",
+    "...S.."
+  ],
+  "startDir": "N",
+  "deck": [
+    "bridge",
+    "straight",
+    "right",
+    "left",
+    "right",
+    "straight2",
+    "left",
+    "straight2",
+    "right",
+    "straight2",
+    "right",
+    "left"
+  ],
+  "stars": {
+    "two": 2,
+    "three": 3
+  },
+  "fog": true,
+  "easeDecks": [
+    [
+      "bridge",
+      "straight",
+      "right",
+      "left",
+      "right",
+      "straight2",
+      "left",
+      "left",
+      "straight2",
+      "right",
+      "straight2",
+      "right",
+      "left"
+    ],
+    [
+      "bridge",
+      "straight",
+      "right",
+      "left",
+      "right",
+      "straight2",
+      "straight",
+      "left",
+      "left",
+      "straight2",
+      "right",
+      "straight2",
+      "right",
+      "left"
+    ]
+  ],
+  "metrics": {
+    "rating": 4.5,
+    "roads": 2,
+    "minTiles": 8,
+    "reserve": 4,
+    "trap": 0.278
+  }
+}

@@ -1,7 +1,7 @@
 // Решатель для бесконечной колоды: плитки любые из набора, лимита нет.
 // Отвечает только на вопросы геометрии: можно ли отсюда дойти до выхода и сколько разных дорог есть.
 
-import { advanceTime, anyExpired, goalReached, placeTile, timeKey, timeStart, type TimeState } from './tiles';
+import { advanceTime, goalReached, placeTile, timeDead, timeKey, timeStart, type TimeState } from './tiles';
 import type { Dir, Level, TileKind } from './types';
 
 /** Кэш «минимум плиток до выхода» по уровню: зависит только от геометрии, поэтому общий для всех вызовов. */
@@ -21,7 +21,7 @@ const isOn = (mask: bigint, i: number) => ((mask >> BigInt(i)) & 1n) === 1n;
 /** Цель достигнута (арка или все светлячки). */
 const done = (level: Level, h: number, m: bigint) => goalReached(level, h, (i) => isOn(m, i));
 /** Отсюда уже не выиграть из-за времени (погас гаснущий фонарь). */
-const dead = (level: Level, ts: TimeState) => level.fades.length > 0 && anyExpired(level, ts);
+const dead = (level: Level, ts: TimeState) => level.timed && timeDead(level, ts);
 
 /** Минимум плиток из набора, чтобы дойти до выхода через все фонари; -1 — уже не дойти. */
 export function geoMinTiles(level: Level, kinds: readonly TileKind[], head: number, dir: Dir, mask: bigint, time: TimeState = timeStart(level)): number {

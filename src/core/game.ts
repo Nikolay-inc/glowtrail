@@ -2,10 +2,10 @@
 // Состояние неизменяемое: каждое действие возвращает новое состояние.
 
 import { geoCanMove, geoMinTiles } from './geo';
-import { anyExpired, fadeLeft, goalReached, placeTile, type PlacedCell, type Placement, type TimeState } from './tiles';
+import { advanceShadow, anyExpired, fadeLeft, goalReached, placeTile, shadowCaught, timeStart, type PlacedCell, type Placement, type ShadowState, type TimeState } from './tiles';
 import type { Dir, Level, TileKind } from './types';
 
-export { placeTile, tileShape, type BlockReason, type PlacedCell, type Placement, type TimeState } from './tiles';
+export { placeTile, tileShape, type BlockReason, type PlacedCell, type Placement, type TimeState, type ShadowState } from './tiles';
 
 export const TRAY_SIZE = 3;
 
@@ -21,6 +21,8 @@ export interface RoadCell extends PlacedCell {
   dirOut: Dir;
   /** Номер плитки, которая заняла клетку (0 — старт). По нему считаются часы уровня. */
   step: number;
+  /** Грибное кольцо: дорога вошла (in) или вышла из парного (out). */
+  portal?: 'in' | 'out';
 }
 
 export type Status = 'playing' | 'won' | 'lost';
@@ -42,6 +44,10 @@ export interface GameState {
   stashSlots: number;
   /** Заряды «Поворота плитки» на этот уровень. */
   rotations: number;
+  /** Заряды травницы на этот уровень (задерживают тень; сколько осталось — в timeOf(state).sh). */
+  charms: number;
+  /** Радиус обзора в тумане (1 + обсерватория). */
+  sight: number;
   /** Состояние генератора случайных плиток (бесконечная колода). */
   rng: number;
   /** Сколько раз отменяли ход — от этого зависят звёзды на уровнях без лимита. */
@@ -67,6 +73,10 @@ export interface GameOptions {
   stashSlots?: number;
   /** Зарядов «Поворота плитки». */
   rotations?: number;
+  /** Травница: сколько раз за уровень задержать тень (0–3). */
+  charms?: number;
+  /** Обсерватория: на сколько клеток дальше видно в тумане (0–2). */
+  fogBonus?: number;
 }
 
 /** Поворот на 90° по часовой стрелке: выход «прямо» → «направо» → (назад нельзя) → «налево» → «прямо». */
@@ -176,6 +186,8 @@ export function createGame(level: Level, deck: TileKind[] = level.deck, seed = 1
     stash2: null,
     stashSlots: level.allowStash ? Math.max(1, Math.min(2, opts.stashSlots ?? 1)) : 1,
     rotations: Math.max(0, opts.rotations ?? 0),
+    charms: level.shadow ? Math.max(0, opts.charms ?? 0) : 0,
+    sight: 1 + Math.max(0, opts.fogBonus ?? 0),
     rng,
     undosUsed: 0,
     moves: 0,
@@ -190,11 +202,36 @@ export function tilesPlaced(state: GameState): number {
   return state.road[state.road.length - 1].step;
 }
 
-/** Время уровня для правил: число поставленных плиток и когда зажглись гаснущие фонари. */
+/** Время уровня для правил: число поставленных плиток, когда зажглись гаснущие фонари и где тень. */
 export function timeOf(state: GameState): TimeState {
   const t = tilesPlaced(state);
-  if (!state.level.fades.length) return { t, lit: [] };
-  return { t, lit: state.level.fades.map((idx) => state.road.find((r) => r.idx === idx)?.step ?? -1) };
+  const lit = state.level.fades.length ? state.level.fades.map((idx) => state.road.find((r) => r.idx === idx)?.step ?? -1) : [];
+  const sh = shadowOf(state);
+  return sh ? { t, lit, sh } : { t, lit };
+}
+
+/** Тень по дороге: проигрываем ходы по порядку (дорога знает, какой плиткой занята каждая клетка). */
+export function shadowOf(state: GameState): ShadowState | undefined {
+  const level = state.level;
+  let sh = timeStart(level, state.charms).sh;
+  if (!sh) return undefined;
+  const road = state.road;
+  let i = 1;
+  for (let step = 1; i < road.length; step++) {
+    const cells: { idx: number }[] = [];
+    while (i < road.length && road[i].step === step) cells.push(road[i++]);
+    sh = advanceShadow(level, sh, step, cells);
+  }
+  return sh;
+}
+
+/** Почему партия проиграна: тень догнала, гаснущий фонарь погас или ходов нет. */
+export function lossReason(state: GameState): 'shadow' | 'fade' | 'stuck' | null {
+  if (state.status !== 'lost') return null;
+  const ts = timeOf(state);
+  if (shadowCaught(ts)) return 'shadow';
+  if (state.level.fades.length && anyExpired(state.level, ts)) return 'fade';
+  return 'stuck';
 }
 
 /** Сколько ходов ещё горит гаснущий фонарь в клетке idx: -1 — не зажжён, 0 — погас. */
@@ -241,7 +278,7 @@ export function firefliesOnRoad(state: GameState): number {
 }
 
 export function isExitOpen(state: GameState): boolean {
-  return lanternsOnRoad(state) === state.level.lanterns.length;
+  return state.level.goal === 'escape' || lanternsOnRoad(state) === state.level.lanterns.length;
 }
 
 /** Сколько клеток (по прямой сетке) от конца дороги до выхода (цель «светлячки» — до ближайшего несобранного). */
@@ -290,6 +327,8 @@ function computeStatus(state: GameState): Status {
   if (goalReached(state.level, state.head, (i) => state.onRoad[i])) return 'won';
   // Гаснущий фонарь погас до прихода в арку — снова не зажжён, а пройти через него ещё раз нельзя.
   if (state.level.fades.length && anyExpired(state.level, timeOf(state))) return 'lost';
+  // Тень догнала конец дороги.
+  if (state.level.shadow && shadowCaught(timeOf(state))) return 'lost';
   return hasAnyMove(state) ? 'playing' : 'lost';
 }
 

@@ -1,0 +1,76 @@
+{
+  "id": "forest-22",
+  "name": "Огоньки на пути",
+  "grid": [
+    "#....",
+    ".E...",
+    "...L.",
+    "#..L.",
+    "#....",
+    "....S"
+  ],
+  "startDir": "N",
+  "deck": [
+    "right",
+    "left",
+    "left",
+    "left",
+    "straight2",
+    "left",
+    "straight",
+    "right",
+    "right",
+    "straight2",
+    "straight2",
+    "right",
+    "right"
+  ],
+  "stars": {
+    "two": 3,
+    "three": 6
+  },
+  "shadow": 3,
+  "goal": "escape",
+  "easeDecks": [
+    [
+      "straight",
+      "right",
+      "left",
+      "left",
+      "left",
+      "straight2",
+      "left",
+      "straight",
+      "right",
+      "right",
+      "straight2",
+      "straight2",
+      "right",
+      "right"
+    ],
+    [
+      "straight2",
+      "straight",
+      "right",
+      "left",
+      "left",
+      "left",
+      "straight2",
+      "left",
+      "straight",
+      "right",
+      "right",
+      "straight2",
+      "straight2",
+      "right",
+      "right"
+    ]
+  ],
+  "metrics": {
+    "rating": 3,
+    "roads": 12,
+    "minTiles": 6,
+    "reserve": 7,
+    "trap": 0.283
+  }
+}

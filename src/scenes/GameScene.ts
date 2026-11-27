@@ -26,8 +26,12 @@ import {
   rotateKind,
   stashAt,
   tilesPlaced,
+  lossReason,
+  timeOf,
   type StashIndex,
 } from '../core/game';
+import { shadowDelay, shadowGap, shadowIn } from '../core/tiles';
+import { drawRingBase, paletteOf } from '../ui/forest';
 import { abilities, buyHint, adHint, chapelAvailable, challengeReward, getEconomy, hintsLeft, questEvent, recordWinRewards, spendChapel, spendHint, type ChallengeReward } from '../meta';
 import { showBloomGift } from '../ui/bloomGift';
 import { showNotEnough } from '../ui/notEnough';
@@ -36,10 +40,10 @@ import { buttonRichLabel, drawCoin, drawLight, toast } from '../ui/meta';
 import { coins, freeHintsPerDay, HINT_PRICE, villageBonuses } from '../core/economy';
 import { easeDeck, findExtraTiles, findHint, nearestSolvable } from '../core/solver';
 import type { Level, TileKind } from '../core/types';
-import { LEVELS, nextLevelOf, numberInWorld } from '../levels/index';
-import { sfx, duckMusic } from '../audio';
+import { LEVELS, nextLevelOf, numberInWorld, worldOf } from '../levels/index';
+import { sfx, duckMusic, setMusicMood } from '../audio';
 import type { Quest } from '../core/quests';
-import { loadProgress, logEvent, lossStreak, recordLoss, recordSkip, startAttempt, type LogEvent } from '../storage';
+import { hasEnteredWorld, loadProgress, logEvent, lossStreak, recordLoss, recordSkip, startAttempt, type LogEvent } from '../storage';
 import { countHint, markAuthPrompted, recordPlayDay, shouldPromptAuth } from '../profile';
 import { Account } from '../cloud/account';
 import { openAuthDialog } from '../ui/AuthDialog';
@@ -169,6 +173,10 @@ export class GameScene extends Phaser.Scene {
   private reward = { coins: 0, light: 0, bonusCoins: 0, bonusLight: 0 };
   /** Раскладка нижней панели: зависит от того, есть ли на уровне слот «отложить». */
   private L: TrayLayout = trayLayout(true);
+  /** Туман: сколько клеток было скрыто на старте и какие из них уже открывались (в лог fog_revealed). */
+  private fogHidden = new Set<number>();
+  private fogOpened = new Set<number>();
+  private shadowText!: Phaser.GameObjects.Text;
 
   private get stashX() {
     return this.L.stashX ?? -CARD * 2;
@@ -220,7 +228,13 @@ export class GameScene extends Phaser.Scene {
     this.trayY = TRAY_Y + down;
     this.previewY = PREVIEW_Y + down;
     this.bottomY = BOTTOM_Y + down;
-    addBackground(this, { evening: !level.night });
+    const forest = paletteOf(level) === 'forest';
+    addBackground(this, { evening: !level.night, forest });
+    // Лес — своя музыка (глубже и таинственнее); на выходе — обратно ночная.
+    if (forest) {
+      setMusicMood('forest');
+      this.events.once('shutdown', () => setMusicMood('night'));
+    }
     this.streak = this.custom ? 0 : lossStreak(level.id);
 
     // Верхняя панель: уровень и строка цели (арка + фонари «зажжено/всего»)
@@ -229,6 +243,7 @@ export class GameScene extends Phaser.Scene {
     this.badgesG = this.add.graphics().setDepth(1);
     this.goalText = text(this, 0, this.topY + 58, '', 40).setOrigin(0, 0.5).setDepth(2);
     this.ffText = text(this, 0, this.topY + 58, '', 40).setOrigin(0, 0.5).setDepth(2);
+    this.shadowText = text(this, 0, this.topY + 58, '', 40).setOrigin(0, 0.5).setDepth(2);
     this.undoBtn = new Button(this, 840, this.topY, { w: 130, h: 130, icon: 'undo', onClick: () => this.onUndo() });
     this.restartBtn = new Button(this, 990, this.topY, { w: 130, h: 130, icon: 'restart', onClick: () => this.restart() });
 
@@ -330,7 +345,16 @@ export class GameScene extends Phaser.Scene {
     }
 
     // Для бесконечной колоды — своё случайное зерно на каждую попытку.
-    this.state = createGame(level, deck, Math.floor(Math.random() * 2 ** 31), { stashSlots: ab.stashSlots, rotations: ab.rotations });
+    // Лес: травница задерживает тень, обсерватория — обзор в тумане дальше (бонусы деревни).
+    const vb = this.custom ? null : villageBonuses(getEconomy());
+    this.state = createGame(level, deck, Math.floor(Math.random() * 2 ** 31), {
+      stashSlots: ab.stashSlots,
+      rotations: ab.rotations,
+      charms: vb?.shadowCharms ?? 0,
+      fogBonus: vb?.fogSight ?? 0,
+    });
+    this.fogHidden.clear();
+    this.fogOpened.clear();
     const m = level.metrics;
     this.usedHint = false;
     this.hintsUsed = 0;
@@ -338,6 +362,7 @@ export class GameScene extends Phaser.Scene {
     if (extra > 0) this.log({ ev: 'auto_ease', level: level.id, attempt: this.attempt, added: extra, streak: this.streak });
     this.t0 = Date.now();
     this.board.setRoad(this.state);
+    if (level.fog) this.board.visibleCells().forEach((v, i) => !v && this.fogHidden.add(i));
     this.refresh(false);
     // Уровень появляется из темноты — свет расходится от фонаря Lumo.
     irisIn(this, this.board.lumo.x, this.board.lumo.y);
@@ -373,11 +398,16 @@ export class GameScene extends Phaser.Scene {
     const level = this.state.level;
     const n = level.lanterns.length;
     const ff = level.fireflies.length;
-    type Row = { icon: 'portal' | 'lantern' | 'firefly' | 'fade' | 'bridge'; label: string; note?: string };
+    type Row = { icon: 'portal' | 'lantern' | 'firefly' | 'fade' | 'bridge' | 'ring' | 'fog' | 'shadow' | 'herb' | 'eye'; label: string; note?: string };
     const rows: Row[] = [];
     if (level.goal === 'fireflies') {
       // Цель «светлячки»: двери нет, нужно собрать всех.
       rows.push({ icon: 'firefly', label: t('goal_all_fireflies', { n: ff }) });
+    } else if (level.goal === 'escape') {
+      // «Побег»: арка открыта, фонари — по желанию (задерживают тень).
+      rows.push({ icon: 'portal', label: t('goal_escape') });
+      if (n > 0) rows.push({ icon: 'lantern', label: t('goal_escape_lanterns', { n }) });
+      if (ff > 0) rows.push({ icon: 'firefly', label: t('goal_fireflies', { n: ff }) });
     } else {
       rows.push({ icon: 'portal', label: t('goal_door') });
       if (n > 0) rows.push({ icon: 'lantern', label: t('goal_lanterns', { n }) });
@@ -387,6 +417,17 @@ export class GameScene extends Phaser.Scene {
     const fadeN = level.fades.length ? level.fade[level.fades[0]] : 0;
     if (fadeN) rows.push({ icon: 'fade', label: t('goal_fade_title'), note: t('goal_fade_text') });
     if (level.turnBridges.length) rows.push({ icon: 'bridge', label: t('goal_bridge_title'), note: t('goal_bridge_text') });
+    if (level.rings.length) rows.push({ icon: 'ring', label: t('goal_ring_title'), note: t('goal_ring_text') });
+    if (level.fog) {
+      rows.push({ icon: 'fog', label: t('goal_fog_title'), note: t('goal_fog_text') });
+      // Обсерватория: обзор в тумане дальше.
+      if (this.state.sight > 1) rows.push({ icon: 'eye', label: t('goal_observatory', { n: this.state.sight - 1 }) });
+    }
+    if (level.shadow) {
+      rows.push({ icon: 'shadow', label: t('goal_shadow_title'), note: t('goal_shadow_text', { n: level.shadow }) });
+      // Травница: сколько раз задержит тень на этом уровне.
+      if (this.state.charms > 0) rows.push({ icon: 'herb', label: t('goal_herbalist', { n: this.state.charms }) });
+    }
 
     const ICON = 80;
     const GAP = 40;
@@ -437,6 +478,11 @@ export class GameScene extends Phaser.Scene {
       else if (r.icon === 'firefly') drawFireflyIcon(ig, ix, iy, 30, true);
       else if (r.icon === 'lantern') this.drawLanternIcon(ig, ix, iy + 4, true, 1.5);
       else if (r.icon === 'fade') this.drawFadeIcon(ig, ix, iy + 10, fadeN);
+      else if (r.icon === 'ring') drawRingBase(ig, ix, iy, ICON * 1.05, 1);
+      else if (r.icon === 'fog') this.drawFogIcon(ig, ix, iy);
+      else if (r.icon === 'shadow') this.drawShadowIcon(ig, ix, iy, 1.6);
+      else if (r.icon === 'herb') this.drawHerbIcon(ig, ix, iy);
+      else if (r.icon === 'eye') this.drawEyeIcon(ig, ix, iy);
       else this.drawTurnBridgeIcon(ig, ix, iy + 10);
       c.add(ig);
       const label = labels[i].setScale(fit);
@@ -487,6 +533,47 @@ export class GameScene extends Phaser.Scene {
     g.fillCircle(x + 26, y - 28, 22);
     g.lineStyle(4, C.primary, 1);
     g.strokeCircle(x + 26, y - 28, 22);
+  }
+
+  /** Туман: три облачка. */
+  private drawFogIcon(g: Phaser.GameObjects.Graphics, x: number, y: number) {
+    g.fillStyle(0x9aa0d0, 0.9);
+    g.fillEllipse(x - 14, y + 6, 54, 30);
+    g.fillEllipse(x + 16, y + 2, 50, 34);
+    g.fillStyle(0xc8c8f0, 1);
+    g.fillEllipse(x, y - 10, 46, 32);
+  }
+
+  /** Тень: тёмный сгусток с глазами. k — масштаб. */
+  private drawShadowIcon(g: Phaser.GameObjects.Graphics, x: number, y: number, k = 1) {
+    g.fillStyle(0x6a2cff, 0.25);
+    g.fillCircle(x, y, 26 * k);
+    g.fillStyle(0x0c0618, 1);
+    g.fillEllipse(x, y - 2 * k, 30 * k, 32 * k);
+    for (let i = -1; i <= 1; i++) g.fillCircle(x + i * 8 * k, y + 13 * k, 6 * k);
+    g.fillStyle(0xe8d8ff, 1);
+    g.fillEllipse(x - 6 * k, y - 4 * k, 5 * k, 7 * k);
+    g.fillEllipse(x + 6 * k, y - 4 * k, 5 * k, 7 * k);
+  }
+
+  /** Травница: листик. */
+  private drawHerbIcon(g: Phaser.GameObjects.Graphics, x: number, y: number) {
+    g.fillStyle(0x5ed06a, 1);
+    g.fillEllipse(x - 8, y + 4, 52, 28);
+    g.fillStyle(0x8af08a, 1);
+    g.fillEllipse(x + 10, y - 10, 40, 22);
+    g.lineStyle(4, 0x2a6a30, 1);
+    g.lineBetween(x - 30, y + 10, x + 26, y - 12);
+  }
+
+  /** Обсерватория: глаз-телескоп. */
+  private drawEyeIcon(g: Phaser.GameObjects.Graphics, x: number, y: number) {
+    g.fillStyle(0xfff1cc, 1);
+    g.fillEllipse(x, y, 64, 34);
+    g.fillStyle(0x3a46a0, 1);
+    g.fillCircle(x, y, 13);
+    g.fillStyle(0x0b0f27, 1);
+    g.fillCircle(x, y, 6);
   }
 
   /** Поворотный мост в карточке цели: мост сейчас и полупрозрачный — каким станет после плитки. */
@@ -577,7 +664,14 @@ export class GameScene extends Phaser.Scene {
     this.board.setHead(s);
     this.board.updateLanterns(s);
     this.board.updateFireflies(s);
+    if (s.level.fog) this.board.visibleCells().forEach((v, i) => v && this.fogHidden.has(i) && this.fogOpened.add(i));
     this.updateHints();
+  }
+
+  /** Туман: сколько клеток игрок открыл за попытку (в лог при конце уровня). */
+  private logFog() {
+    if (!this.state.level.fog || !this.fogHidden.size) return;
+    this.log({ ev: 'fog_revealed', level: this.state.level.id, attempt: this.attempt, cells: this.fogOpened.size, total: this.fogHidden.size });
   }
 
   /** Строка цели под заголовком: арка (с замком, пока не все фонари), фонари и светлячки «собрано/всего». */
@@ -589,15 +683,26 @@ export class GameScene extends Phaser.Scene {
     const ffTotal = level.fireflies.length;
     const y = this.topY + 58;
     const open = lanternsLeft(this.state) === 0;
-    const lit = n - lanternsLeft(this.state);
+    // «Побег»: фонари не обязательны — считаем, сколько зажжено на самом деле.
+    const lit = level.goal === 'escape' ? lanternsOnRoad(this.state) : n - lanternsLeft(this.state);
     const ff = firefliesOnRoad(this.state);
     this.goalText.setText(n > 0 ? `${lit}/${n}` : '');
     this.ffText.setText(ffTotal > 0 ? `${ff}/${ffTotal}` : '');
-    // Ширина строки: арка, [фонарь + текст], [светлячок + текст].
+    // Тень: через сколько ходов появится или сколько клеток до неё.
+    const ts = level.shadow ? timeOf(this.state) : null;
+    const gap = ts ? shadowGap(ts) : -1;
+    this.shadowText.setText(!ts ? '' : gap < 0 ? t('shadow_in', { n: shadowIn(level, ts) }) : t('shadow_gap', { n: gap }));
+    this.shadowText.setColor(gap >= 0 && gap <= 2 ? '#ff8a7a' : '#d8c8ff');
+    // Ширина строки: арка, [фонарь + текст], [светлячок + текст], [тень + текст].
+    const door = level.goal !== 'fireflies';
+    // Строка между кнопками (поворот слева, отмена справа): если не влезает — шрифт мельче.
+    const parts = [n > 0, ffTotal > 0, !!ts].filter(Boolean).length;
+    const fs = parts >= 3 ? 34 : 40;
+    for (const tx of [this.goalText, this.ffText, this.shadowText]) tx.setFontSize(fs);
     const lanternW = n > 0 ? 30 + 50 + this.goalText.width : 0;
     const ffW = ffTotal > 0 ? 40 + 50 + this.ffText.width : 0;
-    const door = level.goal === 'classic';
-    const total = (door ? 44 : -40) + lanternW + ffW;
+    const shW = ts ? 40 + 50 + this.shadowText.width : 0;
+    const total = (door ? 44 : -40) + lanternW + ffW + shW;
     let x = W / 2 - total / 2;
     if (door) {
       drawPortalIcon(g, x + 22, y, 22, open);
@@ -611,6 +716,11 @@ export class GameScene extends Phaser.Scene {
     if (ffTotal > 0) {
       drawFireflyIcon(g, x + 76, y, 20, ff > 0);
       this.ffText.setX(x + 106).setColor(ff === ffTotal ? '#c8ff7a' : C.text);
+      x += ffW;
+    }
+    if (ts) {
+      this.drawShadowIcon(g, x + 76, y, 0.85);
+      this.shadowText.setX(x + 106);
     }
   }
 
@@ -1192,6 +1302,19 @@ export class GameScene extends Phaser.Scene {
     const newCells = next.road.length - prev.road.length;
     const placed = next.road[next.road.length - 1];
     if (placed.kind === 'jump') this.log({ ev: 'tile_jump_used', level: next.level.id, attempt: this.attempt, tile: placed.step });
+    if (next.road.slice(prev.road.length).some((r) => r.portal === 'in')) this.log({ ev: 'teleport_used', level: next.level.id, attempt: this.attempt, tile: placed.step });
+    if (next.level.shadow) {
+      // Тень: задержал фонарь или травница — подпись над тенью; догнала — бросок и «Тень настигла».
+      const why = next.status === 'won' ? null : shadowDelay(timeOf(prev), timeOf(next));
+      if (why) {
+        this.board.shadowDelayed(t(why === 'herbalist' ? 'shadow_delayed_herbalist' : 'shadow_delayed_lantern'), why === 'herbalist');
+        this.log({ ev: 'shadow_delayed', level: next.level.id, attempt: this.attempt, source: why, tile: placed.step });
+      }
+      if (lossReason(next) === 'shadow') {
+        this.board.shadowCaught();
+        this.log({ ev: 'shadow_caught', level: next.level.id, attempt: this.attempt, tile: placed.step });
+      }
+    }
     if (!this.custom) questEvent({ type: 'tile', jump: placed.kind === 'jump' });
     const expired = expiredLantern(next);
     if (next.status !== 'won' && expired >= 0 && expiredLantern(prev) < 0) {
@@ -1289,6 +1412,7 @@ export class GameScene extends Phaser.Scene {
 
   private logAbandon() {
     if (this.ended) return;
+    this.logFog();
     this.log({ ev: 'abandon', level: this.state.level.id, attempt: this.attempt, ms: this.elapsed(), moves: this.state.moves, ...this.attemptStats(0) });
     this.ended = true;
   }
@@ -1339,6 +1463,7 @@ export class GameScene extends Phaser.Scene {
       moves: s.moves,
       ...this.attemptStats(stars),
     });
+    this.logFog();
     if (s.level.fireflies.length > 0) {
       this.log({ ev: 'fireflies_collected', level: s.level.id, attempt: this.attempt, fireflies: ff, firefliesTotal: s.level.fireflies.length });
     }
@@ -1371,8 +1496,21 @@ export class GameScene extends Phaser.Scene {
     const s = this.state;
     this.streak = this.custom ? this.streak + 1 : recordLoss(s.level.id);
     this.log({ ev: 'lose', level: s.level.id, attempt: this.attempt, ms: this.elapsed(), moves: s.moves, streak: this.streak, ...this.attemptStats(0) });
+    this.logFog();
     if (this.streak >= STUCK.pulseHint) this.pulse(this.hintBtn);
-    this.time.delayedCall(450, () => {
+    // Тень догнала — сначала показываем бросок и надпись «Тень настигла!», потом «Почти!».
+    const caught = lossReason(s) === 'shadow';
+    if (caught) {
+      this.time.delayedCall(700, () => {
+        if (this.state !== s) return;
+        const c = this.board.center(s.head);
+        const banner = text(this, W / 2, c.y - this.board.cell * 0.9, t('shadow_caught'), 64, '#e8d8ff', true, { w: W - 120 }).setDepth(30);
+        banner.setStroke('#0b0f27', 10).setScale(0.6).setAlpha(0);
+        this.tweens.add({ targets: banner, scale: 1, alpha: 1, duration: 260, ease: 'Back.out' });
+        this.tweens.add({ targets: banner, alpha: 0, duration: 300, delay: 900, onComplete: () => banner.destroy() });
+      });
+    }
+    this.time.delayedCall(caught ? 1900 : 450, () => {
       if (this.state !== s) return;
       sfx.lose();
       this.showLosePanel();
@@ -1462,7 +1600,10 @@ export class GameScene extends Phaser.Scene {
     const tutorialEnd = !this.custom && isTutorialActive(num) && num === TUTORIAL_LAST_LEVEL;
     if (!this.custom && isTutorialActive(num)) logTutorialStep(`level_${num}_done`, this.state.level.id);
     if (tutorialEnd) completeTutorial();
-    const toMenu = isLast || tutorialEnd || !!this.custom;
+    // Следующий уровень — в новом мире, куда игрок ещё не входил: сначала карта (там сцена входа в мир).
+    const nextLv = this.custom ? null : nextLevelOf(this.level);
+    const newWorld = !!nextLv && worldOf(nextLv).id !== worldOf(this.level).id && !hasEnteredWorld(worldOf(nextLv).id);
+    const toMenu = isLast || tutorialEnd || !!this.custom || newWorld;
     const next = () => (toMenu ? this.go('Menu') : this.go('Game', { levelIndex: this.levelIndex + 1 }));
     const by = top + 610 + ffRow;
     o.add(new Button(this, W / 2, by, { w: 520, h: 140, icon: 'play', label: this.custom ? t('to_editor') : isLast ? t('menu') : t('next'), primary: true, onClick: next }));
@@ -1515,7 +1656,9 @@ export class GameScene extends Phaser.Scene {
     const dist = distanceToExit(s);
 
     // Раскладка по вертикали считается заранее, чтобы панель была ровно по содержимому.
-    const infoRel = total > 0 ? 350 : 210;
+    // Тень догнала: пояснение в три строки — место под ним.
+    const shadowLoss = lossReason(s) === 'shadow';
+    const infoRel = (total > 0 ? 350 : 210) + (shadowLoss ? 90 : 0);
     const btnRel = infoRel + 150;
     const twoBig = !!extra || canUndo(s);
     const rowRel = btnRel + (twoBig ? 345 : 190);
@@ -1536,9 +1679,11 @@ export class GameScene extends Phaser.Scene {
     // Дорога упёрлась в закрытую арку: объясняем, почему войти нельзя.
     const w = s.level.width;
     const facingExit =
-      s.level.goal === 'classic' &&
+      s.level.goal !== 'fireflies' &&
       (s.head % w) + DX[s.dir] === s.level.exit.x && Math.floor(s.head / w) + DY[s.dir] === s.level.exit.y && lanternsLeft(s) > 0;
-    if (facingExit) {
+    if (shadowLoss) {
+      o.add(text(this, W / 2, y + 50, t('lose_shadow'), 44, '#d8c8ff', true, { w: 800, lines: 3 }));
+    } else if (facingExit) {
       o.add(text(this, W / 2, y, t('tip_door_locked'), 46, '#ffd36b', true, { w: 860, lines: 2 }));
       this.board.shakeLock();
       this.log({ ev: 'door_locked_attempt', level: s.level.id, attempt: this.attempt });

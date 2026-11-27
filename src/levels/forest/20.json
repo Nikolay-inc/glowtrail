@@ -1,0 +1,87 @@
+{
+  "id": "forest-20",
+  "name": "Испытание тени",
+  "grid": [
+    "......",
+    ".....#",
+    ".....L",
+    "aFb.Fa",
+    "S..FL.",
+    "...#..",
+    "....FE",
+    ".....b"
+  ],
+  "startDir": "E",
+  "deck": [
+    "left",
+    "right",
+    "left",
+    "left",
+    "left",
+    "right",
+    "left",
+    "left",
+    "left",
+    "right",
+    "left",
+    "straight",
+    "straight",
+    "right",
+    "right",
+    "straight2"
+  ],
+  "stars": {
+    "two": 2,
+    "three": 3
+  },
+  "fog": true,
+  "shadow": 4,
+  "easeDecks": [
+    [
+      "straight",
+      "left",
+      "right",
+      "left",
+      "left",
+      "left",
+      "right",
+      "left",
+      "left",
+      "left",
+      "right",
+      "left",
+      "straight",
+      "straight",
+      "right",
+      "right",
+      "straight2"
+    ],
+    [
+      "straight2",
+      "straight",
+      "left",
+      "right",
+      "left",
+      "left",
+      "left",
+      "right",
+      "left",
+      "left",
+      "left",
+      "right",
+      "left",
+      "straight",
+      "straight",
+      "right",
+      "right",
+      "straight2"
+    ]
+  ],
+  "metrics": {
+    "rating": 5.3,
+    "roads": 3,
+    "minTiles": 12,
+    "reserve": 4,
+    "trap": 0.305
+  }
+}

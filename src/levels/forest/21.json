@@ -1,0 +1,61 @@
+{
+  "id": "forest-21",
+  "name": "Побег",
+  "grid": [
+    "E....",
+    ".....",
+    "F..##",
+    ".F...",
+    ".....",
+    ".S..#"
+  ],
+  "startDir": "N",
+  "deck": [
+    "right",
+    "straight",
+    "left",
+    "straight2",
+    "left",
+    "right",
+    "straight",
+    "straight2"
+  ],
+  "stars": {
+    "two": 1,
+    "three": 2
+  },
+  "shadow": 3,
+  "goal": "escape",
+  "easeDecks": [
+    [
+      "right",
+      "straight",
+      "left",
+      "straight2",
+      "left",
+      "right",
+      "left",
+      "straight",
+      "straight2"
+    ],
+    [
+      "right",
+      "straight",
+      "left",
+      "straight2",
+      "left",
+      "right",
+      "straight2",
+      "left",
+      "straight",
+      "straight2"
+    ]
+  ],
+  "metrics": {
+    "rating": 2.7,
+    "roads": 13,
+    "minTiles": 5,
+    "reserve": 3,
+    "trap": 0.197
+  }
+}

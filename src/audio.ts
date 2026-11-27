@@ -170,7 +170,7 @@ export function duckMusic(seconds = 2) {
   music.duck(seconds);
 }
 
-/** Настроение музыки: деревня — теплее. */
+/** Настроение музыки: 'night' — Долина, 'warm' — деревня, 'forest' — «Туманный лес». Смена — кроссфейд ~2,5 с, то же настроение — ничего. */
 export function setMusicMood(mood: Mood) {
   music.setMood(mood);
 }

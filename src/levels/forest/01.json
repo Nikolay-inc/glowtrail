@@ -1,0 +1,74 @@
+{
+  "id": "forest-01",
+  "name": "Грибное кольцо",
+  "grid": [
+    ".aE..",
+    "....#",
+    "....#",
+    "....#",
+    ".F.F.",
+    ".a..S"
+  ],
+  "startDir": "N",
+  "deck": [
+    "straight",
+    "left",
+    "straight2",
+    "left",
+    "left",
+    "straight2",
+    "left",
+    "right",
+    "straight",
+    "straight",
+    "left",
+    "left",
+    "straight"
+  ],
+  "stars": {
+    "two": 4,
+    "three": 7
+  },
+  "easeDecks": [
+    [
+      "right",
+      "straight",
+      "left",
+      "straight2",
+      "left",
+      "left",
+      "straight2",
+      "left",
+      "right",
+      "straight",
+      "straight",
+      "left",
+      "left",
+      "straight"
+    ],
+    [
+      "right",
+      "straight",
+      "left",
+      "straight2",
+      "left",
+      "right",
+      "left",
+      "straight2",
+      "left",
+      "right",
+      "straight",
+      "straight",
+      "left",
+      "left",
+      "straight"
+    ]
+  ],
+  "metrics": {
+    "rating": 2.6,
+    "roads": 25,
+    "minTiles": 5,
+    "reserve": 8,
+    "trap": 0.27
+  }
+}

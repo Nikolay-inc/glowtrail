@@ -1,0 +1,67 @@
+{
+  "id": "forest-30",
+  "name": "Сердце леса",
+  "grid": [
+    ".#..FF",
+    "...#.L",
+    "....Fa",
+    "....FS",
+    ".#....",
+    "....##",
+    "......",
+    "EaL..."
+  ],
+  "startDir": "W",
+  "deck": [
+    "right",
+    "straight2",
+    "straight",
+    "left",
+    "right",
+    "right",
+    "right",
+    "straight",
+    "right"
+  ],
+  "stars": {
+    "two": 1,
+    "three": 2
+  },
+  "fog": true,
+  "shadow": 2,
+  "goal": "escape",
+  "easeDecks": [
+    [
+      "right",
+      "straight2",
+      "straight",
+      "right",
+      "left",
+      "right",
+      "right",
+      "right",
+      "straight",
+      "right"
+    ],
+    [
+      "right",
+      "straight2",
+      "straight",
+      "right",
+      "left",
+      "right",
+      "straight",
+      "right",
+      "right",
+      "straight",
+      "right"
+    ]
+  ],
+  "metrics": {
+    "rating": 5.4,
+    "roads": 2,
+    "minTiles": 6,
+    "reserve": 3,
+    "trap": 0.458
+  }
+}

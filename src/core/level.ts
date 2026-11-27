@@ -1,4 +1,4 @@
-import { CELL_BY_CHAR, CHAR_BY_CELL, DIR_BY_LETTER, TILE_KINDS, type CellType, type Level, type LevelData, type Point } from './types';
+import { CELL_BY_CHAR, CHAR_BY_CELL, DIR_BY_LETTER, RING_LETTERS, TILE_KINDS, type CellType, type Level, type LevelData, type Point } from './types';
 
 /** Превращает JSON уровня в структуру для логики и проверяет, что он корректен. */
 export function parseLevel(data: LevelData, num = 0): Level {
@@ -13,6 +13,8 @@ export function parseLevel(data: LevelData, num = 0): Level {
   const fade: number[] = [];
   const bridgeH: boolean[] = [];
   const turnBridges: number[] = [];
+  const ringId: number[] = [];
+  const ringCells: number[][] = RING_LETTERS.map(() => []);
   const goal = data.goal ?? 'classic';
 
   data.grid.forEach((row, y) => {
@@ -33,12 +35,27 @@ export function parseLevel(data: LevelData, num = 0): Level {
       if (type === 'turnbridge') turnBridges.push(y * width + x);
       fade.push(ch >= '2' && ch <= '9' ? Number(ch) : 0);
       bridgeH.push(ch === '-');
+      const ring = (RING_LETTERS as readonly string[]).indexOf(ch);
+      ringId.push(ring + 1);
+      if (ring >= 0) ringCells[ring].push(y * width + x);
       cells.push(type);
     });
   });
 
   if (!start) throw new Error(`Уровень ${data.id}: нет старта`);
-  if (goal === 'classic' && !exit) throw new Error(`Уровень ${data.id}: нет выхода`);
+  if (goal !== 'fireflies' && !exit) throw new Error(`Уровень ${data.id}: нет выхода`);
+  const shadow = data.shadow ?? 0;
+  if (!Number.isInteger(shadow) || shadow < 0 || shadow > 20) throw new Error(`Уровень ${data.id}: тень — целое число ходов 0–20`);
+  if (goal === 'escape' && !shadow) throw new Error(`Уровень ${data.id}: цель «Побег» без тени`);
+  const ringPair: number[] = cells.map(() => -1);
+  const rings: [number, number][] = [];
+  ringCells.forEach((cs, k) => {
+    if (cs.length === 0) return;
+    if (cs.length !== 2) throw new Error(`Уровень ${data.id}: колец «${RING_LETTERS[k]}» должно быть два, а их ${cs.length}`);
+    ringPair[cs[0]] = cs[1];
+    ringPair[cs[1]] = cs[0];
+    rings.push([cs[0], cs[1]]);
+  });
   if (goal === 'fireflies') {
     if (exit) throw new Error(`Уровень ${data.id}: у цели «светлячки» арки нет`);
     if (fireflies.length === 0) throw new Error(`Уровень ${data.id}: цель «светлячки», а светлячков нет`);
@@ -68,7 +85,12 @@ export function parseLevel(data: LevelData, num = 0): Level {
     fades: fade.map((n, i) => (n > 0 ? i : -1)).filter((i) => i >= 0),
     turnBridges,
     bridgeH,
-    timed: turnBridges.length > 0 || fade.some((n) => n > 0),
+    ringPair,
+    ringId,
+    rings,
+    fog: data.fog ?? false,
+    shadow,
+    timed: turnBridges.length > 0 || fade.some((n) => n > 0) || shadow > 0,
     deck: [...(data.deck ?? [])],
     tileSet: data.tileSet ? [...data.tileSet] : null,
     allowStash: data.allowStash ?? true,
@@ -82,15 +104,16 @@ export function parseLevel(data: LevelData, num = 0): Level {
 }
 
 /** Символ клетки в формате JSON (с ориентацией моста и числом гаснущего фонаря). */
-export function cellChar(level: Pick<Level, 'cells' | 'fade' | 'bridgeH'>, idx: number): string {
+export function cellChar(level: Pick<Level, 'cells' | 'fade' | 'bridgeH'> & { ringId?: number[] }, idx: number): string {
   const c = level.cells[idx];
   if (c === 'turnbridge') return level.bridgeH[idx] ? '-' : '|';
+  if (c === 'ring') return RING_LETTERS[(level.ringId?.[idx] || 1) - 1];
   if (c === 'lantern' && level.fade[idx] > 0) return String(level.fade[idx]);
   return CHAR_BY_CELL[c];
 }
 
 /** Строки поля уровня в формате JSON. */
-export function levelRows(level: Pick<Level, 'cells' | 'fade' | 'bridgeH' | 'width'>): string[] {
+export function levelRows(level: Pick<Level, 'cells' | 'fade' | 'bridgeH' | 'width'> & { ringId?: number[] }): string[] {
   const rows: string[] = [];
   for (let i = 0; i < level.cells.length; i += level.width) {
     let row = '';

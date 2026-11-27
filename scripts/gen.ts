@@ -1,5 +1,6 @@
-// npm run gen -- --count 300 --size 5x6 --features lantern,rock,water --seed N [--reserve 2-7] [--goal fireflies] [--min-roads 10] [--max-rating 3]
-// Элементы: lantern, rock, water, firefly, jump (плитка «прыжок»), turnbridge (поворотный мост), fade (гаснущий фонарь).
+// npm run gen -- --count 300 --size 5x6 --features lantern,rock,water --seed N [--reserve 2-7] [--goal fireflies|escape] [--min-roads 10] [--max-rating 3]
+// Элементы: lantern, rock, water, firefly, jump (плитка «прыжок»), turnbridge (поворотный мост), fade (гаснущий фонарь),
+// ring (грибные кольца-телепорты), fog (туман, проверка «без угадывания»), shadow (тень; у цели escape — всегда).
 // Генерирует кандидатов в уровни и сохраняет их с метриками в generated/ (в игру они не попадают).
 // Отбрасывает нерешаемые, уровни с 1 решением, «скучные» (почти любой ход годится), требующие «отложить»
 // и уровни, где не собрать всех светлячков. Из кандидатов уровни выбирает npm run pick.
@@ -23,7 +24,7 @@ const goal = arg('goal', 'classic') as GoalType;
 // Лёгкие уровни и уровни-знакомства: не меньше 10 решений и рейтинг не выше 3.
 const minRoads = Number(arg('min-roads', String(DEFAULT_FILTER.minRoads)));
 const maxRating = process.argv.includes('--max-rating') ? Number(arg('max-rating', '10')) : undefined;
-if (goal !== 'classic' && goal !== 'fireflies') throw new Error('Цель: classic или fireflies');
+if (goal !== 'classic' && goal !== 'fireflies' && goal !== 'escape') throw new Error('Цель: classic, fireflies или escape');
 for (const f of features) if (!GEN_FEATURES.includes(f)) throw new Error(`Неизвестный элемент «${f}», можно: ${GEN_FEATURES.join(', ')}`);
 if (!(width >= 3 && height >= 3 && width <= 8 && height <= 10)) throw new Error('Размер поля: от 3x3 до 8x10');
 

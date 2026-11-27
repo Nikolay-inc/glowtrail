@@ -12,10 +12,10 @@ import { LEVELS } from '../src/levels/index';
 describe('карточки правил: сценарии идут по настоящим правилам игры', () => {
   for (const card of Object.values(RULE_CARDS)) {
     card.phases.forEach((phase, i) => {
-      it(`${card.id}, фаза ${i + 1}: неудачные попытки не встают, финал — победа`, () => {
+      it(`${card.id}, фаза ${i + 1}: неудачные попытки не встают, финал — ${phase.ends === 'lost' ? 'тень догнала' : 'победа'}`, () => {
         const r = runPhase(phase);
         expect(r.failsOk).toBe(true);
-        expect(r.state.status).toBe('won');
+        expect(r.state.status).toBe(phase.ends === 'lost' ? 'lost' : 'won');
       });
     });
   }
@@ -75,7 +75,7 @@ describe('когда показывать карточки', () => {
     expect(RULES_BY_LEVEL[firstWith((l) => l.cells.includes('rock'))]).toContain('rock');
     expect(RULES_BY_LEVEL[firstWith((l) => l.cells.includes('water'))]).toContain('water');
     // Остальное объясняем по содержимому уровня — там, где элемент встретился впервые.
-    const byContent = ['firefly', 'jump', 'ffgoal', 'turnbridge', 'fade'];
+    const byContent = ['firefly', 'jump', 'ffgoal', 'turnbridge', 'fade', 'ring', 'fog', 'shadow', 'escape'];
     expect(Object.values(RULES_BY_LEVEL).flat().sort()).toEqual(ALL_RULES.filter((r) => !byContent.includes(r)).sort());
     const ff = LEVELS.find((l) => l.fireflies.length > 0);
     expect(ff?.num).toBe(FIREFLY_FROM);
@@ -84,6 +84,15 @@ describe('когда показывать карточки', () => {
     expect(rulesFor(LEVELS.find((l) => l.goal === 'fireflies')!)).toContain('ffgoal');
     expect(rulesFor(LEVELS.find((l) => l.turnBridges.length > 0)!)).toContain('turnbridge');
     expect(rulesFor(LEVELS.find((l) => l.fades.length > 0)!)).toContain('fade');
+    // Лес: кольца — 31, туман — 35, тень — 41, «Побег» — 51 (первая встреча).
+    expect(LEVELS.find((l) => l.rings.length > 0)?.num).toBe(31);
+    expect(LEVELS.find((l) => l.fog)?.num).toBe(35);
+    expect(LEVELS.find((l) => l.shadow > 0)?.num).toBe(41);
+    expect(LEVELS.find((l) => l.goal === 'escape')?.num).toBe(51);
+    expect(rulesFor(LEVELS[30])).toContain('ring');
+    expect(rulesFor(LEVELS[34])).toContain('fog');
+    expect(rulesFor(LEVELS[40])).toContain('shadow');
+    expect(rulesFor(LEVELS[50])).toContain('escape');
     // Каждая карточка правил где-то встречается.
     const shown = new Set(LEVELS.flatMap((l) => rulesFor(l)));
     for (const r of ALL_RULES) if (r !== 'side') expect(shown.has(r), r).toBe(true);

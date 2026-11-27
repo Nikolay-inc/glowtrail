@@ -120,6 +120,8 @@ export type BonusKind =
   | 'wardrobeDiscountPct' // скидка на гардероб
   | 'preview' // «Фонарик»: плиток видно наперёд
   | 'nightLight' // ночные уровни светлее
+  | 'shadowCharms' // травница: сколько раз за уровень задержать тень (лес)
+  | 'fogSight' // обсерватория: обзор в тумане дальше на столько клеток (лес)
   | 'questRerolls' // заменить задание жителя (раз в день)
   | 'questLight' // +свет за каждое выполненное задание
   | 'streetDiscountPct' // скидка на улицы
@@ -137,8 +139,8 @@ export const BONUS: Record<string, { kind: BonusKind; values: readonly [number, 
   square: { kind: 'chestTier', values: [1, 2, 3] },
   lumo: { kind: 'wardrobeDiscountPct', values: [5, 10, 15] },
   lighthouse: { kind: 'preview', values: [1, 2, 3] },
-  herbalist: { kind: 'extraFreeHints', values: [1, 1, 2] },
-  observatory: { kind: 'nightLight', values: [1, 2, 3] },
+  herbalist: { kind: 'shadowCharms', values: [1, 2, 3] },
+  observatory: { kind: 'fogSight', values: [1, 1, 2] },
   'owl-post': { kind: 'questRerolls', values: [1, 2, 3] },
   'mushroom-farm': { kind: 'questLight', values: [1, 2, 3] },
   sawmill: { kind: 'streetDiscountPct', values: [10, 15, 20] },

@@ -1,0 +1,76 @@
+{
+  "id": "forest-18",
+  "name": "Блуждающие огни",
+  "grid": [
+    "..#..S",
+    "....a.",
+    ".L...b",
+    ".L....",
+    "..a...",
+    ".E....",
+    ".##b.."
+  ],
+  "startDir": "S",
+  "deck": [
+    "straight",
+    "left",
+    "right",
+    "straight",
+    "right",
+    "straight",
+    "left",
+    "left",
+    "left",
+    "straight",
+    "straight2",
+    "left",
+    "straight"
+  ],
+  "stars": {
+    "two": 2,
+    "three": 4
+  },
+  "fog": true,
+  "easeDecks": [
+    [
+      "straight",
+      "left",
+      "right",
+      "straight",
+      "right",
+      "left",
+      "straight",
+      "left",
+      "left",
+      "left",
+      "straight",
+      "straight2",
+      "left",
+      "straight"
+    ],
+    [
+      "straight",
+      "left",
+      "right",
+      "straight",
+      "right",
+      "left",
+      "left",
+      "straight",
+      "left",
+      "left",
+      "left",
+      "straight",
+      "straight2",
+      "left",
+      "straight"
+    ]
+  ],
+  "metrics": {
+    "rating": 5,
+    "roads": 4,
+    "minTiles": 8,
+    "reserve": 5,
+    "trap": 0.408
+  }
+}

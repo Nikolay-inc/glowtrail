@@ -129,6 +129,8 @@ export function addDust(scene: Phaser.Scene, v: ViewRect = currentView(scene), d
  * Используется вместо обычного затемнения камеры.
  */
 export function irisIn(scene: Phaser.Scene, x: number, y: number, duration = 650) {
+  // Проверка вёрстки (?audit=1): без затемнения — скриншот сразу показывает экран.
+  if ((globalThis as { __glowAudit?: boolean }).__glowAudit) return;
   // Темнота на всю видимую область (на высоких экранах она больше раскладки 1080×1920).
   const v = currentView(scene);
   const rt = scene.add.renderTexture(v.x, v.y, Math.ceil(v.w), Math.ceil(v.h)).setOrigin(0).setDepth(100);

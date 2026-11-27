@@ -1,0 +1,89 @@
+{
+  "id": "forest-17",
+  "name": "Туманный брод",
+  "grid": [
+    "....L.",
+    ".EL.F.",
+    "#..a..",
+    "......",
+    "~~~~~~",
+    "....a.",
+    ".LF..#",
+    "....S."
+  ],
+  "startDir": "N",
+  "deck": [
+    "straight2",
+    "right",
+    "left",
+    "straight",
+    "right",
+    "left",
+    "straight2",
+    "straight",
+    "right",
+    "right",
+    "left",
+    "left",
+    "straight",
+    "left",
+    "straight2",
+    "right",
+    "straight2"
+  ],
+  "stars": {
+    "two": 2,
+    "three": 4
+  },
+  "fog": true,
+  "easeDecks": [
+    [
+      "straight2",
+      "right",
+      "left",
+      "straight",
+      "right",
+      "left",
+      "bridge",
+      "straight2",
+      "straight",
+      "right",
+      "right",
+      "left",
+      "left",
+      "straight",
+      "left",
+      "straight2",
+      "right",
+      "straight2"
+    ],
+    [
+      "left",
+      "straight2",
+      "right",
+      "left",
+      "straight",
+      "right",
+      "left",
+      "bridge",
+      "straight2",
+      "straight",
+      "right",
+      "right",
+      "left",
+      "left",
+      "straight",
+      "left",
+      "straight2",
+      "right",
+      "straight2"
+    ]
+  ],
+  "metrics": {
+    "rating": 5.1,
+    "roads": 30,
+    "minTiles": 12,
+    "reserve": 5,
+    "trap": 0.433
+  }
+}

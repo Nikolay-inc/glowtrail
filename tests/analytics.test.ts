@@ -68,7 +68,7 @@ describe('согласие на статистику', () => {
 
   it('выбор хранится в сохранении (v9), старые сохранения — «не спрашивали», при входе в аккаунт — с этого устройства', () => {
     const old = migrate({ version: 8, progress: { unlocked: ['valley-01'], stars: {} }, log: [] });
-    expect(old.version).toBe(9);
+    expect(old.version).toBe(10);
     expect(old.progress.analytics).toBe('');
     expect(migrate({ version: 9, progress: { analytics: 'no' } }).progress.analytics).toBe('no');
     expect(migrate({ version: 9, progress: { analytics: 'maybe' } }).progress.analytics).toBe('');

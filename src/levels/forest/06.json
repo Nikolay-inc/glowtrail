@@ -1,0 +1,70 @@
+{
+  "id": "forest-06",
+  "name": "Молочная тропа",
+  "grid": [
+    ".S...",
+    ".....",
+    ".....",
+    ".#...",
+    "..L..",
+    "E#..#",
+    "....."
+  ],
+  "startDir": "S",
+  "deck": [
+    "right",
+    "right",
+    "left",
+    "straight",
+    "left",
+    "straight",
+    "right",
+    "left",
+    "straight",
+    "left",
+    "straight2"
+  ],
+  "stars": {
+    "two": 1,
+    "three": 2
+  },
+  "fog": true,
+  "easeDecks": [
+    [
+      "right",
+      "right",
+      "left",
+      "straight",
+      "left",
+      "straight",
+      "straight2",
+      "right",
+      "left",
+      "straight",
+      "left",
+      "straight2"
+    ],
+    [
+      "right",
+      "right",
+      "left",
+      "straight",
+      "left",
+      "straight",
+      "right",
+      "straight2",
+      "right",
+      "left",
+      "straight",
+      "left",
+      "straight2"
+    ]
+  ],
+  "metrics": {
+    "rating": 3.5,
+    "roads": 19,
+    "minTiles": 8,
+    "reserve": 3,
+    "trap": 0.212
+  }
+}

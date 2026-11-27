@@ -40,6 +40,8 @@ const KIND_ICON: Record<BonusKind, IconName | 'light' | 'coin' | 'firefly'> = {
   wardrobeDiscountPct: 'wardrobe',
   preview: 'lantern',
   nightLight: 'lantern',
+  shadowCharms: 'heart',
+  fogSight: 'globe',
   questRerolls: 'scroll',
   questLight: 'light',
   streetDiscountPct: 'hammer',

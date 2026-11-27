@@ -1,0 +1,70 @@
+{
+  "id": "forest-29",
+  "name": "Передышка у костра",
+  "grid": [
+    "..#..",
+    "....E",
+    ".....",
+    ".#...",
+    ".....",
+    "S...."
+  ],
+  "startDir": "N",
+  "deck": [
+    "straight",
+    "right",
+    "left",
+    "straight2",
+    "straight",
+    "right",
+    "straight",
+    "straight2",
+    "left",
+    "left",
+    "straight"
+  ],
+  "stars": {
+    "two": 2,
+    "three": 4
+  },
+  "shadow": 3,
+  "goal": "escape",
+  "easeDecks": [
+    [
+      "straight2",
+      "straight",
+      "right",
+      "left",
+      "straight2",
+      "straight",
+      "right",
+      "straight",
+      "straight2",
+      "left",
+      "left",
+      "straight"
+    ],
+    [
+      "straight2",
+      "straight",
+      "right",
+      "left",
+      "straight2",
+      "straight",
+      "right",
+      "right",
+      "straight",
+      "straight2",
+      "left",
+      "left",
+      "straight"
+    ]
+  ],
+  "metrics": {
+    "rating": 3,
+    "roads": 11,
+    "minTiles": 6,
+    "reserve": 5,
+    "trap": 0.278
+  }
+}

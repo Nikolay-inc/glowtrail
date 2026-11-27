@@ -1,0 +1,82 @@
+{
+  "id": "forest-16",
+  "name": "Кольца в тумане",
+  "grid": [
+    ".S...L",
+    "..a.L.",
+    "......",
+    "......",
+    "...#.a",
+    ".#....",
+    ".....E"
+  ],
+  "startDir": "S",
+  "deck": [
+    "straight",
+    "straight",
+    "straight2",
+    "straight",
+    "left",
+    "left",
+    "left",
+    "right",
+    "left",
+    "left",
+    "straight",
+    "right",
+    "left",
+    "left",
+    "straight2"
+  ],
+  "stars": {
+    "two": 1,
+    "three": 2
+  },
+  "fog": true,
+  "easeDecks": [
+    [
+      "straight",
+      "straight",
+      "straight2",
+      "straight",
+      "left",
+      "right",
+      "left",
+      "left",
+      "right",
+      "left",
+      "left",
+      "straight",
+      "right",
+      "left",
+      "left",
+      "straight2"
+    ],
+    [
+      "straight",
+      "straight",
+      "straight2",
+      "straight",
+      "left",
+      "right",
+      "straight2",
+      "left",
+      "left",
+      "right",
+      "left",
+      "left",
+      "straight",
+      "right",
+      "left",
+      "left",
+      "straight2"
+    ]
+  ],
+  "metrics": {
+    "rating": 4.5,
+    "roads": 10,
+    "minTiles": 12,
+    "reserve": 3,
+    "trap": 0.225
+  }
+}

@@ -24,6 +24,20 @@ export function logEvent(e: Omit<LogEvent, 't'>) {
   });
 }
 
+/** Игрок уже входил в этот мир (сцена входа показана). */
+export function hasEnteredWorld(id: string): boolean {
+  return SaveService.load().progress.worlds.includes(id);
+}
+
+/** Отметить вход в мир (один раз) и записать world_enter в лог. */
+export function markWorldEntered(id: string) {
+  if (hasEnteredWorld(id)) return;
+  SaveService.update((d) => {
+    d.progress.worlds = [...new Set([...d.progress.worlds, id])];
+    d.log.push({ t: new Date().toISOString(), ev: 'world_enter', world: id });
+  });
+}
+
 export function resetAll() {
   SaveService.reset();
 }

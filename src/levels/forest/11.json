@@ -1,0 +1,78 @@
+{
+  "id": "forest-11",
+  "name": "Тень за спиной",
+  "grid": [
+    ".E...",
+    ".....",
+    "#F#..",
+    ".....",
+    "...F.",
+    ".#..S"
+  ],
+  "startDir": "N",
+  "deck": [
+    "left",
+    "straight",
+    "straight",
+    "straight",
+    "right",
+    "straight",
+    "right",
+    "left",
+    "straight",
+    "left",
+    "left",
+    "straight",
+    "straight2",
+    "straight2"
+  ],
+  "stars": {
+    "two": 3,
+    "three": 5
+  },
+  "shadow": 4,
+  "easeDecks": [
+    [
+      "left",
+      "straight",
+      "straight",
+      "straight",
+      "right",
+      "straight2",
+      "straight",
+      "right",
+      "left",
+      "straight",
+      "left",
+      "left",
+      "straight",
+      "straight2",
+      "straight2"
+    ],
+    [
+      "left",
+      "straight",
+      "straight",
+      "straight",
+      "right",
+      "straight2",
+      "left",
+      "straight",
+      "right",
+      "left",
+      "straight",
+      "left",
+      "left",
+      "straight",
+      "straight2",
+      "straight2"
+    ]
+  ],
+  "metrics": {
+    "rating": 2.6,
+    "roads": 14,
+    "minTiles": 8,
+    "reserve": 6,
+    "trap": 0.167
+  }
+}

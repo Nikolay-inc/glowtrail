@@ -251,8 +251,14 @@ interface District {
   streets: number[];
 }
 
-export function chapterLevels(ch1: ModelLevel[]): ModelLevel[][] {
-  return [ch1, plannedLevels(2), plannedLevels(3)];
+/**
+ * Уровни трёх глав: настоящие уровни из списка (глава 1 — «Долина», глава 2 — «Туманный лес», если они
+ * переданы), остальные главы — по плану (plannedLevels).
+ */
+export function chapterLevels(levels: ModelLevel[]): ModelLevel[][] {
+  const real = (c: 1 | 2 | 3) => levels.filter((l) => l.chapter === c);
+  const ch2 = real(2);
+  return [real(1), ch2.length >= 30 ? ch2.slice(0, 30) : plannedLevels(2), plannedLevels(3)];
 }
 
 /** Вещи «за монеты» с ценой в своей валюте (обычные и половина редких — свет). */
@@ -261,9 +267,12 @@ const CHEST_LIST = [...CHEST_ITEMS];
 const QUEST_LIST = QUEST_ITEMS.filter((id) => WARDROBE.some((w) => w.id === id));
 const COZY_LIST = [...COZY_ITEMS];
 
-/** Полная симуляция трёх глав для профиля; extra — минут перепрохождений и заданий в день. */
-export function simulate3(ch1: ModelLevel[], p: Profile, extra: number, opts: { tailMaxDays?: number } = {}): SimResult {
-  const all = chapterLevels(ch1);
+/**
+ * Полная симуляция трёх глав для профиля; extra — минут перепрохождений и заданий в день.
+ * levels — настоящие уровни игры (глава 1 и, если есть, глава 2); недостающие главы — по плану.
+ */
+export function simulate3(levels: ModelLevel[], p: Profile, extra: number, opts: { tailMaxDays?: number } = {}): SimResult {
+  const all = chapterLevels(levels);
   let coins = 0;
   let light = 0;
   let t = 0;

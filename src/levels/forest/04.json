@@ -1,0 +1,60 @@
+{
+  "id": "forest-04",
+  "name": "Через ручей",
+  "grid": [
+    ".....#",
+    "#....S",
+    "....b#",
+    "~~~~~~",
+    ".a...a",
+    ".Eb...",
+    "..L..."
+  ],
+  "startDir": "W",
+  "deck": [
+    "right",
+    "left",
+    "straight",
+    "right",
+    "left",
+    "right",
+    "right",
+    "right"
+  ],
+  "stars": {
+    "two": 1,
+    "three": 2
+  },
+  "easeDecks": [
+    [
+      "right",
+      "left",
+      "straight",
+      "right",
+      "left",
+      "straight2",
+      "right",
+      "right",
+      "right"
+    ],
+    [
+      "right",
+      "left",
+      "straight",
+      "right",
+      "left",
+      "straight2",
+      "straight",
+      "right",
+      "right",
+      "right"
+    ]
+  ],
+  "metrics": {
+    "rating": 3.5,
+    "roads": 3,
+    "minTiles": 5,
+    "reserve": 3,
+    "trap": 0.28
+  }
+}

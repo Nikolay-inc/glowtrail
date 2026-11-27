@@ -2,7 +2,7 @@
 // Логики здесь нет — вид только показывает состояние из core/game.
 
 import Phaser from 'phaser';
-import { fadeLeftAt, tilesPlaced, type GameState, type Placement } from '../core/game';
+import { fadeLeftAt, tilesPlaced, timeOf, type GameState, type Placement } from '../core/game';
 import { bridgeHorizontal } from '../core/tiles';
 import { DX, DY, type Dir, type Level } from '../core/types';
 import { C } from './theme';
@@ -14,12 +14,16 @@ import { raysBurst, reducedMotion } from './fx';
 import { sfx } from '../audio';
 import { DEFAULT_LOOK, type Look } from '../core/wardrobe';
 import { ARCH_COLORS, decorateArch, ROAD_COLORS, type ArchStyle, type RoadStyle } from './skins';
+import { fogVisible } from '../core/fog';
+import { drawRingBase, FogView, forestCellDecor, forestDrops, forestMist, PALETTES, paletteOf, RingView, ShadowView, type Palette, type PaletteColors } from './forest';
 
 /** Точка дороги: центр клетки; jump — к ней дорога пришла прыжком (рисуем дугу, а не линию). */
 interface RoadPt {
   x: number;
   y: number;
   jump?: boolean;
+  /** Сюда дорога пришла через грибное кольцо — линию от предыдущей точки не рисуем. */
+  gap?: boolean;
 }
 
 /** Детерминированный «шум» 0..1 по двум числам — раскладка камешков не дрожит при перерисовке. */
@@ -81,6 +85,8 @@ export interface BoardOptions {
   /** Стиль дороги и арки (из образа). */
   road?: RoadStyle;
   arch?: ArchStyle;
+  /** Палитра поля (по умолчанию — по миру уровня). */
+  palette?: Palette;
 }
 
 export class BoardView {
@@ -137,6 +143,13 @@ export class BoardView {
   private readonly roadStyle: RoadStyle;
   private readonly archStyle: ArchStyle;
   private readonly nightLight: number;
+  private readonly P: PaletteColors;
+  private readonly forest: boolean;
+  private rings: RingView[] = [];
+  private fog?: FogView;
+  private shadow?: ShadowView;
+  /** Видимые сквозь туман клетки (без тумана — все). */
+  private vis: boolean[];
 
   constructor(
     private scene: Phaser.Scene,
@@ -153,7 +166,11 @@ export class BoardView {
     this.nightLight = opts.nightLight ?? 0;
     this.roadStyle = opts.road ?? 'glow';
     this.archStyle = opts.arch ?? 'portal';
-    this.hasExit = level.goal === 'classic';
+    this.hasExit = level.goal !== 'fireflies';
+    const pal = opts.palette ?? paletteOf(level);
+    this.forest = pal === 'forest';
+    this.P = PALETTES[pal];
+    this.vis = level.cells.map(() => true);
 
     createDecorTextures(scene);
     this.drawCells();
@@ -174,6 +191,15 @@ export class BoardView {
     scene.tweens.add({ targets: this.headG, alpha: 0.35, duration: 650, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
     this.drawLanternsAndExit();
     this.drawFireflies();
+    // Лес: живые части грибных колец, туман над скрытыми клетками, тень на дороге.
+    for (const [a, b] of level.rings) {
+      for (const idx of [a, b]) {
+        const c = this.center(idx);
+        this.rings.push(new RingView(scene, idx, level.ringId[idx], c.x, c.y, this.cell));
+      }
+    }
+    if (level.fog) this.fog = new FogView(scene, level, this);
+    if (level.shadow) this.shadow = new ShadowView(scene, level, this);
 
     const startIdx = level.start.y * level.width + level.start.x;
     this.lumo = createLumo(scene, this.cell * 0.8, this.look, true).setDepth(7);
@@ -221,6 +247,11 @@ export class BoardView {
       .setDepth(8);
     if (opts.dark ?? true) this.initDarkness();
     if (opts.ambient !== false) this.ambient();
+  }
+
+  /** Поле в пикселях (для тумана и капель). */
+  private get area() {
+    return { x: this.ox, y: this.oy, w: this.cell * this.level.width, h: this.cell * this.level.height };
   }
 
   // -------------------------------------------------------------------------
@@ -272,6 +303,7 @@ export class BoardView {
         }
         items.push(g);
       }
+      if (this.forest) items.push(...forestCellDecor(scene, rnd, x0, y0, cell));
       if (items.length) this.decor.set(idx, items);
     });
   }
@@ -293,9 +325,15 @@ export class BoardView {
         alpha: { start: 0.75, end: 0 },
         frequency: 900,
         blendMode: Phaser.BlendModes.ADD,
-        tint: level.night ? 0x9dff5c : 0xffd890,
+        tint: level.night ? 0x9dff5c : this.forest ? 0x9df0e0 : 0xffd890,
       })
       .setDepth(6.6);
+    if (this.forest) {
+      // Лес: медленно плывущий туман и редкие капли вместо бабочек.
+      forestMist(scene, this.area, cell);
+      forestDrops(scene, this.area, cell);
+      return;
+    }
     if (level.night) return;
     const fly = () => {
       if (!this.scene.sys.isActive() || this.won) return;
@@ -416,7 +454,8 @@ export class BoardView {
   /** Украшения клеток прячутся под дорогой (и возвращаются при отмене хода). */
   private updateDecor(state: GameState) {
     for (const [idx, items] of this.decor) {
-      const hide = state.onRoad[idx];
+      // Под дорогой и в тумане украшений не видно (светящиеся грибы иначе выдали бы клетку).
+      const hide = state.onRoad[idx] || !this.vis[idx];
       for (const it of items) (it as unknown as Phaser.GameObjects.Components.Visible).setVisible(!hide);
     }
   }
@@ -465,6 +504,7 @@ export class BoardView {
       this.pet.y += (this.lumo.y + o.y - this.pet.y) * 0.12;
       this.pet.setAlpha(this.lumo.alpha);
     }
+    this.fog?.update(time);
     if (!this.dark) return;
     const { cell } = this;
     const flicker = 1 + Math.sin(time * 0.006) * 0.03 + Math.sin(time * 0.0173) * 0.02;
@@ -476,6 +516,8 @@ export class BoardView {
       const c = this.center(l.idx);
       this.light(c.x, c.y - cell * 0.2, cell * (l.state === 'lit' ? 4.6 : 4) * flicker, 0.95);
     }
+    // Грибные кольца светятся в темноте.
+    for (const r of this.rings) this.light(r.glow.x, r.glow.y, cell * 1.4, 0.5);
     // Светлячки сами светятся в темноте (пока их не собрали).
     for (const f of this.fireflies) {
       if (f.collected || !f.view.visible) continue;
@@ -526,14 +568,14 @@ export class BoardView {
     // Подложка поля
     g.fillStyle(0x000000, 0.3);
     g.fillRoundedRect(this.ox - cell * 0.12, this.oy - cell * 0.12 + 12, cell * (level.width + 0.24), cell * (level.height + 0.24), cell * 0.25);
-    g.fillStyle(C.field, 1);
+    g.fillStyle(this.P.field, 1);
     g.fillRoundedRect(this.ox - cell * 0.12, this.oy - cell * 0.12, cell * (level.width + 0.24), cell * (level.height + 0.24), cell * 0.25);
 
     level.cells.forEach((type, idx) => {
       const x = this.ox + (idx % level.width) * cell;
       const y = this.oy + Math.floor(idx / level.width) * cell;
       if (type === 'water' || type === 'turnbridge') {
-        g.fillStyle(C.water, 1);
+        g.fillStyle(this.P.water, 1);
         g.fillRoundedRect(x + pad * 0.3, y + pad, cell - pad * 0.6, cell - pad * 2, r * 0.6);
         g.fillStyle(0xffffff, 0.06);
         g.fillRoundedRect(x + pad * 0.3, y + pad, cell - pad * 0.6, (cell - pad * 2) * 0.35, r * 0.6);
@@ -542,10 +584,11 @@ export class BoardView {
       }
       // Клетка тёмного луга: два близких оттенка, чтобы поле не было однотонным.
       const tone = hash(idx, level.width) * 0.5;
-      g.fillStyle(C.cell, 1);
+      g.fillStyle(this.P.cell, 1);
       g.fillRoundedRect(x + pad, y + pad, cell - pad * 2, cell - pad * 2, r);
-      g.fillStyle(C.cellLight, 0.3 + tone * 0.35);
+      g.fillStyle(this.P.cellLight, 0.3 + tone * 0.35);
       g.fillRoundedRect(x + pad, y + pad, cell - pad * 2, (cell - pad * 2) * 0.5, r);
+      if (type === 'ring') drawRingBase(g, x + cell / 2, y + cell / 2, cell, level.ringId[idx]);
       if (type === 'rock') {
         const cx = x + cell / 2;
         const cy = y + cell / 2;
@@ -590,7 +633,7 @@ export class BoardView {
   private addWaves(x: number, y: number) {
     const { cell } = this;
     const w = this.scene.add.graphics().setDepth(1);
-    w.lineStyle(cell * 0.035, C.waterLight, 0.6);
+    w.lineStyle(cell * 0.035, this.P.waterLight, 0.6);
     for (const yy of [0.38, 0.64]) {
       w.beginPath();
       w.moveTo(x + cell * 0.18, y + cell * yy);
@@ -663,8 +706,8 @@ export class BoardView {
     // Закрытый выход тлеет таинственным фиолетовым — его ещё нужно открыть.
     this.exitGlow.setTint(0x9b7bff);
     this.ember(this.exitGlow, 0.32);
-    if (level.lanterns.length === 0) {
-      // Фонарей нет — арка открыта с самого начала.
+    if (level.lanterns.length === 0 || level.goal === 'escape') {
+      // Фонарей нет (или «Побег») — арка открыта с самого начала.
       this.exitOpen = true;
       this.lock.setVisible(false);
       this.drawPortal(true);
@@ -728,6 +771,8 @@ export class BoardView {
         this.scene.tweens.killTweensOf(f.view);
         f.view.setVisible(true).setPosition(c.x, c.y).setScale(1).setAlpha(1);
       }
+      // Светлячок в тумане не виден.
+      if (!f.collected) f.view.setVisible(this.vis[f.idx]);
     }
   }
 
@@ -880,7 +925,7 @@ export class BoardView {
 
   /** Точки дороги: центры клеток, признаки мостов и прыжков. */
   private roadPoints(state: GameState) {
-    return state.road.map((r) => ({ ...this.center(r.idx), bridge: r.kind === 'bridge', jump: r.kind === 'jump', dirIn: r.dirIn }));
+    return state.road.map((r) => ({ ...this.center(r.idx), bridge: r.kind === 'bridge', jump: r.kind === 'jump' && r.portal !== 'out', gap: r.portal === 'out', dirIn: r.dirIn }));
   }
 
   /**
@@ -891,6 +936,7 @@ export class BoardView {
     const pts = this.roadPoints(state);
     this.roadAnim?.stop();
     this.roadLights = pts.map((p) => ({ x: p.x, y: p.y }));
+    this.syncForest(state, newCells > 0);
     this.updateDecor(state);
     const t = tilesPlaced(state);
     this.updateBridges(state, this.lastT >= 0 && t !== this.lastT);
@@ -919,6 +965,51 @@ export class BoardView {
       },
     });
     this.walkTo(newRoad, dur, jump);
+  }
+
+  // -------------------------------------------------------------------------
+  // Лес: туман, кольца, тень
+
+  /** Туман, пройденные кольца и тень — по состоянию партии. animate — после хода. */
+  private syncForest(state: GameState, animate: boolean) {
+    for (const r of this.rings) r.setUsed(state.onRoad[r.idx]);
+    if (this.fog) {
+      const ts = timeOf(state);
+      this.vis = fogVisible(this.level, (i) => state.onRoad[i], ts, state.sight);
+      // Туман расходится, когда Lumo дошагал до новой клетки.
+      if (animate) this.scene.time.delayedCall(STEP_MS * 0.6, () => this.fog?.set(this.vis, true));
+      else this.fog.set(this.vis, false);
+      for (const f of this.fireflies) if (!f.collected) f.view.setVisible(this.vis[f.idx]);
+    }
+    // Тень бежит после шага Lumo.
+    this.shadow?.sync(state, animate, animate ? STEP_MS + 60 : 0);
+  }
+
+  /** Клетки, видимые сквозь туман сейчас. */
+  visibleCells(): readonly boolean[] {
+    return this.vis;
+  }
+
+  /** Подпись над тенью при задержке (фонарь или травница). */
+  shadowDelayed(label: string, herb: boolean) {
+    this.shadow?.delayed(label, herb, STEP_MS + 380);
+  }
+
+  /** Тень догнала Lumo: бросок, тёмная вспышка, Lumo гаснет. */
+  shadowCaught() {
+    if (!this.shadow) return;
+    const delay = STEP_MS + 400;
+    this.shadow.caught({ x: this.lumo.x, y: this.lumo.y }, delay);
+    this.scene.time.delayedCall(delay + 260, () => {
+      raysBurst(this.scene, this.lumo.x, this.lumo.y, 0x6a2cff, this.cell * 2);
+      this.scene.tweens.add({ targets: this.lumo, alpha: 0.35, duration: 120, yoyo: true, repeat: 2 });
+      this.scene.cameras.main.shake(160, 0.004);
+    });
+  }
+
+  /** Где сейчас тень (для подсказок), null — ещё не появилась. */
+  shadowPos() {
+    return this.shadow?.position ?? null;
   }
 
   // -------------------------------------------------------------------------
@@ -965,6 +1056,7 @@ export class BoardView {
       const p = this.lumoAt(r.idx, r.dirOut);
       const from = { x: this.lumo.x, y: this.lumo.y };
       const prog = { k: 0 };
+      if (r.portal === 'out') return this.teleportTween(r, p, each);
       return {
         targets: prog,
         k: 1,
@@ -1003,6 +1095,51 @@ export class BoardView {
       };
     });
     this.lumoTween = this.scene.tweens.chain({ tweens });
+  }
+
+  /** Грибное кольцо: Lumo тает в искрах у одного кольца и появляется у парного. */
+  private teleportTween(r: GameState['road'][number], p: { x: number; y: number }, dur: number) {
+    const prog = { k: 0 };
+    const ring = this.rings.find((v) => v.idx === r.idx);
+    const color = ring?.color ?? 0xd78bff;
+    let jumped = false;
+    const sx = () => Math.sign(this.lumo.scaleX || 1);
+    return {
+      targets: prog,
+      k: 1,
+      duration: Math.max(dur, 420),
+      ease: 'Linear',
+      onStart: () => {
+        jumped = false;
+        raysBurst(this.scene, this.lumo.x, this.lumo.y, color, this.cell * 1.3);
+        this.sparks.explode(12, this.lumo.x, this.lumo.y);
+        if (this.sound) sfx.jump();
+      },
+      onUpdate: () => {
+        const k = prog.k;
+        if (k < 0.5) {
+          const v = 1 - k * 2;
+          this.lumo.setScale(sx() * Math.max(0.05, v), Math.max(0.05, v)).setAlpha(v);
+          this.lumo.angle = k * 360;
+        } else {
+          if (!jumped) {
+            jumped = true;
+            this.lumo.setPosition(p.x, p.y);
+            raysBurst(this.scene, p.x, p.y, color, this.cell * 1.3);
+            this.sparks.explode(12, p.x, p.y);
+            this.flash(p.x, p.y, this.cell * 2.6);
+          }
+          const v = (k - 0.5) * 2;
+          this.lumo.setScale(sx() * Math.max(0.05, v), Math.max(0.05, v)).setAlpha(v);
+          this.lumo.angle = (1 - v) * -180;
+        }
+      },
+      onComplete: () => {
+        this.lumo.setPosition(p.x, p.y).setAlpha(1).setAngle(0);
+        this.lumo.setScale(sx(), 1);
+        this.face(r.dirOut);
+      },
+    };
   }
 
   /** Серия ходов без отмен: искры бегут по последним клеткам дороги. */
@@ -1060,7 +1197,7 @@ export class BoardView {
     // Пока свет растекается — на его краю горит яркий огонёк.
     const full = Math.floor(upTo);
     const frac = upTo - full;
-    if (frac > 0.01 && full + 1 < pts.length && !pts[full + 1].jump) {
+    if (frac > 0.01 && full + 1 < pts.length && !pts[full + 1].jump && !pts[full + 1].gap) {
       const a = pts[full];
       const b = pts[full + 1];
       const x = a.x + (b.x - a.x) * frac;
@@ -1083,7 +1220,7 @@ export class BoardView {
     const s = this.cell;
     for (let i = 0; i < pts.length - 1; i++) {
       const b = pts[i + 1];
-      if (b.jump || i >= upTo) continue;
+      if (b.jump || b.gap || i >= upTo) continue;
       const a = pts[i];
       const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
       const nx = -(b.y - a.y) / len;
@@ -1109,7 +1246,7 @@ export class BoardView {
     const s = this.cell;
     for (let i = 0; i < pts.length - 1; i++) {
       const b = pts[i + 1];
-      if (b.jump || i >= upTo) continue;
+      if (b.jump || b.gap || i >= upTo) continue;
       const a = pts[i];
       const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
       const ux = (b.x - a.x) / len;
@@ -1130,7 +1267,7 @@ export class BoardView {
     const s = this.cell;
     for (let i = 0; i < pts.length - 1; i++) {
       const b = pts[i + 1];
-      if (b.jump || i >= upTo) continue;
+      if (b.jump || b.gap || i >= upTo) continue;
       const a = pts[i];
       const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
       const nx = -(b.y - a.y) / len;
@@ -1152,6 +1289,11 @@ export class BoardView {
     const seg = (i: number, frac: number) => {
       const a = pts[i];
       const b = pts[i + 1];
+      if (b.gap) {
+        // Через грибное кольцо: вместо линии — свет появляется у парного кольца.
+        if (frac >= 1) g.fillCircle(b.x, b.y, lw / 2);
+        return;
+      }
       if (b.jump) {
         if (!solidOnly) this.jumpArc(g, a, b, frac, lw, color, alpha);
         else this.jumpArc(g, a, b, frac, lw * 0.5, color, alpha);
@@ -1264,7 +1406,7 @@ export class BoardView {
     if (!p) return;
     const s = this.cell;
     const head = this.center(state.head);
-    const pts: RoadPt[] = [head, ...p.cells.map((c, i) => ({ ...this.center(c.idx), jump: p.kind === 'jump' && i === 0 }))];
+    const pts: RoadPt[] = [head, ...p.cells.map((c, i) => ({ ...this.center(c.idx), jump: p.kind === 'jump' && i === 0, gap: c.portal === 'out' }))];
     const color = p.ok ? C.ghost : C.bad;
     const alpha = target === 'hint' ? 0.28 : p.ok ? 0.5 : 0.55;
     // Настоящая форма дороги: после последней клетки — выход в новом направлении, поворот виден изгибом.
@@ -1440,6 +1582,7 @@ export class BoardView {
     this.highlightSide(null);
     this.scene.tweens.add({ targets: this.cone, alpha: 0, duration: 300 });
     const cells = state.road.slice(1);
+    this.shadow?.vanish();
     let litCount = 0;
     const stepDur = Phaser.Math.Clamp(1500 / cells.length, 70, 150);
     // Пусть Lumo сначала дошагает последнюю плитку.

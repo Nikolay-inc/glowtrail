@@ -1,7 +1,9 @@
 // npm run verify — проверяет все уровни и кривую сложности.
 // Ошибки (не решается, неверные звёзды, битые колоды облегчения, устаревшие метрики, недоступные светлячки,
 // уровень с одним решением) роняют команду; отклонения от кривой — предупреждения.
-// Обучающие уровни 1–10 сверяются со своей таблицей (CURVE ниже), уровни 11–30 — с планом мира (src/levels/curve.ts).
+// Обучающие уровни 1–10 сверяются со своей таблицей (CURVE ниже), уровни 11–60 — с планами миров (src/levels/curve.ts).
+// Уровни с туманом проверяются на «без угадывания» (fogFair): осторожный игрок, видящий только раскрытое, доходит до цели.
+//   --world forest — в таблице только уровни этого мира; --md — таблица в Markdown (для отчёта).
 
 import { LEVELS } from '../src/levels/index';
 import { analyzeLevel } from '../src/core/difficulty';
@@ -11,7 +13,12 @@ import { featuresOf } from '../src/core/generator';
 import type { Level } from '../src/core/types';
 import { portalSides } from '../src/core/portal';
 import { TIP_TEXT } from '../src/tutorial';
-import { BREATHER_MAX_RATING, BREATHER_MIN_ROADS, EASY_MAX_RATING, EASY_MIN_ROADS, mustBeEasy, FIREFLY_FROM, MAX_H, MAX_W, NOVELTY, RATING_TOLERANCE, slotOf, VALLEY_PLAN, type Role } from '../src/levels/curve';
+import { ALL_SLOTS, BREATHER_MAX_RATING, BREATHER_MIN_ROADS, EASY_MAX_RATING, EASY_MIN_ROADS, mustBeEasy, FIREFLY_FROM, MAX_H, MAX_W, NOVELTY, RATING_TOLERANCE, slotOf, type NoveltyTest, type Role } from '../src/levels/curve';
+import { fogFair } from '../src/core/fog';
+import { WORLDS, worldOf } from '../src/levels/worlds';
+
+const onlyWorld = process.argv.includes('--world') ? process.argv[process.argv.indexOf('--world') + 1] : null;
+const md = process.argv.includes('--md');
 
 /** Целевая кривая обучающих уровней 1–10. */
 interface Target {
@@ -73,6 +80,9 @@ function elementsOf(level: Level): string {
   if (level.deck.includes('jump')) out.push('прыжок');
   if (level.turnBridges.length) out.push('мост');
   if (level.fades.length) out.push(`гаснущий ${level.fades.map((i) => level.fade[i]).join(',')}`);
+  if (level.rings.length) out.push(`кольца ×${level.rings.length}`);
+  if (level.fog) out.push('туман');
+  if (level.shadow) out.push(`тень ${level.shadow}`);
   return out.join(' + ');
 }
 
@@ -99,7 +109,11 @@ for (const [i, level] of LEVELS.entries()) {
 
   if (!r.solvable) err.push('НЕ РЕШАЕТСЯ');
   if (level.tip && !(level.tip in TIP_TEXT)) err.push(`неизвестная подсказка tip: "${level.tip}"`);
-  if (level.goal === 'classic' && level.fireflies.length && r.maxFireflies < level.fireflies.length) {
+  if (level.fog) {
+    const f = fogFair(base);
+    if (!f.ok) err.push(`туман: без угадывания не решить (осторожный игрок застрял на ходу ${f.stuckAt})`);
+  }
+  if (level.goal !== 'fireflies' && level.fireflies.length && r.maxFireflies < level.fireflies.length) {
     err.push(`светлячков ${level.fireflies.length}, а собрать за одну победу можно только ${r.maxFireflies}`);
   } else if (level.fireflies.length && !infinite && r.firefliesWithoutStash < level.fireflies.length) {
     err.push(`всех светлячков (${level.fireflies.length}) можно собрать только с «отложить» — без него ${r.firefliesWithoutStash}`);
@@ -143,7 +157,7 @@ for (const [i, level] of LEVELS.entries()) {
     if (c.rocks && !t.allows.rocks) warn.push('камни раньше времени');
     if (c.water && !t.allows.water) warn.push('вода или мост раньше времени');
     if (level.fireflies.length) warn.push('светлячки раньше времени');
-    const late = featuresOf(level).filter((f) => f === 'jump' || f === 'turnbridge' || f === 'fade');
+    const late = featuresOf(level).filter((f) => ['jump', 'turnbridge', 'fade', 'ring', 'fog', 'shadow'].includes(f));
     if (late.length || level.goal !== 'classic') warn.push(`новые элементы раньше времени: ${[...late, level.goal].join(', ')}`);
     if (t.teachesStash && !needsStash) warn.push('учит «отложить», но решается без него');
     if (t.teachesStash && level.tutorial !== 'stash') warn.push('нет подсказки-обучения «отложить» (tutorial: "stash")');
@@ -154,7 +168,7 @@ for (const [i, level] of LEVELS.entries()) {
       if (vertical || !horizontal) warn.push('в арку должно быть можно войти только сбоку');
     }
   } else if (slot) {
-    plan = `${slot.intro ? 'знакомство' : ROLE_RU[slot.role]} ~${slot.rating}${slot.goal === 'fireflies' ? ', светлячки' : ''}`;
+    plan = `${slot.intro ? 'знакомство' : ROLE_RU[slot.role]} ~${slot.rating}${slot.goal === 'fireflies' ? ', светлячки' : slot.goal === 'escape' ? ', побег' : ''}`;
     if (r.roads < 2) err.push('одно решение — по плану мира таких уровней нет');
     if (level.goal !== (slot.goal ?? 'classic')) warn.push(`цель ${level.goal}, по плану ${slot.goal ?? 'classic'}`);
     if (mustBeEasy(slot) && (m.rating > EASY_MAX_RATING || r.roads < EASY_MIN_ROADS)) {
@@ -182,6 +196,10 @@ for (const [i, level] of LEVELS.entries()) {
   warnings += warn.length;
 
   const status = err.length ? '✗' : warn.length ? '!' : '✓';
+  if (onlyWorld && worldOf(level).id !== onlyWorld) {
+    for (const x of err) notes.push(`✗ ${level.num}. ${x}`);
+    continue;
+  }
   rows.push([
     String(level.num),
     level.name,
@@ -208,10 +226,10 @@ if (stashLevels > 1) {
   warnings++;
 }
 
-// «Пила» внутри каждого десятка мира: передышка легче средних, 9-й сложнее передышки, испытание — самое сложное.
-const decades = [...new Set(VALLEY_PLAN.map((s) => Math.floor((s.num - 1) / 10)))];
+// «Пила» внутри каждого десятка мира: передышка легче средних, «сложнее» сложнее передышки, испытание — самое сложное.
+const decades = [...new Set(ALL_SLOTS.map((s) => Math.floor((s.num - 1) / 10)))];
 for (const d of decades) {
-  const slots = VALLEY_PLAN.filter((s) => Math.floor((s.num - 1) / 10) === d && ratings.has(s.num));
+  const slots = ALL_SLOTS.filter((s) => Math.floor((s.num - 1) / 10) === d && ratings.has(s.num));
   if (slots.length < 10) continue;
   const rt = (role: Role) => slots.filter((s) => s.role === role).map((s) => ratings.get(s.num)!);
   const avg = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / Math.max(1, xs.length);
@@ -222,28 +240,51 @@ for (const d of decades) {
   const others = slots.filter((s) => s.role !== 'challenge').map((s) => ratings.get(s.num)!);
   const saw: string[] = [];
   if (!(breather < avg(rt('medium')))) saw.push(`передышка (${breather}) не легче средних (${avg(rt('medium')).toFixed(1)})`);
-  if (!(harder > breather)) saw.push(`9-й (${harder}) не сложнее передышки (${breather})`);
+  if (harder !== undefined && !(harder > breather)) saw.push(`«сложнее» (${harder}) не сложнее передышки (${breather})`);
   if (!(avg(rt('easy')) < avg(rt('medium')))) saw.push('лёгкие не легче средних');
   if (!(challenge >= Math.max(...others))) saw.push(`испытание (${challenge}) не самое сложное в десятке (${Math.max(...others)})`);
   for (const x of saw) notes.push(`! ${lo}–${hi}. «Пила»: ${x}`);
   warnings += saw.length;
 }
-// Рост сложности по миру: средний рейтинг второго десятка ниже третьего.
+// Рост сложности по миру: средний рейтинг каждого десятка (кроме обучения 1–10) выше предыдущего в том же мире.
 const decadeAvg = (lo: number) => {
   const xs = [...ratings.entries()].filter(([n]) => n >= lo && n < lo + 10).map(([, r]) => r);
   return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : NaN;
 };
-const avg2 = decadeAvg(11);
-const avg3 = decadeAvg(21);
+const avgLines: string[] = [];
+for (const w of WORLDS) {
+  const first = w.levels[0]?.num ?? 1;
+  const starts = w.levels.filter((l) => (l.num - 1) % 10 === 0 && l.num > 10).map((l) => l.num);
+  const avgs = starts.map((lo) => [lo, decadeAvg(lo)] as const).filter(([, a]) => !Number.isNaN(a));
+  if (avgs.length) avgLines.push(`${w.id}: ${avgs.map(([lo, a]) => `${lo}–${lo + 9} — ${a.toFixed(1)}`).join(', ')}`);
+  for (let k = 1; k < avgs.length; k++) {
+    if (!(avgs[k][1] > avgs[k - 1][1])) {
+      notes.push(`! Сложность не растёт по миру ${w.id}: ${avgs[k - 1][0]}–${avgs[k - 1][0] + 9} — ${avgs[k - 1][1].toFixed(1)}, ${avgs[k][0]}–${avgs[k][0] + 9} — ${avgs[k][1].toFixed(1)}`);
+      warnings++;
+    }
+  }
+  void first;
+}
 
 // Что-то новое примерно каждые 5 уровней: в каждом блоке плана есть его новинка.
+const NOVEL: Record<NoveltyTest, (l: Level) => boolean> = {
+  firefly: (l) => l.fireflies.length > 0,
+  jump: (l) => l.deck.includes('jump'),
+  ffgoal: (l) => l.goal === 'fireflies',
+  turnbridge: (l) => l.turnBridges.length > 0,
+  fade: (l) => l.fades.length > 0,
+  valleyAll: (l) => l.deck.includes('jump') && l.turnBridges.length > 0 && l.fades.length > 0,
+  ring: (l) => l.rings.length > 0,
+  fog: (l) => l.fog,
+  shadow: (l) => l.shadow > 0,
+  ringFog: (l) => l.rings.length > 0 && l.fog,
+  escape: (l) => l.goal === 'escape',
+  combo: (l) => (l.deck.includes('jump') || l.turnBridges.length > 0 || l.fades.length > 0) && (l.rings.length > 0 || l.fog || l.shadow > 0),
+  boss: (l) => l.goal === 'escape' && l.fog && l.rings.length > 0,
+};
 for (const b of NOVELTY) {
   const lv = LEVELS.filter((l) => l.num >= b.from && l.num <= b.to);
-  const has = (l: Level) =>
-    b.what === 'светлячки' ? l.fireflies.length > 0 : b.what === 'прыжок' ? l.deck.includes('jump') : b.what.startsWith('цель') ? l.goal === 'fireflies'
-      : b.what === 'поворотный мост' ? l.turnBridges.length > 0 : b.what === 'гаснущий фонарь' ? l.fades.length > 0
-        : l.deck.includes('jump') && l.turnBridges.length > 0 && l.fades.length > 0;
-  const miss = lv.filter((l) => !has(l)).map((l) => l.num);
+  const miss = lv.filter((l) => !NOVEL[b.test](l)).map((l) => l.num);
   if (miss.length) {
     notes.push(`! ${b.from}–${b.to} (${b.what}): нет новинки на уровнях ${miss.join(', ')}`);
     warnings++;
@@ -253,18 +294,22 @@ for (const b of NOVELTY) {
 const head = ['#', 'Уровень', 'Поле', 'Колода', 'Запас', 'Мин.', 'Решений', 'Тупики', 'Рейтинг', 'План', 'Новое', 'Светл.', 'Звёзды 2/3', '«Отложить»', 'Время', ''];
 const widths = head.map((h, c) => Math.max(h.length, ...rows.map((r) => r[c].length)));
 const line = (r: string[]) => r.map((v, c) => (c === 1 || c === 9 || c === 10 ? v.padEnd(widths[c]) : v.padStart(widths[c]))).join(' | ');
-console.log(line(head));
-console.log(widths.map((w) => '-'.repeat(w)).join('-|-'));
-for (const r of rows) console.log(line(r));
+if (md) {
+  // Markdown: без столбца времени.
+  const cut = (r: string[]) => r.filter((_, c) => c !== 14);
+  console.log('| ' + cut(head).map((h) => h || 'OK').join(' | ') + ' |');
+  console.log('|' + cut(head).map(() => '---').join('|') + '|');
+  for (const r of rows) console.log('| ' + cut(r).join(' | ') + ' |');
+} else {
+  console.log(line(head));
+  console.log(widths.map((w) => '-'.repeat(w)).join('-|-'));
+  for (const r of rows) console.log(line(r));
+}
 console.log('\nЗапас — плиток в колоде сверх минимума (∞ — колода бесконечная). Решений — разных дорог до выхода (считаем до 500).');
 console.log('Тупики — доля случайных допустимых ходов, после которых уровень уже не решить (выборка 600 ходов).');
 console.log('Рейтинг 1–10 = 1 + тупики (до 4) + мало решений (до 2) + малый запас (до 1,5) + длина пути (до 1,5), формула — ratingOf в src/core/difficulty.ts.');
 console.log('Звёзды: с колодой — по оставшимся плиткам (3 — от макс. − 1, 2 — от половины); без лимита — 0 отмен 3, 1–2 отмены 2, больше 1.');
-if (!Number.isNaN(avg2)) console.log(`Средний рейтинг: 11–20 — ${avg2.toFixed(1)}, 21–30 — ${Number.isNaN(avg3) ? '—' : avg3.toFixed(1)}`);
-if (!Number.isNaN(avg2) && !Number.isNaN(avg3) && !(avg3 > avg2)) {
-  notes.push(`! Сложность не растёт по миру: 11–20 — ${avg2.toFixed(1)}, 21–30 — ${avg3.toFixed(1)}`);
-  warnings++;
-}
+if (avgLines.length) console.log(`Средний рейтинг по десяткам: ${avgLines.join('; ')}`);
 if (notes.length) console.log('\n' + notes.join('\n'));
 if (errors) {
   console.error(`\nОшибок: ${errors}`);

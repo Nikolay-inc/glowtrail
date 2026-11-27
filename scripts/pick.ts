@@ -1,11 +1,12 @@
-// npm run pick — подбирает уровни 11–30 мира «Долина» из кандидатов генератора (generated/*.json)
-// под план мира (src/levels/curve.ts): размер поля, обязательные и разрешённые элементы, целевой рейтинг.
-// Пишет src/levels/valley/NN.json (id «valley-NN», название-заготовка из плана), сразу считает колоды
-// облегчения и метрики. Уровни 1–10 (обучение) не трогает.
+// npm run pick — подбирает уровни мира из кандидатов генератора (generated/*.json) под план мира
+// (src/levels/curve.ts): размер поля, обязательные и разрешённые элементы, целевой рейтинг.
+// Пишет src/levels/<мир>/NN.json (id «<мир>-NN», NN — номер в мире, название-заготовка из плана), сразу
+// считает колоды облегчения и метрики. Уровни 1–10 «Долины» (обучение) не трогает.
 //
-//   npm run pick              — подобрать и записать
-//   npm run pick -- --dry     — только показать, что выбрано бы
-//   npm run pick -- --only 14,20  — перевыбрать только эти уровни (остальные не трогать)
+//   npm run pick                  — «Долина» (11–30): подобрать и записать
+//   npm run pick -- --world forest — «Туманный лес» (31–60)
+//   npm run pick -- --dry         — только показать, что выбрано бы
+//   npm run pick -- --only 14,20  — перевыбрать только эти уровни (номера по порядку, остальные не трогать)
 
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { parseLevel } from '../src/core/level';
@@ -15,11 +16,17 @@ import { easeDeck, TooManyStates } from '../src/core/solver';
 import type { DifficultyReport } from '../src/core/difficulty';
 import { starThresholds } from '../src/core/game';
 import type { LevelData } from '../src/core/types';
-import { BREATHER_MAX_RATING, BREATHER_MIN_ROADS, EASY_MAX_RATING, EASY_MIN_ROADS, mustBeEasy, VALLEY_PLAN, type Slot } from '../src/levels/curve';
+import { BREATHER_MAX_RATING, BREATHER_MIN_ROADS, EASY_MAX_RATING, EASY_MIN_ROADS, mustBeEasy, WORLD_PLANS, type Slot } from '../src/levels/curve';
 
 const dry = process.argv.includes('--dry');
 const onlyArg = process.argv.indexOf('--only');
 const only = onlyArg >= 0 ? new Set(process.argv[onlyArg + 1].split(',').map(Number)) : null;
+const worldArg = process.argv.indexOf('--world');
+const world = worldArg >= 0 ? process.argv[worldArg + 1] : 'valley';
+const PLAN = WORLD_PLANS[world];
+if (!PLAN) throw new Error(`Нет плана мира «${world}» (есть: ${Object.keys(WORLD_PLANS).join(', ')})`);
+/** Номер первого уровня мира минус 1: номер в мире = num - offset. «Долина» начинается с 1, план — с 11. */
+const offset = world === 'valley' ? 0 : PLAN[0].num - 1;
 
 if (!existsSync('generated')) throw new Error('Нет папки generated/ — сначала npm run gen');
 const pool: Candidate[] = [];
@@ -36,9 +43,10 @@ for (const f of readdirSync('generated').filter((x) => x.endsWith('.json'))) {
 console.log(`Кандидатов: ${pool.length} из ${readdirSync('generated').length} файлов\n`);
 
 // Поля уже стоящих уровней — чтобы не взять тот же уровень дважды.
-const fileOf = (num: number) => `src/levels/valley/${String(num).padStart(2, '0')}.json`;
+const inWorld = (num: number) => String(num - offset).padStart(2, '0');
+const fileOf = (num: number) => `src/levels/${world}/${inWorld(num)}.json`;
 const used = new Set<string>();
-for (const slot of VALLEY_PLAN) {
+for (const slot of PLAN) {
   if (only && !only.has(slot.num) && existsSync(fileOf(slot.num))) {
     used.add((JSON.parse(readFileSync(fileOf(slot.num), 'utf8')) as LevelData).grid.join('/'));
   }
@@ -52,7 +60,9 @@ function fits(slot: Slot, c: Candidate): boolean {
   if (mustBeEasy(slot) && (c.metrics.rating > EASY_MAX_RATING || c.metrics.roads < EASY_MIN_ROADS)) return false;
   const f = featuresOf(parseLevel(c.data));
   if (!slot.needs.every((x) => f.includes(x))) return false;
-  return f.every((x) => slot.needs.includes(x) || slot.allows.includes(x));
+  if (!f.every((x) => slot.needs.includes(x) || slot.allows.includes(x))) return false;
+  // Туман «без угадывания» генератор уже проверил (fogGuess), итог ещё раз проверяет verify.
+  return true;
 }
 
 /** Чем меньше, тем лучше: отклонение рейтинга от цели, небольшой штраф за маленькое поле на поздних уровнях. */
@@ -64,7 +74,7 @@ function score(slot: Slot, c: Candidate): number {
 }
 
 const rows: string[] = [];
-for (const slot of VALLEY_PLAN) {
+for (const slot of PLAN) {
   if (only && !only.has(slot.num)) continue;
   const ranked = pool.filter((c) => !used.has(c.data.grid.join('/')) && fits(slot, c)).sort((a, b) => score(slot, a) - score(slot, b));
   // Лучший кандидат, который решатель разбирает быстро (подсказки на телефоне).
@@ -85,13 +95,15 @@ for (const slot of VALLEY_PLAN) {
   }
   used.add(best.data.grid.join('/'));
   const data: LevelData = {
-    id: `valley-${String(slot.num).padStart(2, '0')}`,
+    id: `${world}-${inWorld(slot.num)}`,
     name: slot.name,
     grid: best.data.grid,
     startDir: best.data.startDir,
     deck: best.data.deck,
     stars: { two: 0, three: 0 },
   };
+  if (best.data.fog) data.fog = true;
+  if (best.data.shadow) data.shadow = best.data.shadow;
   if (slot.goal && slot.goal !== 'classic') data.goal = slot.goal;
   if (slot.night) data.night = true;
   // Звёзды, облегчение и метрики — заново, теми же функциями, что verify и ease.
@@ -106,4 +118,4 @@ for (const slot of VALLEY_PLAN) {
   if (!dry) writeFileSync(fileOf(slot.num), JSON.stringify(data, null, 2) + '\n');
 }
 console.log(rows.join('\n'));
-console.log(dry ? '\n--dry: файлы не записаны' : '\nЗаписано в src/levels/valley/. Дальше: npm run verify');
+console.log(dry ? '\n--dry: файлы не записаны' : `\nЗаписано в src/levels/${world}/. Дальше: npm run verify`);

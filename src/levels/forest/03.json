@@ -1,0 +1,71 @@
+{
+  "id": "forest-03",
+  "name": "Корни и кольца",
+  "grid": [
+    ".....",
+    "...a.",
+    ".EF..",
+    "..#.a",
+    "..##F",
+    "....S"
+  ],
+  "startDir": "N",
+  "deck": [
+    "left",
+    "left",
+    "straight",
+    "right",
+    "straight2",
+    "left",
+    "straight",
+    "left",
+    "straight",
+    "left",
+    "straight",
+    "left"
+  ],
+  "stars": {
+    "two": 3,
+    "three": 6
+  },
+  "easeDecks": [
+    [
+      "straight2",
+      "left",
+      "left",
+      "straight",
+      "right",
+      "straight2",
+      "left",
+      "straight",
+      "left",
+      "straight",
+      "left",
+      "straight",
+      "left"
+    ],
+    [
+      "straight2",
+      "left",
+      "left",
+      "straight",
+      "right",
+      "straight",
+      "straight2",
+      "left",
+      "straight",
+      "left",
+      "straight",
+      "left",
+      "straight",
+      "left"
+    ]
+  ],
+  "metrics": {
+    "rating": 2.7,
+    "roads": 12,
+    "minTiles": 5,
+    "reserve": 7,
+    "trap": 0.27
+  }
+}

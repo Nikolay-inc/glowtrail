@@ -24,14 +24,17 @@ export const TIP_TEXT: Record<TipId, StringKey> = {
 };
 
 /** Карточки правил с анимацией: показываются перед уровнем, где элемент появляется впервые. */
-export type RuleId = 'road' | 'lantern' | 'side' | 'rock' | 'water' | 'firefly' | 'jump' | 'ffgoal' | 'turnbridge' | 'fade';
-export const ALL_RULES: readonly RuleId[] = ['road', 'lantern', 'side', 'rock', 'water', 'firefly', 'jump', 'ffgoal', 'turnbridge', 'fade'];
+export type RuleId = 'road' | 'lantern' | 'side' | 'rock' | 'water' | 'firefly' | 'jump' | 'ffgoal' | 'turnbridge' | 'fade' | 'ring' | 'fog' | 'shadow' | 'escape';
+export const ALL_RULES: readonly RuleId[] = ['road', 'lantern', 'side', 'rock', 'water', 'firefly', 'jump', 'ffgoal', 'turnbridge', 'fade', 'ring', 'fog', 'shadow', 'escape'];
 
 /** Что на уровне — для выбора карточек правил по содержимому. */
 export interface RulesLevel {
   num: number;
   fireflies: readonly number[];
-  goal?: 'classic' | 'fireflies';
+  goal?: 'classic' | 'fireflies' | 'escape';
+  rings?: readonly unknown[];
+  fog?: boolean;
+  shadow?: number;
   deck?: readonly string[];
   turnBridges?: readonly number[];
   fades?: readonly number[];
@@ -47,6 +50,10 @@ export function rulesFor(level: RulesLevel): RuleId[] {
   if (level.deck?.includes('jump')) out.push('jump');
   if (level.turnBridges?.length) out.push('turnbridge');
   if (level.fades?.length) out.push('fade');
+  if (level.rings?.length) out.push('ring');
+  if (level.fog) out.push('fog');
+  if (level.goal === 'escape') out.push('escape');
+  else if (level.shadow) out.push('shadow');
   return out;
 }
 

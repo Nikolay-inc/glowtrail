@@ -12,6 +12,7 @@ import { analyzeLevel } from '../core/difficulty';
 import { starThresholds } from '../core/game';
 import { parseLevel } from '../core/level';
 import { easeDeck, solutionOf } from '../core/solver';
+import { fogFair } from '../core/fog';
 import { CELL_BY_CHAR, CHAR_BY_CELL, TILE_KINDS, type CellType, type GoalType, type LevelData, type TileKind } from '../core/types';
 import { LEVELS } from '../levels/index';
 import { EDITOR_RETURN } from '../scenes/GameScene';
@@ -29,6 +30,7 @@ const CELL_VIEW: Record<CellType, { label: string; bg: string; title: string }> 
   exit: { label: '🚪', bg: '#1d6b66', title: 'Выход' },
   firefly: { label: '✨', bg: '#2f4a2a', title: 'Светлячок' },
   turnbridge: { label: '═', bg: '#2f78ad', title: 'Поворотный мост (тап ещё раз — повернуть)' },
+  ring: { label: '🍄', bg: '#4a2f6b', title: 'Грибное кольцо-телепорт (пара — две клетки одной буквы)' },
 };
 /** Палитра: символ → подпись. */
 const TOOLS: { ch: string; title: string }[] = [
@@ -41,6 +43,8 @@ const TOOLS: { ch: string; title: string }[] = [
   { ch: 'S', title: 'Старт' },
   { ch: 'E', title: 'Выход' },
   { ch: 'F', title: 'Светлячок' },
+  { ch: 'a', title: 'Кольцо A (телепорт, ставь два)' },
+  { ch: 'b', title: 'Кольцо B (телепорт, ставь два)' },
 ];
 const TILE_VIEW: Record<TileKind, string> = { straight: '↑', straight2: '⇈', left: '↰', right: '↱', bridge: '═', jump: '⤴' };
 const TILE_RU: Record<TileKind, string> = { straight: 'прямо', straight2: 'прямо ×2', left: 'налево', right: 'направо', bridge: 'мост', jump: 'прыжок' };
@@ -53,6 +57,7 @@ function viewOf(ch: string, startDir: LevelData['startDir']) {
   if (ch === '-') return { ...v, label: '═' };
   if (ch === '|') return { ...v, label: '║' };
   if (ch >= '2' && ch <= '9') return { ...v, label: `🏮${ch}`, title: `Гаснущий фонарь: горит ${ch} ходов (тап ещё раз — изменить)` };
+  if (ch === 'a' || ch === 'b') return { ...v, label: `🍄${ch.toUpperCase()}`, bg: ch === 'a' ? '#6b3f8a' : '#2f6b6b' };
   return v;
 }
 const STORE_KEY = 'glowtrail.editor';
@@ -70,6 +75,8 @@ interface Draft {
   allowStash: boolean;
   night: boolean;
   goal?: GoalType;
+  fog?: boolean;
+  shadow?: number;
 }
 
 function emptyDraft(width = 5, height = 7): Draft {
@@ -83,7 +90,7 @@ function fromData(d: LevelData): Draft {
   const height = d.grid.length;
   const width = d.grid[0].length;
   const cells = d.grid.flatMap((row) => [...row].map((ch) => (CELL_BY_CHAR[ch] ? ch : '.')));
-  return { id: String(d.id), name: d.name, width, height, cells, startDir: d.startDir, deck: [...d.deck], tileSet: d.tileSet ? [...d.tileSet] : undefined, allowStash: d.allowStash ?? true, night: !!d.night, goal: d.goal };
+  return { id: String(d.id), name: d.name, width, height, cells, startDir: d.startDir, deck: [...d.deck], tileSet: d.tileSet ? [...d.tileSet] : undefined, allowStash: d.allowStash ?? true, night: !!d.night, goal: d.goal, fog: !!d.fog, shadow: d.shadow ?? 0 };
 }
 
 /** Черновик старого формата (типы клеток словами) — переводим в символы. */
@@ -95,7 +102,9 @@ function toData(dr: Draft): LevelData {
   const grid: string[] = [];
   for (let y = 0; y < dr.height; y++) grid.push(dr.cells.slice(y * dr.width, (y + 1) * dr.width).join(''));
   const d: LevelData = { id: dr.id, name: dr.name, grid, startDir: dr.startDir, deck: [...dr.deck], stars: { two: 0, three: 0 } };
-  if (dr.goal === 'fireflies') d.goal = 'fireflies';
+  if (dr.goal === 'fireflies' || dr.goal === 'escape') d.goal = dr.goal;
+  if (dr.fog) d.fog = true;
+  if (dr.shadow) d.shadow = dr.shadow;
   if (dr.tileSet) d.tileSet = [...dr.tileSet];
   if (!dr.allowStash) d.allowStash = false;
   if (dr.night) d.night = true;
@@ -196,6 +205,8 @@ export function startEditor(game: Phaser.Game) {
             l.tileSet ? 'Звёзды — по отменам' : `Звёзды: 2★ от ${stars.two}, 3★ от ${stars.three} (макс. остаток ${r.maxLeftover})`,
             r.solvableWithoutStash ? '«Отложить» не обязателен' : '⚠ без «отложить» не решить',
             m.roads < 2 ? '⚠ одно решение — в мире таких уровней нет' : '',
+            l.fog ? (fogFair(l).ok ? 'Туман: решается без угадывания ✓' : '⚠ туман: без угадывания не решить') : '',
+            l.shadow ? `Тень появляется через ${l.shadow} ходов` : '',
           ]
             .filter(Boolean)
             .join('\n')
@@ -400,22 +411,35 @@ export function startEditor(game: Phaser.Game) {
     const night = h('input', { type: 'checkbox' }) as HTMLInputElement;
     night.checked = draft.night;
     night.onchange = () => ((draft.night = night.checked), save());
-    const ffGoal = h('input', { type: 'checkbox' }) as HTMLInputElement;
-    ffGoal.checked = draft.goal === 'fireflies';
+    const ffGoal = h('select') as HTMLSelectElement;
+    for (const [v, label] of [['classic', 'цель: арка'], ['fireflies', 'цель: только светлячки'], ['escape', 'цель: побег от тени']]) ffGoal.append(new Option(label, v));
+    ffGoal.value = draft.goal ?? 'classic';
     ffGoal.onchange = () => {
-      draft.goal = ffGoal.checked ? 'fireflies' : undefined;
-      // У цели «светлячки» арки нет.
-      if (ffGoal.checked) draft.cells = draft.cells.map((c) => (c === 'E' ? '.' : c));
+      draft.goal = ffGoal.value === 'classic' ? undefined : (ffGoal.value as GoalType);
+      // У цели «светлячки» арки нет; у побега — нужна тень.
+      if (draft.goal === 'fireflies') draft.cells = draft.cells.map((c) => (c === 'E' ? '.' : c));
+      if (draft.goal === 'escape' && !draft.shadow) draft.shadow = 4;
       save();
       render();
     };
+    const fog = h('input', { type: 'checkbox' }) as HTMLInputElement;
+    fog.checked = !!draft.fog;
+    fog.onchange = () => ((draft.fog = fog.checked), save());
+    const shadow = h('input', { type: 'number', min: '0', max: '20' }) as HTMLInputElement;
+    shadow.style.width = '4em';
+    shadow.value = String(draft.shadow ?? 0);
+    shadow.onchange = () => ((draft.shadow = Math.max(0, Math.min(20, Math.round(Number(shadow.value) || 0)))), save());
     const l1 = h('label');
     l1.append(stash, ' «отложить»');
     const l2 = h('label');
     l2.append(night, ' ночь');
     const l3 = h('label');
-    l3.append(ffGoal, ' цель: только светлячки');
-    move.append(l1, l2, l3);
+    l3.append(ffGoal);
+    const l4 = h('label');
+    l4.append(fog, ' туман');
+    const l5 = h('label');
+    l5.append('тень через ', shadow, ' ходов (0 — нет)');
+    move.append(l1, l2, l3, l4, l5);
     side.append(move);
 
     // Действия

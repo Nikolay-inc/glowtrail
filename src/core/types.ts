@@ -20,7 +20,7 @@ export const TILE_KINDS: readonly TileKind[] = ['straight', 'straight2', 'left',
  * Типы клеток. turnbridge — поворотный мост через воду (после каждой поставленной плитки поворачивается на 90°).
  * Гаснущий фонарь — это lantern с числом ходов (Level.fade).
  */
-export type CellType = 'empty' | 'rock' | 'water' | 'lantern' | 'exit' | 'start' | 'firefly' | 'turnbridge';
+export type CellType = 'empty' | 'rock' | 'water' | 'lantern' | 'exit' | 'start' | 'firefly' | 'turnbridge' | 'ring';
 
 export const CELL_BY_CHAR: Record<string, CellType> = {
   '.': 'empty',
@@ -40,13 +40,21 @@ export const CELL_BY_CHAR: Record<string, CellType> = {
   '7': 'lantern',
   '8': 'lantern',
   '9': 'lantern',
+  a: 'ring', // грибное кольцо-телепорт пары A (на поле ровно два)
+  b: 'ring', // грибное кольцо-телепорт пары B
 };
 
-/** Обратная таблица: тип клетки → символ (редактор, генератор). Для моста и гаснущего фонаря — cellChar в level.ts. */
-export const CHAR_BY_CELL: Record<CellType, string> = { empty: '.', rock: '#', water: '~', lantern: 'L', exit: 'E', start: 'S', firefly: 'F', turnbridge: '-' };
+/** Буквы пар грибных колец: индекс + 1 — номер пары в Level.ringId. */
+export const RING_LETTERS = ['a', 'b'] as const;
 
-/** Цель уровня: classic — дойти до арки через все фонари; fireflies — собрать всех светлячков (арки нет). */
-export type GoalType = 'classic' | 'fireflies';
+/** Обратная таблица: тип клетки → символ (редактор, генератор). Для моста и гаснущего фонаря — cellChar в level.ts. */
+export const CHAR_BY_CELL: Record<CellType, string> = { empty: '.', rock: '#', water: '~', lantern: 'L', exit: 'E', start: 'S', firefly: 'F', turnbridge: '-', ring: 'a' };
+
+/**
+ * Цель уровня: classic — дойти до арки через все фонари; fireflies — собрать всех светлячков (арки нет);
+ * escape — «Побег»: дойти до арки, пока тень не догнала (арка открыта сразу, фонари задерживают тень).
+ */
+export type GoalType = 'classic' | 'fireflies' | 'escape';
 
 /** Уровень в том виде, как он лежит в JSON. */
 export interface LevelData {
@@ -55,9 +63,14 @@ export interface LevelData {
   name: string;
   /**
    * Строки поля сверху вниз: . пусто, # камень, ~ вода, L фонарь, E выход, S старт, F светлячок,
-   * - | поворотный мост (горизонтальный / вертикальный на старте), 2–9 гаснущий фонарь (горит N ходов).
+   * - | поворотный мост (горизонтальный / вертикальный на старте), 2–9 гаснущий фонарь (горит N ходов),
+   * a b грибные кольца-телепорты (по два одной буквы).
    */
   grid: string[];
+  /** Туман: клетки скрыты, кроме тех, что рядом с дорогой и зажжёнными фонарями (арка, фонари и кольца светятся сквозь него). */
+  fog?: boolean;
+  /** Тень: появляется на старте через столько ходов (число на старте) и бежит по дороге за Lumo. */
+  shadow?: number;
   /** Куда смотрит фонарщик на старте: N, E, S, W. */
   startDir: 'N' | 'E' | 'S' | 'W';
   /** Цель уровня (по умолчанию classic). */
@@ -122,9 +135,19 @@ export interface Level {
   fades: number[];
   /** Поворотные мосты (индексы клеток). */
   turnBridges: number[];
+  /** По клеткам: парное грибное кольцо (индекс клетки) или -1. */
+  ringPair: number[];
+  /** По клеткам: номер пары колец (1 — a, 2 — b) или 0. */
+  ringId: number[];
+  /** Пары колец: [клетка, клетка]. */
+  rings: [number, number][];
+  /** Туман над полем. */
+  fog: boolean;
+  /** Через сколько ходов на старте появляется тень (0 — тени нет). */
+  shadow: number;
   /** По клеткам: поворотный мост на старте горизонтальный (проход слева направо). */
   bridgeH: boolean[];
-  /** На поле есть то, что меняется со временем (поворотный мост, гаснущий фонарь). */
+  /** На поле есть то, что меняется со временем (поворотный мост, гаснущий фонарь, тень). */
   timed: boolean;
   deck: TileKind[];
   /** Набор бесконечной колоды или null, если колода конечная. */

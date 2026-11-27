@@ -8,6 +8,7 @@ import { getLocale, keyOfText, missingKeys, t } from '../i18n';
 import { SETS, WARDROBE } from '../core/wardrobe';
 import { BUILDINGS, DECOR_TYPE_ORDER, DISTRICTS } from '../core/villageData';
 import { LEVELS } from '../levels/index';
+import { applyAction, canPlace, lossReason, type GameState } from '../core/game';
 import { getEconomy } from '../meta';
 import { SaveService } from '../save/SaveService';
 import { ALL_RULES } from '../tutorial';
@@ -228,6 +229,22 @@ function views(game: Phaser.Game): Record<string, () => Promise<void>> {
   };
   v['village-all'] = () => allLit(false, null);
   v['village-all-edit'] = () => allLit(true, 3);
+  // Сцена «Lumo входит в лес» — кадр с названием мира и фразой (сцена не заканчивается сама).
+  v['forest-intro'] = async () => void (await start('ForestIntro', { hold: true }, 2500));
+  // Карта, прокрученная к переходу в «Туманный лес»: пока закрыт (дымка, замки, подсказка) и открытый.
+  const mapForest = async () => {
+    const s = (await start('Menu')) as unknown as { focusWorld: (id: string) => void };
+    s.focusWorld('forest');
+    await sleep(600);
+  };
+  v['map-forest-locked'] = mapForest;
+  v['map-forest'] = async () => {
+    SaveService.update((d) => {
+      d.progress.stars[LEVELS[29].id] = Math.max(1, d.progress.stars[LEVELS[29].id] ?? 0);
+      if (!d.progress.worlds.includes('forest')) d.progress.worlds.push('forest');
+    });
+    await mapForest();
+  };
   // Открытый лесной квартал (последним: отмечает уровень 30 пройденным в сохранении проверки).
   v['village-forest'] = async () => {
     SaveService.update((d) => {
@@ -240,6 +257,53 @@ function views(game: Phaser.Game): Record<string, () => Promise<void>> {
     const s = (await start('Village', { district: 'forest' }, 1000)) as unknown as Any;
     s.toggleEdit();
     await sleep(500);
+  };
+  type GameView = {
+    state: GameState;
+    goalCard?: Phaser.GameObjects.Container;
+    board: { setRoad: (st: GameState) => void; shadowDelayed: (label: string, herb: boolean) => void };
+    refresh: (animate: boolean) => void;
+    showLosePanel: () => void;
+  };
+  // Лес: карточка цели босса (кольца, туман, тень, травница и обсерватория), «Тень настигла» → «Почти!», подпись травницы.
+  const forestLevel = async (index: number) => {
+    SaveService.update((d) => {
+      d.economy.buildings = { ...d.economy.buildings, herbalist: 3, observatory: 3 };
+      for (const r of ALL_RULES) if (!d.profile.tipsSeen.includes(`rule:${r}`)) d.profile.tipsSeen.push(`rule:${r}`);
+    });
+    return (await start('Game', { levelIndex: index }, 1400)) as unknown as GameView;
+  };
+  /** Ходы плитками лотка (сначала повороты — длинная дорога), пока партия идёт и until не выполнено. */
+  const wander = (st: GameState, until: (s: GameState) => boolean) => {
+    for (let i = 0; i < 30 && st.status === 'playing' && !until(st); i++) {
+      const order = [0, 1, 2].sort((a, b) => Number(['left', 'right'].includes(st.tray[b] ?? '')) - Number(['left', 'right'].includes(st.tray[a] ?? '')));
+      const slot = order.find((j) => canPlace(st, st.tray[j] ?? null));
+      if (slot === undefined) break;
+      st = applyAction(st, { type: 'place', slot });
+    }
+    return st;
+  };
+  v['goal-card-forest'] = async () => void (await forestLevel(59));
+  v['almost-shadow'] = async () => {
+    const s = await forestLevel(40);
+    s.goalCard?.destroy();
+    s.goalCard = undefined;
+    // Без травницы — тень догоняет на длинной петле.
+    s.state = wander({ ...s.state, charms: 0 }, (x) => lossReason(x) === 'shadow');
+    s.board.setRoad(s.state);
+    s.refresh(false);
+    s.showLosePanel();
+    await sleep(1500);
+  };
+  v['shadow-herbalist'] = async () => {
+    const s = await forestLevel(41);
+    s.goalCard?.destroy();
+    s.goalCard = undefined;
+    s.state = wander(s.state, (x) => x.road.length >= 6);
+    s.board.setRoad(s.state);
+    s.refresh(false);
+    s.board.shadowDelayed(t('shadow_delayed_herbalist'), true);
+    await sleep(1400);
   };
   return v;
 }

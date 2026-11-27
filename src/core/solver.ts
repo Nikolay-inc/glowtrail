@@ -3,7 +3,7 @@
 
 import { dealExtra, isInfinite, placeTile, tileLeadsToExit, timeOf, TRAY_SIZE, type Action, type GameState } from './game';
 import { geoCountRoads, geoMaxFireflies, geoMinTiles } from './geo';
-import { advanceTime, anyExpired, goalReached, timeKey, timeStart, type TimeState } from './tiles';
+import { advanceTime, goalReached, timeDead, timeKey, timeStart, type TimeState } from './tiles';
 import { TILE_KINDS, type Dir, type Level, type TileKind } from './types';
 
 export interface Node {
@@ -180,7 +180,7 @@ export class Solver {
 
     const res: Result = { best: -1, ff: -1, roads: this.opts.countRoads ? new Set() : null };
     this.memo.set(k, res); // дорога только растёт, циклов нет
-    if (this.level.fades.length && anyExpired(this.level, n.time)) return res; // фонарь погас — арку не открыть
+    if (this.level.timed && timeDead(this.level, n.time)) return res; // фонарь погас или тень догнала
     if (this.opts.maxStates && this.memo.size > this.opts.maxStates) throw new TooManyStates(this.opts.maxStates);
     for (const m of this.moves(n)) {
       const r = this.explore(m.next);
@@ -228,7 +228,7 @@ export class Solver {
   }
 }
 
-export function startNode(level: Level, deck: TileKind[]): Node {
+export function startNode(level: Level, deck: TileKind[], charms = 0): Node {
   const startIdx = level.start.y * level.width + level.start.x;
   return {
     head: startIdx,
@@ -238,7 +238,7 @@ export function startNode(level: Level, deck: TileKind[]): Node {
     tray: deck.slice(0, TRAY_SIZE),
     stash: null,
     stash2: null,
-    time: timeStart(level),
+    time: timeStart(level, charms),
   };
 }
 

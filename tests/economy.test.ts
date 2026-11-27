@@ -224,7 +224,8 @@ describe('сохранение и облако', () => {
 });
 
 describe('экономика на три главы (npm run sim-economy)', () => {
-  const ch1: ModelLevel[] = LEVELS.slice(0, 30).map((l) => ({ num: l.num, chapter: 1, rating: l.metrics?.rating ?? 3, fireflies: l.fireflies.length, infinite: l.tileSet !== null }));
+  // Настоящие уровни: глава 1 — «Долина» (1–30), глава 2 — «Туманный лес» (31–60); глава 3 — по плану модели.
+const ch1: ModelLevel[] = LEVELS.slice(0, 60).map((l) => ({ num: l.num, chapter: l.num <= 30 ? 1 : 2, rating: l.metrics?.rating ?? 3, fireflies: l.fireflies.length, infinite: l.tileSet !== null }));
   const avg = PROFILES.find((p) => p.id === 'average')!;
   const base = simulate3(ch1, avg, 0);
   const extra = simulate3(ch1, avg, 15);

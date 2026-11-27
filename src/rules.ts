@@ -14,7 +14,11 @@ export interface DemoPhase {
   grid: string[];
   startDir: 'N' | 'E' | 'S' | 'W';
   steps: DemoStep[];
-  goal?: 'classic' | 'fireflies';
+  goal?: 'classic' | 'fireflies' | 'escape';
+  fog?: boolean;
+  shadow?: number;
+  /** Чем заканчивается фаза (по умолчанию — победой): lost — показываем, как тень догоняет. */
+  ends?: 'lost';
 }
 
 export interface RuleCard {
@@ -117,6 +121,55 @@ export const RULE_CARDS: Record<RuleId, RuleCard> = {
       },
     ],
   },
+  ring: {
+    id: 'ring',
+    title: 'rule_ring_title',
+    text: 'rule_ring_text',
+    phases: [
+      // Дорога входит в кольцо — и выходит из парного в том же направлении.
+      { grid: ['E..', 'a..', '#..', '..a', '..S'], startDir: 'N', steps: [{ place: 'straight' }, { place: 'straight' }] },
+    ],
+  },
+  fog: {
+    id: 'fog',
+    title: 'rule_fog_title',
+    text: 'rule_fog_text',
+    phases: [
+      // Туман расходится вокруг дороги: впереди открылся камень — обходим.
+      {
+        grid: ['.E.', '...', '.#.', '...', '.S.'],
+        startDir: 'N',
+        fog: true,
+        steps: [{ place: 'straight' }, { fail: 'straight' }, { reset: true }, { place: 'left' }, { place: 'right' }, { place: 'straight' }, { place: 'right' }, { place: 'left' }, { place: 'straight' }],
+      },
+    ],
+  },
+  shadow: {
+    id: 'shadow',
+    title: 'rule_shadow_title',
+    text: 'rule_shadow_text',
+    phases: [
+      // Петля — тень догоняет. Прямая дорога — успели.
+      { grid: ['.E.', '...', '...', '...', '.S.'], startDir: 'N', shadow: 2, ends: 'lost', steps: [{ place: 'left' }, { place: 'right' }, { place: 'straight' }, { place: 'straight' }] },
+      { grid: ['.E.', '...', '...', '...', '.S.'], startDir: 'N', shadow: 2, steps: [{ place: 'straight' }, { place: 'straight' }, { place: 'straight' }, { place: 'straight' }] },
+    ],
+  },
+  escape: {
+    id: 'escape',
+    title: 'rule_escape_title',
+    text: 'rule_escape_text',
+    phases: [
+      // Арка открыта сразу: беги к ней. Фонарь по пути задерживает тень на ход.
+      { grid: ['.E.', '...', 'L..', '...', '.S.'], startDir: 'N', goal: 'escape', shadow: 2, steps: [{ place: 'straight' }, { place: 'straight' }, { place: 'straight' }, { place: 'straight' }] },
+      {
+        grid: ['.E.', '...', 'L..', '...', '.S.'],
+        startDir: 'N',
+        goal: 'escape',
+        shadow: 2,
+        steps: [{ place: 'left' }, { place: 'right' }, { place: 'straight' }, { place: 'right' }, { place: 'left' }, { place: 'straight' }],
+      },
+    ],
+  },
   water: {
     id: 'water',
     title: 'rule_water_title',
@@ -127,7 +180,7 @@ export const RULE_CARDS: Record<RuleId, RuleCard> = {
 
 export function demoLevel(phase: DemoPhase): Level {
   // Колода не важна: плитки демонстрации подкладываются в лоток перед каждым шагом.
-  return parseLevel({ id: 'demo', name: 'demo', grid: phase.grid, startDir: phase.startDir, deck: ['straight'], stars: { two: 0, three: 0 }, allowStash: false, goal: phase.goal });
+  return parseLevel({ id: 'demo', name: 'demo', grid: phase.grid, startDir: phase.startDir, deck: ['straight'], stars: { two: 0, three: 0 }, allowStash: false, goal: phase.goal, fog: phase.fog, shadow: phase.shadow });
 }
 
 /** Поставить плитку kind на конец дороги (подкладываем её в лоток и ходим настоящим ходом). */

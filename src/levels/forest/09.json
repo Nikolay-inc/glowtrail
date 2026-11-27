@@ -1,0 +1,62 @@
+{
+  "id": "forest-09",
+  "name": "Полянка",
+  "grid": [
+    "#...#",
+    ".E...",
+    "...a.",
+    ".....",
+    "..a..",
+    "....S"
+  ],
+  "startDir": "N",
+  "deck": [
+    "right",
+    "left",
+    "left",
+    "straight2",
+    "straight2",
+    "right",
+    "straight2",
+    "straight2",
+    "right"
+  ],
+  "stars": {
+    "two": 2,
+    "three": 3
+  },
+  "easeDecks": [
+    [
+      "right",
+      "left",
+      "left",
+      "straight2",
+      "straight",
+      "straight2",
+      "right",
+      "straight2",
+      "straight2",
+      "right"
+    ],
+    [
+      "right",
+      "left",
+      "left",
+      "straight2",
+      "straight",
+      "straight2",
+      "straight",
+      "right",
+      "straight2",
+      "straight2",
+      "right"
+    ]
+  ],
+  "metrics": {
+    "rating": 2.9,
+    "roads": 10,
+    "minTiles": 5,
+    "reserve": 4,
+    "trap": 0.257
+  }
+}

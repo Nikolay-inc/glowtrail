@@ -1,0 +1,79 @@
+{
+  "id": "forest-13",
+  "name": "Валуны",
+  "grid": [
+    ".....",
+    ".E...",
+    ".....",
+    ".F...",
+    "...F#",
+    "#..L.",
+    ".#S.."
+  ],
+  "startDir": "N",
+  "deck": [
+    "right",
+    "left",
+    "right",
+    "left",
+    "left",
+    "straight",
+    "straight2",
+    "right",
+    "left",
+    "straight2",
+    "right",
+    "left",
+    "left",
+    "left"
+  ],
+  "stars": {
+    "two": 3,
+    "three": 6
+  },
+  "shadow": 4,
+  "easeDecks": [
+    [
+      "straight",
+      "right",
+      "left",
+      "right",
+      "left",
+      "left",
+      "straight",
+      "straight2",
+      "right",
+      "left",
+      "straight2",
+      "right",
+      "left",
+      "left",
+      "left"
+    ],
+    [
+      "straight2",
+      "straight",
+      "right",
+      "left",
+      "right",
+      "left",
+      "left",
+      "straight",
+      "straight2",
+      "right",
+      "left",
+      "straight2",
+      "right",
+      "left",
+      "left",
+      "left"
+    ]
+  ],
+  "metrics": {
+    "rating": 3,
+    "roads": 43,
+    "minTiles": 7,
+    "reserve": 7,
+    "trap": 0.29
+  }
+}

@@ -1,0 +1,73 @@
+{
+  "id": "forest-07",
+  "name": "Сырая низина",
+  "grid": [
+    "....E.",
+    ".~~~~~",
+    "...#.F",
+    "......",
+    "..FL#.",
+    "......",
+    "..S..."
+  ],
+  "startDir": "N",
+  "deck": [
+    "straight",
+    "right",
+    "right",
+    "straight",
+    "left",
+    "straight",
+    "left",
+    "straight",
+    "left",
+    "bridge",
+    "left",
+    "right"
+  ],
+  "stars": {
+    "two": 2,
+    "three": 3
+  },
+  "fog": true,
+  "easeDecks": [
+    [
+      "straight2",
+      "straight",
+      "right",
+      "right",
+      "straight",
+      "left",
+      "straight",
+      "left",
+      "straight",
+      "left",
+      "bridge",
+      "left",
+      "right"
+    ],
+    [
+      "straight2",
+      "straight",
+      "right",
+      "right",
+      "straight",
+      "left",
+      "right",
+      "straight",
+      "left",
+      "straight",
+      "left",
+      "bridge",
+      "left",
+      "right"
+    ]
+  ],
+  "metrics": {
+    "rating": 4.2,
+    "roads": 6,
+    "minTiles": 8,
+    "reserve": 4,
+    "trap": 0.287
+  }
+}

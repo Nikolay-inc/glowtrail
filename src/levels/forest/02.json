@@ -1,0 +1,75 @@
+{
+  "id": "forest-02",
+  "name": "Светлячки над грибами",
+  "grid": [
+    ".#..a",
+    ".....",
+    "...E.",
+    "...F.",
+    ".....",
+    "#....",
+    ".SaL."
+  ],
+  "startDir": "N",
+  "deck": [
+    "straight",
+    "right",
+    "right",
+    "straight",
+    "left",
+    "right",
+    "right",
+    "straight",
+    "right",
+    "right",
+    "left",
+    "straight2",
+    "right"
+  ],
+  "stars": {
+    "two": 2,
+    "three": 4
+  },
+  "easeDecks": [
+    [
+      "left",
+      "straight",
+      "right",
+      "right",
+      "straight",
+      "left",
+      "right",
+      "right",
+      "straight",
+      "right",
+      "right",
+      "left",
+      "straight2",
+      "right"
+    ],
+    [
+      "straight2",
+      "left",
+      "straight",
+      "right",
+      "right",
+      "straight",
+      "left",
+      "right",
+      "right",
+      "straight",
+      "right",
+      "right",
+      "left",
+      "straight2",
+      "right"
+    ]
+  ],
+  "metrics": {
+    "rating": 2.9,
+    "roads": 14,
+    "minTiles": 8,
+    "reserve": 5,
+    "trap": 0.197
+  }
+}

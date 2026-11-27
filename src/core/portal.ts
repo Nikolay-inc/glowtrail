@@ -32,5 +32,6 @@ export function headSide(state: GameState): Dir | null {
 
 /** Сколько фонарей ещё не горит — это число на замке арки. */
 export function lanternsLeft(state: GameState): number {
+  if (state.level.goal === 'escape') return 0; // «Побег»: арка открыта сразу
   return state.level.lanterns.length - lanternsOnRoad(state);
 }

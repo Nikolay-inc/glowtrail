@@ -16,6 +16,8 @@ export type BlockReason =
 
 export interface PlacedCell extends Point {
   idx: number;
+  /** Грибное кольцо: in — дорога вошла в кольцо, out — вышла из парного (Lumo исчезает и появляется). */
+  portal?: 'in' | 'out';
 }
 
 /** Куда ляжет плитка и можно ли её поставить. */
@@ -37,15 +39,88 @@ export interface Placement {
 // Часы уровня
 
 /**
+ * Тень на дороге. Появляется на старте через level.shadow ходов и каждый ход пробегает SHADOW_SPEED клеток
+ * дороги к Lumo; догнала конец дороги — поражение. Зажжённый фонарь задерживает её на 1 ход, травница
+ * (бонус деревни) — тоже на 1 ход, когда тень вот-вот догонит.
+ */
+export interface ShadowState {
+  /** Клеток в дороге вместе со стартом. */
+  len: number;
+  /** Номер клетки дороги, где тень (0 — старт); -1 — ещё не появилась. */
+  pos: number;
+  /** Ходов задержки в запасе (зажжённые фонари). */
+  wait: number;
+  /** Зарядов травницы на этот уровень. */
+  charm: number;
+}
+
+/**
+ * Тень пробегает 2 клетки за ход: дорога растёт минимум на клетку за ход, и с 1 клеткой тень никогда бы
+ * не догнала. Так «прямо x2», кольца и фонари помогают убежать, а лишние петли — нет.
+ */
+export const SHADOW_SPEED = 2;
+
+/**
  * Время уровня: t — сколько плиток уже поставлено; lit — для каждого гаснущего фонаря (порядок level.fades)
- * номер плитки, после которой он зажёгся (-1 — ещё не зажжён).
+ * номер плитки, после которой он зажёгся (-1 — ещё не зажжён); sh — тень (если она есть на уровне).
  */
 export interface TimeState {
   t: number;
   lit: readonly number[];
+  sh?: ShadowState;
 }
 
-export const timeStart = (level: Level): TimeState => ({ t: 0, lit: level.fades.map(() => -1) });
+/** Начало уровня; charms — заряды травницы (задерживают тень). */
+export const timeStart = (level: Level, charms = 0): TimeState => ({
+  t: 0,
+  lit: level.fades.map(() => -1),
+  ...(level.shadow ? { sh: { len: 1, pos: -1, wait: 0, charm: Math.max(0, charms) } } : {}),
+});
+
+/** Тень догнала конец дороги. */
+export function shadowCaught(ts: TimeState): boolean {
+  const sh = ts.sh;
+  return !!sh && sh.pos >= 0 && sh.pos >= sh.len - 1;
+}
+
+/** Сколько клеток от тени до конца дороги (-1 — тень ещё не появилась). */
+export function shadowGap(ts: TimeState): number {
+  const sh = ts.sh;
+  return !sh || sh.pos < 0 ? -1 : Math.max(0, sh.len - 1 - sh.pos);
+}
+
+/** Через сколько ходов появится тень (0 — уже на дороге или тени нет). */
+export function shadowIn(level: Level, ts: TimeState): number {
+  return !ts.sh || ts.sh.pos >= 0 ? 0 : Math.max(0, level.shadow - ts.t);
+}
+
+/** Что задержало тень на этом ходу (по двум состояниям времени): фонарь, травница или ничего. */
+export function shadowDelay(prev: TimeState, next: TimeState): 'lantern' | 'herbalist' | null {
+  if (!prev.sh || !next.sh || prev.sh.pos < 0) return null;
+  if (next.sh.charm < prev.sh.charm) return 'herbalist';
+  // Появившаяся тень стоит на месте только из-за задержки фонаря.
+  return next.sh.pos === prev.sh.pos ? 'lantern' : null;
+}
+
+/** Тень после хода: дорога выросла на cells, фонари среди них дают задержку. */
+export function advanceShadow(level: Level, sh: ShadowState, t: number, cells: readonly { idx: number }[]): ShadowState {
+  let { len, pos, wait, charm } = sh;
+  len += cells.length;
+  for (const c of cells) if (level.cells[c.idx] === 'lantern') wait++;
+  const exit = level.exit.y * level.width + level.exit.x;
+  const atExit = cells.length > 0 && cells[cells.length - 1].idx === exit;
+  if (pos < 0) {
+    if (t >= level.shadow) pos = 0; // появилась на старте
+  } else if (wait > 0) {
+    wait--; // фонарь задержал
+  } else {
+    const np = pos + SHADOW_SPEED;
+    // Травница: вот-вот догонит — тень стоит этот ход (на победном ходу заряд не тратим).
+    if (np >= len - 1 && charm > 0 && !atExit) charm--;
+    else pos = np;
+  }
+  return { len, pos, wait, charm };
+}
 
 /** Сколько ходов ещё горит гаснущий фонарь (номер в level.fades); -1 — не зажжён, 0 — погас. */
 export function fadeLeft(level: Level, ts: TimeState, k: number): number {
@@ -64,21 +139,30 @@ export function anyExpired(level: Level, ts: TimeState): boolean {
 /** Время после плитки, занявшей клетки cells. */
 export function advanceTime(level: Level, ts: TimeState, cells: readonly { idx: number }[]): TimeState {
   const t = ts.t + 1;
-  if (!level.fades.length) return { t, lit: ts.lit };
+  const sh = ts.sh ? advanceShadow(level, ts.sh, t, cells) : undefined;
+  const withSh = (x: TimeState): TimeState => (sh ? { ...x, sh } : x);
+  if (!level.fades.length) return withSh({ t, lit: ts.lit });
   const lit = [...ts.lit];
   for (const c of cells) {
     const k = level.fades.indexOf(c.idx);
     if (k >= 0) lit[k] = t;
   }
-  return { t, lit };
+  return withSh({ t, lit });
 }
 
-/** Ключ времени для запоминания в решателях: чётность хода (мосты) и остаток гаснущих фонарей. */
+/** Ключ времени для запоминания в решателях: чётность хода (мосты), остаток гаснущих фонарей и тень. */
 export function timeKey(level: Level, ts: TimeState): string {
   if (!level.timed) return '';
   let s = level.turnBridges.length ? String(ts.t & 1) : '';
   for (let k = 0; k < level.fades.length; k++) s += ',' + fadeLeft(level, ts, k);
+  const sh = ts.sh;
+  if (sh) s += `|${sh.pos < 0 ? 'c' + Math.max(0, level.shadow - ts.t) : 'g' + (sh.len - 1 - sh.pos)},${sh.wait},${sh.charm}`;
   return s;
+}
+
+/** Отсюда уже не выиграть из-за времени: погас гаснущий фонарь или тень догнала. */
+export function timeDead(level: Level, ts: TimeState): boolean {
+  return (level.fades.length > 0 && anyExpired(level, ts)) || shadowCaught(ts);
 }
 
 /** Поворотный мост в момент t горизонтальный (проход слева направо)? */
@@ -111,6 +195,7 @@ export function tileShape(kind: TileKind, dir: Dir): { steps: number; newDir: Di
 
 /** Цель достигнута: конец дороги в арке или (цель «светлячки») дорога собрала всех светлячков. */
 export function goalReached(level: Level, head: number, isOnRoad: (idx: number) => boolean): boolean {
+  // classic и escape — арка; fireflies — все светлячки.
   if (level.goal === 'fireflies') return level.fireflies.every(isOnRoad);
   return head === level.exit.y * level.width + level.exit.x;
 }
@@ -138,7 +223,8 @@ export function placeTile(
   let y = Math.floor(head / level.width);
   // Сколько фонарей ещё не горит — выход открывается, только когда горят все.
   let lanternsLeft = 0;
-  for (const l of level.lanterns) {
+  // «Побег»: арка открыта сразу, фонари только задерживают тень.
+  if (level.goal !== 'escape') for (const l of level.lanterns) {
     if (!isOnRoad(l)) lanternsLeft++;
     else if (level.fade[l] > 0 && ts && fadeLeft(level, ts, level.fades.indexOf(l)) <= 0) lanternsLeft++;
   }
@@ -171,6 +257,16 @@ export function placeTile(
       if (lanternsLeft > 0) return fail('exitClosed');
     }
     if (type === 'lantern') lanternsLeft--;
+    if (type === 'ring') {
+      // Грибное кольцо: дорога выходит из парного кольца в том же направлении.
+      const to = level.ringPair[idx];
+      if (to < 0 || isOnRoad(to)) return fail('road');
+      cells.push({ x, y, idx, portal: 'in' });
+      x = to % level.width;
+      y = Math.floor(to / level.width);
+      cells.push({ x, y, idx: to, portal: 'out' });
+      continue;
+    }
     cells.push({ x, y, idx });
   }
   return { ok: true, kind, cells, newDir, jumped };

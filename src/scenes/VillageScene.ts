@@ -123,6 +123,8 @@ const GROUND: Record<DistrictId, { far: number; near: number; water: number; rip
 export class VillageScene extends Phaser.Scene implements P.VillageHost {
   district: DistrictId = 'valley';
   editMode = false;
+  /** Гуляющий Lumo (последний нарисованный) — чтобы при перерисовке карты продолжить с того же места. */
+  private walker: Phaser.GameObjects.Container | null = null;
   modal?: Modal;
   private wallet!: { refresh: () => void };
   private header!: Phaser.GameObjects.Container;
@@ -153,6 +155,7 @@ export class VillageScene extends Phaser.Scene implements P.VillageHost {
   }
 
   create() {
+    this.walker = null;
     const bounds = stretchLayout(this);
     // В деревне музыка теплее; уходя — снова ночь.
     setMusicMood('warm');
@@ -535,10 +538,10 @@ export class VillageScene extends Phaser.Scene implements P.VillageHost {
         if (this.editMode) this.slotMarker(s, p, v >= 0);
       }
       if (d === 'valley' || d === 'forest') {
-        items.push({ y: this.spot(0).y + 30, obj: this.addWalker() });
-        // Где гуляет Lumo (с питомцем): x от 520 до 900.
+        items.push({ y: this.spot(0).y + 30, obj: this.addWalker(this.editMode) });
+        // Где гуляет Lumo (с питомцем): x от 520 до 900. В режиме «Украсить» он уходит — не мешает слотам и знакам улиц.
         const wy = this.spot(0).y + 30;
-        this.boxes.push({ kind: 'walker', owner: -1, id: 'lumo', x: 500, y: wy - 120, w: 420, h: 130 });
+        if (!this.editMode) this.boxes.push({ kind: 'walker', owner: -1, id: 'lumo', x: 500, y: wy - 120, w: 420, h: 130 });
       }
     } else {
       this.lockedPlaque(d);
@@ -785,10 +788,24 @@ export class VillageScene extends Phaser.Scene implements P.VillageHost {
     this.boxes.push({ kind: 'street', owner: i, id: `street ${i + 1}`, x: p.x - 42, y: p.y - 38, w: 84, h: 60 });
   }
 
-  /** Lumo в надетом образе (с питомцем) прогуливается по тропинке у первой постройки. */
-  private addWalker() {
+  /**
+   * Lumo в надетом образе (с питомцем) прогуливается по тропинке у первой постройки. В режиме «Украсить»
+   * (away) — отходит в сторону и тает: нижний знак улицы и слоты у колодца не лежат на нём.
+   */
+  private addWalker(away = false) {
     const y = this.spot(0).y + 30;
-    const lumo = createLumo(this, 110, currentLook(), true, { withPet: true }).setPosition(620, y);
+    // Старт — там, где Lumo был до перерисовки карты (переключение «Украсить» не телепортирует его).
+    const from = Phaser.Math.Clamp(this.walker?.x ?? 620, 540, 880);
+    const lumo = createLumo(this, 110, currentLook(), true, { withPet: true }).setPosition(from, y);
+    this.walker = lumo;
+    if (away) {
+      // При проверке вёрстки (?audit=1) — сразу скрыт: на медленной машине анимация не успевает к скриншоту.
+      if ((globalThis as { __glowAudit?: boolean }).__glowAudit) return lumo.setVisible(false);
+      lumo.face(1);
+      lumo.walk(true);
+      this.tweens.add({ targets: lumo, x: from + 140, alpha: 0, duration: 380, ease: 'Sine.in', onComplete: () => lumo.active && lumo.setVisible(false).walk(false) });
+      return lumo;
+    }
     const walk = (to: number) => {
       if (!lumo.active) return;
       lumo.face(to > lumo.x ? 1 : -1);

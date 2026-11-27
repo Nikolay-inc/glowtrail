@@ -10,6 +10,7 @@ import { MenuScene } from './scenes/MenuScene';
 import { StatsScene } from './scenes/StatsScene';
 import { ProfileScene } from './scenes/ProfileScene';
 import { IntroScene } from './scenes/IntroScene';
+import { ForestIntroScene } from './scenes/ForestIntroScene';
 import { RulesScene } from './scenes/RulesScene';
 import { ConsentScene } from './scenes/ConsentScene';
 import { consentScreenDue, initTelemetry } from './analytics/index';
@@ -109,7 +110,7 @@ async function boot() {
     // DOM-элементы поверх холста — для поля ввода имени (масштабируются вместе с игрой).
     dom: { createContainer: true },
     render: { antialias: true },
-    scene: [BootScene, ConsentScene, MenuScene, GameScene, StatsScene, ProfileScene, IntroScene, RulesScene, VillageScene, WorkshopScene, ShopScene],
+    scene: [BootScene, ConsentScene, MenuScene, GameScene, StatsScene, ProfileScene, IntroScene, ForestIntroScene, RulesScene, VillageScene, WorkshopScene, ShopScene],
   });
 
   initLifecycle(game);

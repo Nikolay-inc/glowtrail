@@ -49,6 +49,7 @@ export function mergeSaves(local: SaveData, cloud: CloudPayload | null): SaveDat
     vibration: lp.vibration, // вибрация — тоже
     language: lp.language, // язык — тоже
     analytics: lp.analytics, // согласие на статистику — выбор на этом устройстве
+    worlds: [...new Set([...lp.worlds, ...cp.worlds])], // миры, куда уже вошли, — объединение
   };
 
   const l = local.profile;

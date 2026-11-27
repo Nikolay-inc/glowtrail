@@ -827,13 +827,36 @@ export function createAvatarBadge(
 /**
  * Фон сцены. evening — тёплый вечер «Долины» (закатное небо и тёмные холмы внизу), иначе ночное небо.
  */
-export function addBackground(scene: Phaser.Scene, opts: { dust?: boolean; evening?: boolean } = {}) {
+export function addBackground(scene: Phaser.Scene, opts: { dust?: boolean; evening?: boolean; forest?: boolean } = {}) {
   // Фон на весь экран (а не только на раскладку 1080×1920): градиент перерисовывается при смене размера.
   const g = scene.add.graphics().setDepth(-10);
   let vignette: Phaser.GameObjects.Image | null = null;
   const paint = (v: ViewRect) => {
     g.clear();
-    if (opts.evening) {
+    if (opts.forest) {
+      // «Туманный лес»: бирюзово-фиолетовые сумерки, полосы тумана и чёрные силуэты елей.
+      const mid = v.y + v.h * 0.5;
+      g.fillGradientStyle(0x080820, 0x080820, 0x1c1446, 0x1c1446, 1);
+      g.fillRect(v.x - 4, v.y - 4, v.w + 8, mid - v.y + 4);
+      g.fillGradientStyle(0x1c1446, 0x1c1446, 0x0f3a46, 0x0f3a46, 1);
+      g.fillRect(v.x - 4, mid, v.w + 8, v.y + v.h - mid + 4);
+      const by = v.y + v.h;
+      g.fillStyle(0x7ae0d8, 0.06);
+      g.fillEllipse(v.x + v.w * 0.5, by - v.h * 0.2, v.w * 1.4, v.h * 0.12);
+      const rnd = new Phaser.Math.RandomDataGenerator(['forest-bg']);
+      for (const [base, color, hk] of [[by - v.h * 0.1, 0x10142e, 0.16], [by - v.h * 0.02, 0x06081a, 0.2]] as const) {
+        g.fillStyle(color, 1);
+        for (let x = v.x - 60; x < v.x + v.w + 60; x += rnd.between(70, 130)) {
+          const h = v.h * hk * rnd.realInRange(0.7, 1.2);
+          const w = h * 0.36;
+          g.fillTriangle(x - w, base, x + w, base, x, base - h);
+          g.fillTriangle(x - w * 0.8, base - h * 0.35, x + w * 0.8, base - h * 0.35, x, base - h * 1.05);
+        }
+        g.fillRect(v.x - 4, base, v.w + 8, by - base + 4);
+      }
+      g.fillStyle(0xb8a8f0, 0.05);
+      g.fillEllipse(v.x + v.w * 0.3, by - v.h * 0.12, v.w * 0.9, v.h * 0.05);
+    } else if (opts.evening) {
       const mid = v.y + v.h * 0.55;
       g.fillGradientStyle(C.eveTop, C.eveTop, C.eveMid, C.eveMid, 1);
       g.fillRect(v.x - 4, v.y - 4, v.w + 8, mid - v.y + 4);
@@ -862,9 +885,9 @@ export function addBackground(scene: Phaser.Scene, opts: { dust?: boolean; eveni
   const Y1 = H + 1000;
   const rnd = new Phaser.Math.RandomDataGenerator(['glowtrail']);
   // В сумерках звёзды только в верхней части неба.
-  for (let i = 0; i < (opts.evening ? 60 : 90); i++) {
+  for (let i = 0; i < (opts.evening || opts.forest ? 60 : 90); i++) {
     const st = scene.add
-      .image(rnd.between(X0, X1), opts.evening ? rnd.between(Y0, H * 0.55) : rnd.between(Y0, Y1), 'dot')
+      .image(rnd.between(X0, X1), opts.evening || opts.forest ? rnd.between(Y0, H * 0.55) : rnd.between(Y0, Y1), 'dot')
       .setScale(rnd.realInRange(0.15, 0.35))
       .setAlpha(rnd.realInRange(0.15, 0.5))
       .setDepth(-9);

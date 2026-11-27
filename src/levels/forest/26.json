@@ -1,0 +1,87 @@
+{
+  "id": "forest-26",
+  "name": "Прыжок в кольцо",
+  "grid": [
+    "#L....",
+    "..L.a.",
+    ".#...E",
+    "......",
+    "......",
+    "......",
+    ".S..aL"
+  ],
+  "startDir": "N",
+  "deck": [
+    "jump",
+    "straight",
+    "right",
+    "straight",
+    "jump",
+    "jump",
+    "right",
+    "right",
+    "straight",
+    "straight",
+    "left",
+    "left",
+    "straight",
+    "straight2",
+    "left",
+    "left",
+    "jump"
+  ],
+  "stars": {
+    "two": 1,
+    "three": 1
+  },
+  "easeDecks": [
+    [
+      "right",
+      "jump",
+      "straight",
+      "right",
+      "straight",
+      "jump",
+      "jump",
+      "right",
+      "right",
+      "straight",
+      "straight",
+      "left",
+      "left",
+      "straight",
+      "straight2",
+      "left",
+      "left",
+      "jump"
+    ],
+    [
+      "right",
+      "jump",
+      "straight",
+      "right",
+      "straight",
+      "jump",
+      "left",
+      "jump",
+      "right",
+      "right",
+      "straight",
+      "straight",
+      "left",
+      "left",
+      "straight",
+      "straight2",
+      "left",
+      "left",
+      "jump"
+    ]
+  ],
+  "metrics": {
+    "rating": 5,
+    "roads": 34,
+    "minTiles": 15,
+    "reserve": 2,
+    "trap": 0.267
+  }
+}

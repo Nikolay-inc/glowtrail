@@ -70,7 +70,11 @@ describe('постройки: три уровня', () => {
     const e: Economy = { ...rich(), buildings: { mill: 1, teahouse: 1, bakery: 3, herbalist: 1, chapel: 2, square: 3, lumo: 2 } };
     const b = villageBonuses(e);
     expect(b.coinMultPct).toBe(10 + 5);
-    expect(b.extraFreeHints).toBe(3 + 1);
+    expect(b.extraFreeHints).toBe(3);
+    // Травница задерживает тень в лесу (1/2/3 раза), обсерватория — обзор в тумане (+1/+1/+2).
+    expect(b.shadowCharms).toBe(1);
+    expect(villageBonuses({ ...rich(), buildings: { herbalist: 3, observatory: 3 } }).shadowCharms).toBe(3);
+    expect(villageBonuses({ ...rich(), buildings: { herbalist: 3, observatory: 3 } }).fogSight).toBe(2);
     expect(b.dailyPlus3).toBe(2);
     expect(b.dailyChest).toBe(true);
     expect(villageBonuses({ ...rich(), buildings: { mill: 3 } }).coinMultPct).toBe(20);

@@ -29,6 +29,9 @@ export interface RulesData {
 /** Событие на game.events, когда карточки закрыты. */
 export const RULES_CLOSED = 'rules-closed';
 
+/** Карточки механик леса — на лесном поле. */
+const FOREST_RULES: readonly RuleId[] = ['ring', 'fog', 'shadow', 'escape'];
+
 const PANEL_W = 920;
 const PANEL_H = 1330;
 
@@ -67,7 +70,7 @@ export class RulesScene extends Phaser.Scene {
     text(this, W / 2, top + 72, t(rule.title), 64);
 
     // Мини-поле: то же, что в игре, но без темноты — чтобы всё было хорошо видно.
-    this.board = new BoardView(this, demoLevel(ph), { x: W / 2 - 390, y: top + 140, w: 780, h: 530 }, { look: currentLook(), dark: false, ambient: false });
+    this.board = new BoardView(this, demoLevel(ph), { x: W / 2 - 390, y: top + 140, w: 780, h: 530 }, { look: currentLook(), dark: false, ambient: false, palette: FOREST_RULES.includes(rule.id) ? 'forest' : 'valley' });
     this.card = new TileCard(this, W / 2, top + 770, 0);
     this.card.disableInteractive();
     this.card.setScale(0.8);
@@ -168,7 +171,11 @@ export class RulesScene extends Phaser.Scene {
     }
     if (!this.alive) return;
     this.finger.setAlpha(0);
-    if (state.status === 'won') {
+    if (state.status === 'lost' && state.level.shadow) {
+      // Тень догнала — бросок к Lumo.
+      this.board.shadowCaught();
+      await this.wait(900);
+    } else if (state.status === 'won') {
       await new Promise<void>((res) =>
         this.board.walkLumo(
           state,

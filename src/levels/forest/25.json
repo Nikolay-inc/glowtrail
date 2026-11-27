@@ -1,0 +1,65 @@
+{
+  "id": "forest-25",
+  "name": "Грибной обход",
+  "grid": [
+    ".....E",
+    "...a..",
+    "......",
+    "#..#..",
+    "a..L..",
+    "......",
+    ".S#..."
+  ],
+  "startDir": "N",
+  "deck": [
+    "straight",
+    "left",
+    "right",
+    "left",
+    "right",
+    "right",
+    "right",
+    "left",
+    "straight"
+  ],
+  "stars": {
+    "two": 1,
+    "three": 2
+  },
+  "shadow": 3,
+  "goal": "escape",
+  "easeDecks": [
+    [
+      "straight2",
+      "straight",
+      "left",
+      "right",
+      "left",
+      "right",
+      "right",
+      "right",
+      "left",
+      "straight"
+    ],
+    [
+      "straight2",
+      "straight",
+      "left",
+      "right",
+      "left",
+      "right",
+      "straight2",
+      "right",
+      "right",
+      "left",
+      "straight"
+    ]
+  ],
+  "metrics": {
+    "rating": 4.9,
+    "roads": 2,
+    "minTiles": 6,
+    "reserve": 3,
+    "trap": 0.39
+  }
+}

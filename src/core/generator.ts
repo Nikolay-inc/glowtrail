@@ -7,11 +7,12 @@ import { GeoTooBig, geoMinBounded } from './geo';
 import { levelRows, parseLevel } from './level';
 import { advanceTime, placeTile, timeStart } from './tiles';
 import { solveLevel, TooManyStates } from './solver';
+import { fogFair, fogVisible } from './fog';
 import { DX, DY, type CellType, type Dir, type GoalType, type Level, type LevelData, type TileKind } from './types';
 
 /** Элементы уровня: клетки поля и плитка «прыжок». */
-export type GenFeature = 'lantern' | 'rock' | 'water' | 'firefly' | 'jump' | 'turnbridge' | 'fade';
-export const GEN_FEATURES: readonly GenFeature[] = ['lantern', 'rock', 'water', 'firefly', 'jump', 'turnbridge', 'fade'];
+export type GenFeature = 'lantern' | 'rock' | 'water' | 'firefly' | 'jump' | 'turnbridge' | 'fade' | 'ring' | 'fog' | 'shadow';
+export const GEN_FEATURES: readonly GenFeature[] = ['lantern', 'rock', 'water', 'firefly', 'jump', 'turnbridge', 'fade', 'ring', 'fog', 'shadow'];
 
 export interface GenParams {
   width: number;
@@ -52,7 +53,7 @@ const pick = <T>(r: Rand, xs: readonly T[]): T => xs[Math.floor(r() * xs.length)
 const LETTER: Record<Dir, LevelData['startDir']> = { 0: 'N', 1: 'E', 2: 'S', 3: 'W' };
 
 /** Почему кандидат отброшен (для статистики генератора). */
-export type Reject = 'layout' | 'unsolvable' | 'path' | 'oneRoad' | 'boring' | 'needsStash' | 'fireflies' | 'deck' | 'tooBig' | 'notEssential' | 'tooHard';
+export type Reject = 'layout' | 'unsolvable' | 'path' | 'oneRoad' | 'boring' | 'needsStash' | 'fireflies' | 'deck' | 'tooBig' | 'notEssential' | 'tooHard' | 'fogGuess';
 
 /** Сгенерированное поле. */
 export interface GenGrid {
@@ -65,6 +66,8 @@ export interface GenGrid {
   fade: number[];
   /** Поворотные мосты: горизонтальные на старте (по клеткам). */
   bridgeH: boolean[];
+  /** Грибные кольца: номер пары (1 — a, 2 — b) по клеткам. */
+  ringId: number[];
 }
 
 /** Больше состояний решателя — уровень отбрасываем: подсказка и «+3 плитки» на телефоне считались бы долго. */
@@ -98,7 +101,7 @@ export function randomGrid(r: Rand, p: GenParams): GenGrid | null {
   if (!far.length) return null;
   let exit = pick(r, far);
   const farPoint = exit;
-  if (goal === 'classic') cells[exit] = 'exit';
+  if (goal !== 'fireflies') cells[exit] = 'exit';
   else exit = -1;
   const free = () => cells.map((c, i) => (c === 'empty' ? i : -1)).filter((i) => i >= 0);
   // Клетка перед стартом остаётся свободной.
@@ -160,9 +163,29 @@ export function randomGrid(r: Rand, p: GenParams): GenGrid | null {
     }
   }
   const area = w * h;
+  const ringId: number[] = new Array(w * h).fill(0);
+  if (p.features.includes('ring')) {
+    // 1 пара колец (на больших полях иногда 2): одно кольцо ближе к старту, парное — ближе к дальней точке.
+    const pairs = area >= 36 && r() < 0.35 ? 2 : 1;
+    const fx = farPoint % w;
+    const fy = Math.floor(farPoint / w);
+    const dist = (i: number, x0: number, y0: number) => Math.abs((i % w) - x0) + Math.abs(Math.floor(i / w) - y0);
+    for (let k = 0; k < pairs; k++) {
+      const f = free().filter((i) => i !== ahead);
+      const near = f.filter((i) => dist(i, sx, sy) <= 3 && dist(i, sx, sy) >= 1);
+      const far2 = f.filter((i) => dist(i, fx, fy) <= 3);
+      if (!near.length || !far2.length) return null;
+      const a = pick(r, near);
+      const b = pick(r, far2.filter((i) => i !== a));
+      if (b === undefined || dist(a, b % w, Math.floor(b / w)) < 3) return null;
+      cells[a] = 'ring';
+      cells[b] = 'ring';
+      ringId[a] = ringId[b] = k + 1;
+    }
+  }
   if (p.features.includes('rock') && !put('rock', int(r, 2, Math.max(2, Math.round(area / 9))))) return null;
-  if (goal === 'classic' && p.features.includes('lantern') && !put('lantern', int(r, 1, area >= 40 ? 3 : 2))) return null;
-  if (goal === 'classic' && p.features.includes('fade')) {
+  if (goal !== 'fireflies' && p.features.includes('lantern') && !put('lantern', int(r, 1, area >= 40 ? 3 : 2))) return null;
+  if (goal !== 'fireflies' && p.features.includes('fade')) {
     // Гаснущий фонарь: 1 (на больших полях иногда 2), горит 3–7 ходов.
     const n = area >= 40 && r() < 0.3 ? 2 : 1;
     // Ставим его недалеко от арки: до неё должно хватать ходов (иначе уровень заведомо не решается).
@@ -183,11 +206,11 @@ export function randomGrid(r: Rand, p: GenParams): GenGrid | null {
   if (goal === 'fireflies') {
     if (!put('firefly', int(r, 2, area >= 36 ? 4 : 3))) return null;
   } else if (p.features.includes('firefly') && !put('firefly', int(r, 1, 3))) return null;
-  return { cells, start, dir, exit, fade, bridgeH };
+  return { cells, start, dir, exit, fade, bridgeH, ringId };
 }
 
-export function gridRows(cells: readonly CellType[], width: number, fade?: number[], bridgeH?: boolean[]): string[] {
-  return levelRows({ cells: [...cells], width, fade: fade ?? cells.map(() => 0), bridgeH: bridgeH ?? cells.map(() => false) });
+export function gridRows(cells: readonly CellType[], width: number, fade?: number[], bridgeH?: boolean[], ringId?: number[]): string[] {
+  return levelRows({ cells: [...cells], width, fade: fade ?? cells.map(() => 0), bridgeH: bridgeH ?? cells.map(() => false), ringId });
 }
 
 /** Виды плиток для пути и запаса: мост — если есть вода (и нет поворотных мостов), прыжок — если он в элементах. */
@@ -282,10 +305,12 @@ export const DEFAULT_FILTER: GenFilter = { minTrap: 0.12, minRoads: 2 };
 export function generateOne(r: Rand, p: GenParams, filter: GenFilter = DEFAULT_FILTER): Candidate | Reject {
   const g = randomGrid(r, p);
   if (!g) return 'layout';
-  const rows = gridRows(g.cells, p.width, g.fade, g.bridgeH);
+  const rows = gridRows(g.cells, p.width, g.fade, g.bridgeH, g.ringId);
   const base: LevelData = { id: 'gen', name: 'gen', grid: rows, startDir: LETTER[g.dir], deck: ['straight'], stars: { two: 0, three: 0 } };
   if (p.goal && p.goal !== 'classic') base.goal = p.goal;
-  const geo = parseLevel(base);
+  if (p.features.includes('fog')) base.fog = true;
+  // Путь ищем без тени (у «Побега» тень далеко); настоящее число ходов до тени подбираем по колоде.
+  const geo = parseLevel(base.goal === 'escape' ? { ...base, shadow: 20 } : base);
   const kinds = kindsFor(p.features, g.cells);
   let path: TileKind[] | null;
   try {
@@ -300,15 +325,22 @@ export function generateOne(r: Rand, p: GenParams, filter: GenFilter = DEFAULT_F
   const reserve = int(r, rlo, rhi);
   const deck = buildDeck(r, path, reserve, kinds);
   const data: LevelData = { ...base, deck };
-  const level = parseLevel(data);
-  // Сначала дешёвые проверки (решается ли вообще и нужны ли прыжок и поворотный мост) — до дорогой выборки тупиков.
+  const shadowed = p.goal === 'escape' || p.features.includes('shadow');
+  // Сначала дешёвые проверки (решается ли вообще и нужны ли прыжок, мост, кольца) — до дорогой выборки тупиков.
   try {
-    if (!solveLevel(level, { countRoads: false, maxStates: GEN_MAX_STATES }).solvable) return 'deck';
-    if (!essential(level, p.features.filter((f) => f !== 'fade'), 0)) return 'notEssential';
+    if (shadowed) {
+      const n = shadowFor(r, data);
+      if (n < 0) return 'deck';
+      data.shadow = n;
+    }
+    const lv = parseLevel(data);
+    if (!solveLevel(lv, { countRoads: false, maxStates: GEN_MAX_STATES }).solvable) return 'deck';
+    if (!essential(lv, p.features.filter((f) => f !== 'fade' && f !== 'shadow'), 0)) return 'notEssential';
   } catch (e) {
     if (e instanceof TooManyStates) return 'tooBig';
     throw e;
   }
+  const level = parseLevel(data);
   let rep: DifficultyReport;
   try {
     rep = analyzeLevel(level, level.deck, GEN_MAX_STATES);
@@ -321,9 +353,11 @@ export function generateOne(r: Rand, p: GenParams, filter: GenFilter = DEFAULT_F
   if (!rep.solvableWithoutStash) return 'needsStash';
   if (rep.metrics.trap < filter.minTrap) return 'boring';
   if (filter.maxRating !== undefined && rep.metrics.rating > filter.maxRating) return 'tooHard';
-  if (level.goal === 'classic' && level.fireflies.length && rep.firefliesWithoutStash < level.fireflies.length) return 'fireflies';
+  if (level.goal !== 'fireflies' && level.fireflies.length && rep.firefliesWithoutStash < level.fireflies.length) return 'fireflies';
   try {
     if (p.features.includes('fade') && !essential(level, ['fade'], rep.roads)) return 'notEssential';
+    if (shadowed && !essential(level, ['shadow'], rep.roads)) return 'notEssential';
+    if (level.fog && !fogFair(level).ok) return 'fogGuess';
   } catch (e) {
     if (e instanceof TooManyStates) return 'tooBig';
     throw e;
@@ -334,11 +368,32 @@ export function generateOne(r: Rand, p: GenParams, filter: GenFilter = DEFAULT_F
 }
 
 /**
+ * Сколько ходов дать до появления тени: от самого строгого числа, при котором уровень ещё решается, плюс 0–2
+ * хода (больше — легче). -1 — не решается даже с тенью, которая почти не появляется.
+ */
+export function shadowFor(r: Rand, data: LevelData): number {
+  const ok = (n: number) => solveLevel(parseLevel({ ...data, shadow: n }), { countRoads: false, maxStates: GEN_MAX_STATES }).solvable;
+  const hi = Math.min(20, data.deck.length + 1);
+  if (!ok(hi)) return -1;
+  let lo = 1;
+  let top = hi;
+  while (lo < top) {
+    const mid = (lo + top) >> 1;
+    if (ok(mid)) top = mid;
+    else lo = mid + 1;
+  }
+  return Math.min(hi, lo + int(r, 0, 2));
+}
+
+/**
  * Новый элемент действительно нужен: без прыжков в колоде уровень не решается; без поворотных мостов
- * (на их месте камень) — тоже; гаснущий фонарь отнимает часть решений (с обычным фонарём их больше).
+ * (на их месте камень) — тоже; без грибных колец (на их месте камень) — тоже; гаснущий фонарь отнимает часть
+ * решений (с обычным фонарём их больше); тень тоже отнимает решения (без неё их больше); туман — на старте
+ * под ним спрятан хотя бы один камень или вода.
  */
 export function essential(level: Level, features: readonly GenFeature[], roads: number): boolean {
-  const data = (over: Partial<LevelData>) => parseLevel({ id: 'e', name: 'e', grid: levelRows(level), startDir: LETTER[level.startDir], deck: level.deck, stars: { two: 0, three: 0 }, goal: level.goal, ...over });
+  const data = (over: Partial<LevelData>) =>
+    parseLevel({ id: 'e', name: 'e', grid: levelRows(level), startDir: LETTER[level.startDir], deck: level.deck, stars: { two: 0, three: 0 }, goal: level.goal, fog: level.fog, shadow: level.shadow || undefined, ...over });
   if (features.includes('jump')) {
     const noJump = level.deck.filter((k) => k !== 'jump');
     if (solveLevel(data({ deck: noJump }), { countRoads: false, maxStates: GEN_MAX_STATES }).solvable) return false;
@@ -350,6 +405,20 @@ export function essential(level: Level, features: readonly GenFeature[], roads: 
   if (features.includes('fade')) {
     const rows = levelRows(level).map((row) => row.replace(/[2-9]/g, 'L'));
     if (solveLevel(data({ grid: rows }), { maxStates: GEN_MAX_STATES }).roads <= roads) return false;
+  }
+  if (features.includes('ring')) {
+    const rows = levelRows(level).map((row) => row.replace(/[ab]/g, '#'));
+    if (solveLevel(data({ grid: rows }), { countRoads: false, maxStates: GEN_MAX_STATES }).solvable) return false;
+  }
+  if (features.includes('shadow')) {
+    // Без тени «Побег» становится обычной аркой без фонарей.
+    const free = level.goal === 'escape' ? data({ goal: 'classic', shadow: undefined, grid: levelRows(level).map((row) => row.replace(/[L2-9]/g, '.')) }) : data({ shadow: undefined });
+    if (solveLevel(free, { maxStates: GEN_MAX_STATES }).roads <= roads) return false;
+  }
+  if (features.includes('fog')) {
+    const start = level.start.y * level.width + level.start.x;
+    const vis = fogVisible(level, (i) => i === start, null);
+    if (!level.cells.some((c, i) => !vis[i] && (c === 'rock' || c === 'water' || c === 'turnbridge'))) return false;
   }
   return true;
 }
@@ -364,5 +433,8 @@ export function featuresOf(level: Level): GenFeature[] {
   if ((level.tileSet ?? level.deck).includes('jump')) out.push('jump');
   if (level.turnBridges.length) out.push('turnbridge');
   if (level.fades.length) out.push('fade');
+  if (level.rings.length) out.push('ring');
+  if (level.fog) out.push('fog');
+  if (level.shadow) out.push('shadow');
   return out;
 }

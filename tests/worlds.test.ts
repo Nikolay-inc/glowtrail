@@ -7,7 +7,8 @@ import { geoMinBounded, geoMinTiles } from '../src/core/geo';
 import { solutionOf, solveLevel, TooManyStates } from '../src/core/solver';
 import type { LevelData, TileKind } from '../src/core/types';
 import { isChallenge, LEVELS, levelById, nextLevelOf, numberInWorld, WORLDS } from '../src/levels/index';
-import { BREATHER_MAX_RATING, BREATHER_MIN_ROADS, EASY_MAX_RATING, EASY_MIN_ROADS, mustBeEasy, MAX_H, MAX_W, NOVELTY, VALLEY_PLAN } from '../src/levels/curve';
+import { ALL_SLOTS, BREATHER_MAX_RATING, BREATHER_MIN_ROADS, EASY_MAX_RATING, EASY_MIN_ROADS, FOREST_PLAN, mustBeEasy, MAX_H, MAX_W, NOVELTY, VALLEY_PLAN } from '../src/levels/curve';
+import { fogFair } from '../src/core/fog';
 import { featuresOf } from '../src/core/generator';
 
 function dataOf(l: ReturnType<typeof parseLevel>): LevelData {
@@ -160,7 +161,7 @@ describe('генератор', () => {
 
 describe('мир «Долина»', () => {
   it('30 уровней: постоянные id, номера по порядку, испытания — 10, 20, 30', () => {
-    expect(WORLDS.map((w) => w.id)).toEqual(['valley']);
+    expect(WORLDS.map((w) => w.id)).toEqual(['valley', 'forest']);
     const v = WORLDS[0].levels;
     expect(v).toHaveLength(30);
     v.forEach((l, i) => {
@@ -170,7 +171,7 @@ describe('мир «Долина»', () => {
       expect(levelById(l.id)).toBe(l);
     });
     expect(v.filter(isChallenge).map((l) => l.num)).toEqual([10, 20, 30]);
-    expect(nextLevelOf(v[29])).toBeNull();
+    expect(nextLevelOf(v[29])?.id).toBe('forest-01');
     expect(nextLevelOf(v[0])).toBe(v[1]);
   });
 
@@ -203,22 +204,30 @@ describe('мир «Долина»', () => {
   });
 
   it('что-то новое каждые ~5 уровней: в каждом блоке плана — его элемент', () => {
-    const has: Record<string, (l: (typeof LEVELS)[number]) => boolean> = {
-      светлячки: (l) => l.fireflies.length > 0 && l.goal === 'classic',
-      прыжок: (l) => l.deck.includes('jump'),
-      'цель «только светлячки»': (l) => l.goal === 'fireflies',
-      'поворотный мост': (l) => l.turnBridges.length > 0,
-      'гаснущий фонарь': (l) => l.fades.length > 0,
-      'всё вместе': (l) => l.deck.includes('jump') && l.turnBridges.length > 0 && l.fades.length > 0,
+    type L = (typeof LEVELS)[number];
+    const has: Record<(typeof NOVELTY)[number]['test'], (l: L) => boolean> = {
+      firefly: (l) => l.fireflies.length > 0 && l.goal === 'classic',
+      jump: (l) => l.deck.includes('jump'),
+      ffgoal: (l) => l.goal === 'fireflies',
+      turnbridge: (l) => l.turnBridges.length > 0,
+      fade: (l) => l.fades.length > 0,
+      valleyAll: (l) => l.deck.includes('jump') && l.turnBridges.length > 0 && l.fades.length > 0,
+      ring: (l) => l.rings.length > 0,
+      fog: (l) => l.fog,
+      shadow: (l) => l.shadow > 0,
+      ringFog: (l) => l.rings.length > 0 && l.fog,
+      escape: (l) => l.goal === 'escape' && l.shadow > 0,
+      combo: (l) => (l.deck.includes('jump') || l.turnBridges.length > 0 || l.fades.length > 0) && (l.rings.length > 0 || l.fog || l.shadow > 0),
+      boss: (l) => l.goal === 'escape' && l.fog && l.rings.length > 0,
     };
     for (const b of NOVELTY) {
-      for (let n = b.from; n <= b.to; n++) expect(has[b.what](LEVELS[n - 1]), `${n}: ${b.what}`).toBe(true);
+      for (let n = b.from; n <= b.to; n++) expect(has[b.test](LEVELS[n - 1]), `${n}: ${b.what}`).toBe(true);
     }
   });
 
-  it('передышки действительно лёгкие, цели и элементы — по плану', () => {
-    for (const slot of VALLEY_PLAN) {
-      const l = levelById(`valley-${slot.num}`)!;
+  it('передышки действительно лёгкие, цели и элементы — по плану (оба мира)', () => {
+    for (const slot of ALL_SLOTS) {
+      const l = LEVELS[slot.num - 1];
       expect(l.goal, l.id).toBe(slot.goal ?? 'classic');
       const f = featuresOf(l);
       for (const need of slot.needs) expect(f, `${l.id} нужен ${need}`).toContain(need);
@@ -231,5 +240,39 @@ describe('мир «Долина»', () => {
         expect(l.metrics!.roads, l.id).toBeGreaterThanOrEqual(BREATHER_MIN_ROADS);
       }
     }
+  });
+});
+
+describe('мир «Туманный лес»', () => {
+  const forest = WORLDS.find((w) => w.id === 'forest')!;
+
+  it('30 уровней 31–60: id forest-01…30, номер в мире 1–30, испытания — 40, 50, 60', () => {
+    expect(forest.levels).toHaveLength(30);
+    forest.levels.forEach((l, i) => {
+      expect(l.id).toBe(`forest-${String(i + 1).padStart(2, '0')}`);
+      expect(l.num).toBe(31 + i);
+      expect(numberInWorld(l)).toBe(i + 1);
+    });
+    expect(forest.levels.filter(isChallenge).map((l) => l.num)).toEqual([40, 50, 60]);
+    expect(nextLevelOf(forest.levels[29])).toBeNull();
+  });
+
+  it('по плану: поле до 6x8, решений не меньше 2, туман без угадывания, тень у «Побега»', () => {
+    for (const slot of FOREST_PLAN) {
+      const l = LEVELS[slot.num - 1];
+      expect(l.width, l.id).toBeLessThanOrEqual(Math.min(slot.maxW, MAX_W));
+      expect(l.height, l.id).toBeLessThanOrEqual(Math.min(slot.maxH, MAX_H));
+      expect(l.metrics!.roads, l.id).toBeGreaterThanOrEqual(2);
+      if (l.goal === 'escape') expect(l.shadow, l.id).toBeGreaterThan(0);
+      if (l.fog) expect(fogFair(l).ok, `${l.id}: туман без угадывания`).toBe(true);
+    }
+  });
+
+  it('рейтинг растёт по миру: средний 31–40 < 41–50 < 51–60, босс — самый сложный в последнем десятке', () => {
+    const avg = (lo: number) => LEVELS.slice(lo - 1, lo + 9).reduce((a, l) => a + l.metrics!.rating, 0) / 10;
+    expect(avg(31)).toBeLessThan(avg(41));
+    expect(avg(41)).toBeLessThan(avg(51));
+    const last = LEVELS.slice(50, 60).map((l) => l.metrics!.rating);
+    expect(last[9]).toBe(Math.max(...last));
   });
 });

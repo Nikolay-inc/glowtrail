@@ -44,7 +44,19 @@ const VALLEY: WorldTheme = {
   path: 0x8a7350,
 };
 
-// Пока один мир; следующие (до трёх) добавятся сюда же.
+/** «Туманный лес»: бирюзово-фиолетовые сумерки, туман, тёмные ели, светящиеся грибы. */
+const FOREST: WorldTheme = {
+  skyTop: 0x0a0a22,
+  skyBottom: 0x1a1640,
+  hillFar: 0x1b2246,
+  hillNear: 0x142e3a,
+  tree: 0x0f3333,
+  water: 0x235a7a,
+  path: 0x6e6280,
+};
+
+// Миры по порядку; третий («Горный город») добавится сюда же. Название мира — ключ i18n `world.<id>`
+// (одинаково на карте и в деревне), поле name — запасное для логов и редактора.
 const WORLD_DEFS: WorldDef[] = [
   {
     id: 'valley',
@@ -52,11 +64,17 @@ const WORLD_DEFS: WorldDef[] = [
     theme: VALLEY,
     files: import.meta.glob<LevelData>('./valley/*.json', { eager: true, import: 'default' }),
   },
+  {
+    id: 'forest',
+    name: 'Туманный лес',
+    theme: FOREST,
+    files: import.meta.glob<LevelData>('./forest/*.json', { eager: true, import: 'default' }),
+  },
 ];
 
 function buildWorlds(): World[] {
   let num = 0;
-  return WORLD_DEFS.map((w) => {
+  return WORLD_DEFS.filter((w) => Object.keys(w.files).length > 0).map((w) => {
     const levels = Object.keys(w.files)
       .sort()
       .map((file) => parseLevel(w.files[file], ++num));
@@ -74,7 +92,22 @@ export function levelById(id: string): Level | undefined {
 }
 
 export function worldOf(level: Level): World {
-  return WORLDS.find((w) => w.levels.includes(level)) ?? WORLDS[0];
+  return WORLDS.find((w) => w.levels.includes(level)) ?? WORLDS.find((w) => level.id.startsWith(w.id + '-')) ?? WORLDS[0];
+}
+
+/** Мир по id (или undefined). */
+export function worldById(id: string): World | undefined {
+  return WORLDS.find((w) => w.id === id);
+}
+
+/** Мир открыт: первый уровень мира доступен (предыдущий мир пройден или последний уровень пропущен). */
+export function worldOpen(world: World, progress: { stars: Record<string, number>; skipped: Record<string, boolean>; unlocked: string[] }): boolean {
+  const first = world.levels[0];
+  if (!first) return false;
+  const i = LEVELS.indexOf(first);
+  if (i <= 0) return true;
+  const prev = LEVELS[i - 1].id;
+  return progress.unlocked.includes(first.id) || !!progress.stars[prev] || !!progress.skipped[prev];
 }
 
 /** Номер уровня внутри своего мира (1…). */

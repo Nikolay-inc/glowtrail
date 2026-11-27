@@ -1,0 +1,80 @@
+{
+  "id": "forest-23",
+  "name": "Бурелом",
+  "grid": [
+    ".EF..",
+    "..F..",
+    "..#..",
+    "....#",
+    ".....",
+    ".#...",
+    "..#S."
+  ],
+  "startDir": "N",
+  "deck": [
+    "straight",
+    "right",
+    "left",
+    "straight2",
+    "straight",
+    "right",
+    "left",
+    "straight2",
+    "right",
+    "right",
+    "left",
+    "right",
+    "left",
+    "straight"
+  ],
+  "stars": {
+    "two": 4,
+    "three": 7
+  },
+  "shadow": 3,
+  "goal": "escape",
+  "easeDecks": [
+    [
+      "straight2",
+      "straight",
+      "right",
+      "left",
+      "straight2",
+      "straight",
+      "right",
+      "left",
+      "straight2",
+      "right",
+      "right",
+      "left",
+      "right",
+      "left",
+      "straight"
+    ],
+    [
+      "straight2",
+      "straight",
+      "right",
+      "left",
+      "straight2",
+      "left",
+      "straight",
+      "right",
+      "left",
+      "straight2",
+      "right",
+      "right",
+      "left",
+      "right",
+      "left",
+      "straight"
+    ]
+  ],
+  "metrics": {
+    "rating": 3,
+    "roads": 13,
+    "minTiles": 6,
+    "reserve": 8,
+    "trap": 0.278
+  }
+}
