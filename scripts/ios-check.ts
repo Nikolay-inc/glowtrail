@@ -38,6 +38,14 @@ ok(existsSync('ios/App/App/GoogleService-Info.plist') && pbx.includes('GoogleSer
 const appEnv = ['.env.app', '.env.app.local', '.env.local', '.env.production'].map((f) => (existsSync(f) ? readFileSync(f, 'utf8') : '')).join('\n');
 ok(/^VITE_SENTRY_DSN=https:\/\/.+/m.test(appEnv), 'VITE_SENTRY_DSN для сборки приложения (.env.app или .env.local)');
 ok(/<key>FIREBASE_ANALYTICS_COLLECTION_ENABLED<\/key>\s*<false\/>/.test(plist), 'Firebase Analytics выключен до согласия (Info.plist)');
+// Реклама и покупки (Р4): текст ATT, SKAdNetwork, StoreKit-файл; боевые ID AdMob и ключ RevenueCat — перед релизом.
+ok(/<key>NSUserTrackingUsageDescription<\/key>/.test(plist) && ['en', 'ru', 'uk'].every((l) => existsSync(`ios/App/App/${l}.lproj/InfoPlist.strings`)), 'текст запроса ATT (Info.plist и InfoPlist.strings)');
+ok((plist.match(/\.skadnetwork<\/string>/g) ?? []).length >= 50, 'SKAdNetworkItems (AdMob)');
+ok(existsSync('ios/App/Glowtrail.storekit'), 'StoreKit-файл Glowtrail.storekit');
+const admobApp = /<key>GADApplicationIdentifier<\/key>\s*<string>([^<]+)<\/string>/.exec(plist)?.[1] ?? '';
+ok(!!admobApp && !admobApp.startsWith('ca-app-pub-3940256099942544'), 'боевой ID приложения AdMob (GADApplicationIdentifier; сейчас тестовый Google)');
+ok(/^VITE_ADMOB_TEST=0/m.test(appEnv) && /^VITE_ADMOB_IOS_REWARDED=ca-app-pub-.+/m.test(appEnv) && /^VITE_ADMOB_IOS_INTERSTITIAL=ca-app-pub-.+/m.test(appEnv), 'боевые блоки AdMob (VITE_ADMOB_TEST=0, VITE_ADMOB_IOS_* в .env.app)');
+ok(/^VITE_REVENUECAT_IOS_KEY=appl_.+/m.test(appEnv), 'ключ RevenueCat (VITE_REVENUECAT_IOS_KEY=appl_… в .env.app)');
 
 if (errors.length) {
   console.error(`\n✗ Не готово:\n${errors.map((e) => `  - ${e}`).join('\n')}`);

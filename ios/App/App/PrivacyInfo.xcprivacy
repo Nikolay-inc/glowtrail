@@ -2,9 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- Glowtrail не отслеживает пользователей и не передаёт данные рекламным сетям. -->
+	<!-- Реклама (Р4): Google AdMob (сторонний SDK GoogleMobileAds) показывает рекламу; рекламный идентификатор (IDFA)
+	     используется только если игрок разрешил отслеживание в запросе ATT — поэтому NSPrivacyTracking = true.
+	     Домены отслеживания объявлены в манифесте самого SDK GoogleMobileAds (пакет SPM), как и его «required reason» API.
+	     RevenueCat (покупки) приносит свой манифест; сама статистика Firebase — без отслеживания (см. ниже). -->
 	<key>NSPrivacyTracking</key>
-	<false/>
+	<true/>
 	<key>NSPrivacyTrackingDomains</key>
 	<array/>
 	<!-- «Required reason» API: UserDefaults — @capacitor/preferences хранит сохранение игры и сессию входа
@@ -43,7 +46,10 @@
 	     взаимодействие с игрой — анонимная статистика Firebase Analytics (с согласия) и отзыв со статистикой (если игрок
 	     сам отправит); ID устройства — идентификатор установки Firebase (Analytics, Remote Config), приблизительное
 	     местоположение — страна/город по IP в Firebase Analytics; отчёты о сбоях и диагностика — Sentry, без
-	     персональных данных. Ничего не используется для трекинга и рекламы. -->
+	     персональных данных. Реклама AdMob: идентификатор устройства (IDFA — только с разрешения ATT), данные о показах
+	     и взаимодействии с рекламой, приблизительное местоположение по IP — сторонняя реклама, с отслеживанием
+	     (ID устройства — одна запись: идентификатор установки Firebase без отслеживания и IDFA рекламы с разрешения ATT).
+	     Покупки (RevenueCat): история покупок, связана с ID игрока (восстановление на другом устройстве). -->
 	<key>NSPrivacyCollectedDataTypes</key>
 	<array>
 		<dict>
@@ -93,6 +99,7 @@
 			<array>
 				<string>NSPrivacyCollectedDataTypePurposeAnalytics</string>
 				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+				<string>NSPrivacyCollectedDataTypePurposeThirdPartyAdvertising</string>
 			</array>
 		</dict>
 		<dict>
@@ -101,11 +108,12 @@
 			<key>NSPrivacyCollectedDataTypeLinked</key>
 			<false/>
 			<key>NSPrivacyCollectedDataTypeTracking</key>
-			<false/>
+			<true/>
 			<key>NSPrivacyCollectedDataTypePurposes</key>
 			<array>
 				<string>NSPrivacyCollectedDataTypePurposeAnalytics</string>
 				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+				<string>NSPrivacyCollectedDataTypePurposeThirdPartyAdvertising</string>
 			</array>
 		</dict>
 		<dict>
@@ -118,6 +126,7 @@
 			<key>NSPrivacyCollectedDataTypePurposes</key>
 			<array>
 				<string>NSPrivacyCollectedDataTypePurposeAnalytics</string>
+				<string>NSPrivacyCollectedDataTypePurposeThirdPartyAdvertising</string>
 			</array>
 		</dict>
 		<dict>
@@ -137,6 +146,30 @@
 			<string>NSPrivacyCollectedDataTypeOtherDiagnosticData</string>
 			<key>NSPrivacyCollectedDataTypeLinked</key>
 			<false/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeAdvertisingData</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeThirdPartyAdvertising</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypePurchaseHistory</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
 			<key>NSPrivacyCollectedDataTypeTracking</key>
 			<false/>
 			<key>NSPrivacyCollectedDataTypePurposes</key>

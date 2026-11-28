@@ -46,6 +46,7 @@ describe('SaveService', () => {
       language: '',
       analytics: '',
       worlds: ['valley'],
+      privacyAsked: false,
     });
     expect('hints' in d.progress).toBe(false); // подсказки теперь бесплатные
     expect(d.log).toHaveLength(1);

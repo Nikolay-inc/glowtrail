@@ -12,6 +12,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/ionic-team/capacitor-swift-pm.git", exact: "7.6.10"),
+        .package(name: "CapacitorCommunityAdmob", path: "../../../node_modules/@capacitor-community/admob"),
         .package(name: "CapacitorFirebaseAnalytics", path: "../../../node_modules/@capacitor-firebase/analytics"),
         .package(name: "CapacitorFirebaseRemoteConfig", path: "../../../node_modules/@capacitor-firebase/remote-config"),
         .package(name: "CapacitorApp", path: "../../../node_modules/@capacitor/app"),
@@ -19,6 +20,7 @@ let package = Package(
         .package(name: "CapacitorPreferences", path: "../../../node_modules/@capacitor/preferences"),
         .package(name: "CapacitorSplashScreen", path: "../../../node_modules/@capacitor/splash-screen"),
         .package(name: "CapacitorStatusBar", path: "../../../node_modules/@capacitor/status-bar"),
+        .package(name: "RevenuecatPurchasesCapacitor", path: "../../../node_modules/@revenuecat/purchases-capacitor"),
         .package(name: "SentryCapacitor", path: "../../../node_modules/@sentry/capacitor")
     ],
     targets: [
@@ -27,6 +29,7 @@ let package = Package(
             dependencies: [
                 .product(name: "Capacitor", package: "capacitor-swift-pm"),
                 .product(name: "Cordova", package: "capacitor-swift-pm"),
+                .product(name: "CapacitorCommunityAdmob", package: "CapacitorCommunityAdmob"),
                 .product(name: "CapacitorFirebaseAnalytics", package: "CapacitorFirebaseAnalytics"),
                 .product(name: "CapacitorFirebaseRemoteConfig", package: "CapacitorFirebaseRemoteConfig"),
                 .product(name: "CapacitorApp", package: "CapacitorApp"),
@@ -34,6 +37,7 @@ let package = Package(
                 .product(name: "CapacitorPreferences", package: "CapacitorPreferences"),
                 .product(name: "CapacitorSplashScreen", package: "CapacitorSplashScreen"),
                 .product(name: "CapacitorStatusBar", package: "CapacitorStatusBar"),
+                .product(name: "RevenuecatPurchasesCapacitor", package: "RevenuecatPurchasesCapacitor"),
                 .product(name: "SentryCapacitor", package: "SentryCapacitor")
             ]
         )

@@ -1,0 +1,66 @@
+diff --git a/node_modules/@capacitor-community/admob/android/src/main/java/com/getcapacitor/community/admob/AdMob.java b/node_modules/@capacitor-community/admob/android/src/main/java/com/getcapacitor/community/admob/AdMob.java
+index b8b36c7..4a87364 100644
+--- a/node_modules/@capacitor-community/admob/android/src/main/java/com/getcapacitor/community/admob/AdMob.java
++++ b/node_modules/@capacitor-community/admob/android/src/main/java/com/getcapacitor/community/admob/AdMob.java
+@@ -81,6 +81,24 @@ public class AdMob extends Plugin {
+         }
+     }
+ 
++    /** Glowtrail (patch-package): IAB TCF v2 строки формы согласия UMP — для решения об аналитике. */
++    @PluginMethod
++    public void getTcfConsent(final PluginCall call) {
++        android.content.SharedPreferences prefs = getContext().getSharedPreferences(getContext().getPackageName() + "_preferences", android.content.Context.MODE_PRIVATE);
++        JSObject response = new JSObject();
++        response.put("purposeConsents", prefs.getString("IABTCF_PurposeConsents", ""));
++        int gdpr = -1;
++        try {
++            gdpr = prefs.getInt("IABTCF_gdprApplies", -1);
++        } catch (ClassCastException e) {
++            try {
++                gdpr = Integer.parseInt(prefs.getString("IABTCF_gdprApplies", "-1"));
++            } catch (Exception ignored) {}
++        }
++        response.put("gdprApplies", gdpr);
++        call.resolve(response);
++    }
++
+     @PluginMethod
+     public void requestTrackingAuthorization(final PluginCall call) {
+         call.resolve();
+diff --git a/node_modules/@capacitor-community/admob/ios/Sources/AdMobPlugin/AdMobPlugin.swift b/node_modules/@capacitor-community/admob/ios/Sources/AdMobPlugin/AdMobPlugin.swift
+index 529fbaa..89ce2d2 100644
+--- a/node_modules/@capacitor-community/admob/ios/Sources/AdMobPlugin/AdMobPlugin.swift
++++ b/node_modules/@capacitor-community/admob/ios/Sources/AdMobPlugin/AdMobPlugin.swift
+@@ -28,7 +28,9 @@ public class AdMobPlugin: CAPPlugin, CAPBridgedPlugin {
+         CAPPluginMethod(name: "prepareRewardVideoAd", returnType: CAPPluginReturnPromise),
+         CAPPluginMethod(name: "showRewardVideoAd", returnType: CAPPluginReturnPromise),
+         CAPPluginMethod(name: "prepareRewardInterstitialAd", returnType: CAPPluginReturnPromise),
+-        CAPPluginMethod(name: "showRewardInterstitialAd", returnType: CAPPluginReturnPromise)
++        CAPPluginMethod(name: "showRewardInterstitialAd", returnType: CAPPluginReturnPromise),
++        // Glowtrail (patch-package): решение из формы согласия UMP (строки IAB TCF в UserDefaults) — для аналитики.
++        CAPPluginMethod(name: "getTcfConsent", returnType: CAPPluginReturnPromise)
+     ]
+ 
+     var testingDevices: [String] = []
+@@ -56,6 +58,21 @@ public class AdMobPlugin: CAPPlugin, CAPBridgedPlugin {
+         call.resolve([:])
+     }
+ 
++    /**
++     * Glowtrail (patch-package): IAB TCF v2 строки, которые форма UMP пишет в UserDefaults.
++     * purposeConsents — «0101…», символ i-1 — согласие на цель i; gdprApplies — 1, если действует GDPR.
++     */
++    @objc func getTcfConsent(_ call: CAPPluginCall) {
++        let d = UserDefaults.standard
++        let applies = d.object(forKey: "IABTCF_gdprApplies")
++        var gdpr = -1
++        if let n = applies as? NSNumber { gdpr = n.intValue } else if let s = applies as? String, let n = Int(s) { gdpr = n }
++        call.resolve([
++            "purposeConsents": d.string(forKey: "IABTCF_PurposeConsents") ?? "",
++            "gdprApplies": gdpr
++        ])
++    }
++
+     /**
+      * DEPRECATED: It's now ship with Admob UMP Consent
+      */

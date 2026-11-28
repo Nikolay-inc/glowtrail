@@ -4,7 +4,8 @@
 import Phaser from 'phaser';
 import { sfx } from '../audio';
 import { DAILY, nextVillageObject, type DailyReward } from '../core/economy';
-import { bloomGift, claimDaily, cozy, dailyAvailable, getEconomy, questsToClaim, wallet } from '../meta';
+import { bloomGift, claimDaily, cozy, dailyAvailable, dailyDoublable, getEconomy, questsToClaim, wallet } from '../meta';
+import { rewardedButton } from './adButton';
 import { Button, drawIcon, text } from './draw';
 import { C, FONT, W, H } from './theme';
 import { fmt, t, tk } from '../i18n';
@@ -342,20 +343,37 @@ export function showDailyDialog(scene: Phaser.Scene, onClose: () => void) {
   });
   m.add(grid, 470, 24);
   m.add(richText(scene, 0, 0, t('daily_today', { reward: dailyLabel(DAILY[day - 1]) }), 42, '#ffd36b', true, m.inner, false, 2), 110, 20);
-  m.buttons([
-    new Button(scene, 0, 0, {
-      w: 520,
-      h: 130,
-      label: t('daily_claim'),
-      primary: true,
-      onClick: () => {
-        const res = claimDaily();
-        sfx.win();
-        if (res && 'item' in res.reward && !res.gotSkin) toast(scene, t('daily_have_item', { n: res.reward.orCoins }));
-        m.close(true);
-      },
-    }),
-  ]);
+  const claim = new Button(scene, 0, 0, {
+    w: 520,
+    h: 130,
+    label: t('daily_claim'),
+    primary: true,
+    onClick: () => {
+      const res = claimDaily();
+      sfx.win();
+      if (res && 'item' in res.reward && !res.gotSkin) toast(scene, t('daily_have_item', { n: res.reward.orCoins }));
+      m.close(true);
+    },
+  });
+  m.buttons([claim]);
+  // «Удвоить за ролик»: монеты и подсказки (не вещь 7-го дня); награда — только за досмотренный ролик.
+  const today = DAILY[day - 1];
+  const double = dailyDoublable(today)
+    ? rewardedButton(scene, 0, 0, {
+        place: 'daily_double',
+        label: t('daily_double_ad'),
+        w: 520,
+        h: 100,
+        fontSize: 36,
+        onReward: () => {
+          claimDaily(true);
+          sfx.win();
+          toast(scene, t('daily_doubled', { reward: dailyLabel({ ...today, ...('coins' in today ? { coins: today.coins * 2 } : 'hints' in today ? { hints: today.hints * 2 } : {}) } as DailyReward) }));
+          m.close(true);
+        },
+      })
+    : null;
+  if (double) m.buttons([double]);
   m.open();
   return true;
 }

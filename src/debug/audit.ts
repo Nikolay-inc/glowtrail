@@ -17,6 +17,11 @@ import { showNameDialog } from '../ui/NameDialog';
 import { showNotEnough } from '../ui/notEnough';
 import { showBloomGift } from '../ui/bloomGift';
 import { showConsent } from '../scenes/ConsentScene';
+import { fakeAds } from '../monetization/ads';
+import { loadProducts, setMonetization } from '../monetization/index';
+import { noStore, testStore } from '../monetization/store';
+import { showBuyCoins, showStarterOffer } from '../ui/storeUi';
+import { localDay } from '../profile';
 import { overlap, type Box } from '../ui/gesture';
 import { ellipsisLog, type UIBox } from '../ui/UIText';
 
@@ -181,6 +186,56 @@ function views(game: Phaser.Game): Record<string, () => Promise<void>> {
       s.showBuyHintPanel();
       await sleep(600);
     },
+  };
+  // Р4: ролики и покупки (в аудите — тестовая реклама и тестовый магазин; «-web» — веб-версия без покупок).
+  const fakeStore = () => setMonetization({ store: testStore({ confirm: async () => false }) });
+  v['win-double'] = async () => {
+    const s = (await start('Game', { levelIndex: 12 }, 1400)) as unknown as Any & { reward: object };
+    s.closeOverlay?.();
+    s.reward = { coins: 25, light: 6, bonusCoins: 3, bonusLight: 0 };
+    s.showWinPanel(2);
+    await sleep(1600);
+  };
+  v['almost-ad'] = async () => {
+    SaveService.update((d) => void (d.economy.shop.plus3Day = localDay(new Date())));
+    const s = (await start('Game', { levelIndex: 12 }, 1400)) as unknown as Any;
+    s.closeOverlay?.();
+    s.showLosePanel();
+    await sleep(700);
+    SaveService.update((d) => void (d.economy.shop.plus3Day = ''));
+  };
+  v.starter = async () => {
+    const s = await start('Menu');
+    showStarterOffer(s, 'shop');
+    await sleep(500);
+  };
+  v['buy-coins'] = async () => {
+    const s = await start('Workshop');
+    showBuyCoins(s);
+    await sleep(500);
+  };
+  v['buy-coins-web'] = async () => {
+    setMonetization({ store: noStore });
+    const s = await start('Workshop');
+    showBuyCoins(s);
+    await sleep(500);
+    fakeStore();
+  };
+  v['shop-purchases'] = async () => void (await start('Shop', { tab: 'purchases' }));
+  v['profile-privacy'] = async () => {
+    const s = (await start('Profile')) as unknown as Any;
+    s.showPrivacy();
+    await sleep(500);
+  };
+  v['shop-purchases-web'] = async () => {
+    setMonetization({ store: noStore });
+    await start('Shop', { tab: 'purchases' });
+    fakeStore();
+  };
+  v['shop-purchases-owned'] = async () => {
+    SaveService.update((d) => void (d.economy.shop.noAds = true));
+    await start('Shop', { tab: 'purchases' });
+    SaveService.update((d) => void (d.economy.shop.noAds = false));
   };
   for (const tab of ['lamp', 'road', 'arch'] as const) v[`shop-${tab}`] = async () => void (await start('Shop', { tab }));
   for (const part of ['hat', 'face', 'outfit', 'staff', 'accessory', 'pet', 'trail', 'sets'] as const) v[`wardrobe-${part}`] = async () => void (await start('Shop', { tab: 'wardrobe', part }));
@@ -429,6 +484,9 @@ export function check(game: Phaser.Game, view: string): Violation[] {
 
 export function install(game: Phaser.Game) {
   (globalThis as { __glowAudit?: boolean }).__glowAudit = true;
+  // Ролики и покупки видны во всех окнах: тестовая реклама и тестовый магазин (цены с пометкой «test»).
+  setMonetization({ ads: fakeAds({ ms: 0 }), store: testStore({ confirm: async () => false }) });
+  void loadProducts();
   const v = views(game);
   (window as unknown as { __audit: object }).__audit = {
     views: Object.keys(v),

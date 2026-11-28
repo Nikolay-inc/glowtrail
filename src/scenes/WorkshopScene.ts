@@ -1,6 +1,6 @@
 // «Мастерская» (в деревне): прокачка способностей за монеты и подсказки.
 // «Отложить» 1 → 2 слота, «Поворот плитки» (открывается в деревне) 1 → 2 → 3 заряда, «Фонарик» 2 → 3 → 4 → 5 плиток.
-// Подсказки: 3 бесплатные в день, покупка за монеты и «бесплатно за рекламу» (пока заглушка).
+// Подсказки: 3 бесплатные в день, покупка за монеты и «Подсказка за ролик» (если ролик доступен).
 
 import Phaser from 'phaser';
 import { setMusicMood, sfx } from '../audio';
@@ -9,6 +9,7 @@ import { fmt, t, tk } from '../i18n';
 import { adHint, buyHint, buyUpgrade, getEconomy, today } from '../meta';
 import { addBackground, Button, drawIcon, layoutRow, text, type IconName } from '../ui/draw';
 import { addTabBar, addWallet, buttonRichLabel, drawCoin, toast } from '../ui/meta';
+import { rewardedButton } from '../ui/adButton';
 import { showNotEnough } from '../ui/notEnough';
 import { uiText } from '../ui/UIText';
 import { edgeRows, stretchLayout } from '../ui/viewport';
@@ -106,21 +107,20 @@ export class WorkshopScene extends Phaser.Scene {
       },
     });
     buttonRichLabel(buyBtn, t('buy_for', { n: HINT_PRICE }), 34, false);
-    const adBtn = new Button(this, 770, hy + 85, {
+    const adBtn = rewardedButton(this, 770, hy + 85, {
+      place: 'hint',
+      label: t('hint_for_ad'),
       w: 400,
       h: 96,
-      icon: 'play',
-      label: t('for_ad'),
       fontSize: 34,
-      onClick: () => {
-        // Заглушка до Р4: настоящая реклама подключится позже, подсказка выдаётся сразу.
+      onReward: () => {
         adHint();
         sfx.star(0);
-        toast(this, t('ad_stub_hint'));
+        toast(this, t('hint_got_ad'));
         this.time.delayedCall(900, () => this.scene.restart());
       },
     });
-    layoutRow([buyBtn, adBtn], 570, 24, 880);
+    layoutRow(adBtn ? [buyBtn, adBtn] : [buyBtn], 570, 24, 880);
     wallet.refresh();
     addTabBar(this, 'Village', rowY + 40, (k) => this.go(k));
   }

@@ -68,7 +68,7 @@ describe('согласие на статистику', () => {
 
   it('выбор хранится в сохранении (v9), старые сохранения — «не спрашивали», при входе в аккаунт — с этого устройства', () => {
     const old = migrate({ version: 8, progress: { unlocked: ['valley-01'], stars: {} }, log: [] });
-    expect(old.version).toBe(10);
+    expect(old.version).toBe(11);
     expect(old.progress.analytics).toBe('');
     expect(migrate({ version: 9, progress: { analytics: 'no' } }).progress.analytics).toBe('no');
     expect(migrate({ version: 9, progress: { analytics: 'maybe' } }).progress.analytics).toBe('');
@@ -112,7 +112,10 @@ describe('Remote Config', () => {
   it('значения по умолчанию в коде, неверные значения отбрасываются', () => {
     expect(parseRemote({})).toEqual(REMOTE_DEFAULTS);
     expect(parseRemote({ economy_coin_multiplier: '1.5', quests_enabled: 'false', ads_rewarded_daily_cap: 'abc', unknown: 1 })).toEqual({ ...REMOTE_DEFAULTS, economy_coin_multiplier: 1.5, quests_enabled: false });
-    expect(Object.keys(REMOTE_DEFAULTS).sort()).toEqual(['ads_interstitial_every_n_levels', 'ads_interstitial_from_level', 'ads_rewarded_daily_cap', 'economy_coin_multiplier', 'quests_enabled']);
+    expect(Object.keys(REMOTE_DEFAULTS).sort()).toEqual(['ads_enabled', 'ads_interstitial_every_n_levels', 'ads_interstitial_from_level', 'ads_interstitial_min_gap_sec', 'ads_rewarded_daily_cap', 'ads_session_grace_sec', 'economy_coin_multiplier', 'quests_enabled']);
+    // Реклама (Р4): значения по умолчанию из задания, выключатель — булев.
+    expect(REMOTE_DEFAULTS).toMatchObject({ ads_enabled: true, ads_interstitial_from_level: 15, ads_interstitial_every_n_levels: 3, ads_interstitial_min_gap_sec: 180, ads_session_grace_sec: 180, ads_rewarded_daily_cap: 5 });
+    expect(parseRemote({ ads_enabled: 'false' }).ads_enabled).toBe(false);
   });
 });
 

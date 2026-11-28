@@ -38,7 +38,7 @@ export const analyticsOn = () => analyticsAllowed(analyticsChoice(), needsConsen
 export const consentScreenDue = () => consentDue(analyticsChoice(), needsConsent());
 
 /** Выбор игрока: экран согласия или переключатель в профиле. */
-export function setAnalyticsChoice(choice: 'yes' | 'no', from: 'consent' | 'profile') {
+export function setAnalyticsChoice(choice: 'yes' | 'no', from: 'consent' | 'profile' | 'ump') {
   const before = analyticsOn();
   SaveService.update((d) => {
     d.progress.analytics = choice;

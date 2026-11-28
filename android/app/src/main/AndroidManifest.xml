@@ -35,11 +35,13 @@
         <meta-data android:name="google_analytics_adid_collection_enabled" android:value="false" />
         <meta-data android:name="google_analytics_ssaid_collection_enabled" android:value="false" />
         <meta-data android:name="google_analytics_default_allow_ad_personalization_signals" android:value="false" />
+        <!-- AdMob (Р4): ID приложения. Сейчас — тестовый ID Google; боевой — из AdMob вместе с блоками (.env.app). -->
+        <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-3940256099942544~3347511713" />
     </application>
 
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- Рекламный идентификатор не нужен (Firebase Analytics добавляет это разрешение сам). -->
-    <uses-permission android:name="com.google.android.gms.permission.AD_ID" tools:node="remove" />
+    <!-- Рекламный идентификатор — для рекламы AdMob (разрешение приносит SDK). Статистика Firebase его не собирает
+         (google_analytics_adid_collection_enabled = false выше). -->
 </manifest>

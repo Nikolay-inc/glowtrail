@@ -8,6 +8,7 @@
 // поэтому переигровка добавляет только разницу, а слияние с облаком не может «удвоить» свет.
 
 import { defaultQuests, mergeQuests, normalizeQuests, type QuestState } from './questState';
+import { defaultShop, mergeShop, normalizeShop, type ShopState } from './shop';
 import { BONUS, bonusesOf, BUILDINGS, buildingDef, costOf, discounted, districtBuildings, DECOR_SLOTS, STREETS_PER_DISTRICT, decorVariants, type Bonuses, type BuildingDef, type DistrictId, type Reward } from './villageData';
 import { CHEST_ITEMS as CHEST_LIST, defaultWardrobe, grantItem, itemBaseCost, itemById, mergeWardrobe, normalizeWardrobe, wardrobeFromSkins, wear, type Cost, type WardrobeState } from './wardrobe';
 
@@ -61,6 +62,8 @@ export interface Economy {
    * Расцвет, который ещё не выбран (нет постройки на 2-м уровне или «Позже»), ждёт — не теряется.
    */
   challenges: { earned: string[]; bloomed: Record<string, string> };
+  /** Покупки и реклама (Р4, src/core/shop.ts): «Без рекламы», обработанные транзакции, счётчики роликов. */
+  shop: ShopState;
 }
 
 /** Монеты за повтор уровня без улучшения: 1-й, 2-й, 3-й, дальше — за день. */
@@ -107,6 +110,7 @@ export function defaultEconomy(): Economy {
     chapel: { day: '', used: 0 },
     replays: { day: '', counts: {} },
     challenges: { earned: [], bloomed: {} },
+    shop: defaultShop(),
   };
 }
 
@@ -503,6 +507,8 @@ export function normalizeEconomy(raw: unknown): Economy {
       for (const [k, v] of Object.entries(raw.challenges.bloomed)) if (e.challenges.earned.includes(k) && typeof v === 'string' && buildingDef(v)) e.challenges.bloomed[k] = v;
     }
   }
+  // v11: покупки и реклама.
+  e.shop = normalizeShop(raw.shop);
   return e;
 }
 
@@ -546,6 +552,8 @@ export function mergeEconomy(local: Economy, cloud: Economy | null): Economy {
     replays: local.replays.day >= cloud.replays.day ? local.replays : cloud.replays,
     // Награды испытаний: полученные — объединение, выбранные расцветы — объединение (при споре — это устройство).
     challenges: { earned: [...new Set([...local.challenges.earned, ...cloud.challenges.earned])], bloomed: { ...cloud.challenges.bloomed, ...local.challenges.bloomed } },
+    // Покупки: «Без рекламы» — «или», обработанные транзакции — объединение (одна покупка не начислится дважды).
+    shop: mergeShop(local.shop, cloud.shop),
   };
 }
 

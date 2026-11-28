@@ -12,8 +12,9 @@ import { ProfileScene } from './scenes/ProfileScene';
 import { IntroScene } from './scenes/IntroScene';
 import { ForestIntroScene } from './scenes/ForestIntroScene';
 import { RulesScene } from './scenes/RulesScene';
-import { ConsentScene } from './scenes/ConsentScene';
-import { consentScreenDue, initTelemetry } from './analytics/index';
+import { applyConsentAnalytics, ConsentScene, privacyFlowDue } from './scenes/ConsentScene';
+import { initTelemetry } from './analytics/index';
+import { adsProvider, gatherConsent, newSession, onAccount, startAds, startStore } from './monetization/index';
 import { isTutorialDone, markTutorialDoneForReturningPlayer } from './tutorial';
 import { recordPlayDay } from './profile';
 import { Account } from './cloud/account';
@@ -25,7 +26,7 @@ import { C, H, W } from './ui/theme';
 import { Preferences } from '@capacitor/preferences';
 import { SplashScreen } from '@capacitor/splash-screen';
 import { StatusBar, Style } from '@capacitor/status-bar';
-import { initLifecycle } from './lifecycle';
+import { APP_PAUSE, APP_RESUME, initLifecycle } from './lifecycle';
 import { isNative, platform } from './platform';
 import { createPreferencesBackend } from './save/preferencesBackend';
 import { SaveService } from './save/SaveService';
@@ -55,9 +56,17 @@ class BootScene extends Phaser.Scene {
     const fromUrl = Number(params.get('level'));
     if (fromUrl >= 1) return void this.scene.start('Game', { levelIndex: fromUrl - 1 });
     const [next, data] = firstTime && !isTutorialDone() ? ['Intro'] : !isTutorialDone() ? ['Game', { levelIndex: tutorialIndex }] : ['Menu'];
-    // ЕС/ЕЭЗ, Великобритания, Швейцария: сначала спрашиваем про анонимную статистику (один раз).
-    if (consentScreenDue() && !params.has('audit')) this.scene.start('Consent', { next, data });
-    else this.scene.start(next, data);
+    // Первый запуск: согласие (в приложении — форма Google UMP и запрос ATT, в вебе — статистика в ЕС), один раз.
+    if (privacyFlowDue() && !params.has('audit')) this.scene.start('Consent', { next, data });
+    else {
+      this.scene.start(next, data);
+      // Уже спрашивали: форма UMP — только если согласие устарело (решает SDK), затем реклама.
+      if (adsProvider().kind === 'admob')
+        void gatherConsent().then((r) => {
+          applyConsentAnalytics(r.analytics);
+          return startAds();
+        });
+    }
   }
 }
 
@@ -119,8 +128,24 @@ async function boot() {
   // Заставку прячем, когда первая сцена уже нарисовалась.
   if (isNative()) game.events.once('poststep', () => void SplashScreen.hide({ fadeOutDuration: 250 }).catch(() => undefined));
 
+  // Новая сессия (для «тихих» первых минут без межуровневой рекламы) — после 30 минут в фоне.
+  let pausedAt = 0;
+  game.events.on(APP_PAUSE, () => (pausedAt = Date.now()));
+  game.events.on(APP_RESUME, () => pausedAt && Date.now() - pausedAt > 30 * 60_000 && newSession());
+
   // Аккаунт и облачное сохранение (если заданы ключи Supabase).
   Account.init();
+  // Покупки: стор с id аккаунта (вход — Purchases.logIn, выход — logOut; «Без рекламы» восстанавливается само).
+  let storeUser: string | null | undefined;
+  const syncStoreUser = () => {
+    const id = Account.user?.id ?? null;
+    if (id === storeUser) return;
+    storeUser = id;
+    void onAccount(id);
+  };
+  // Сессия Supabase читается асинхронно — даём ей секунду, чтобы не создавать лишнего анонимного покупателя.
+  setTimeout(() => (storeUser === undefined ? (storeUser = Account.user?.id ?? null, void startStore(storeUser)) : undefined), 1500);
+  Account.on((e) => e.type === 'changed' && storeUser !== undefined && syncStoreUser());
   // Пришли по ссылке «сбросить пароль» — сразу просим новый пароль.
   Account.on((e) => {
     if (e.type === 'recovery') openAuthDialog('recovery');

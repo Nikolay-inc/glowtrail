@@ -32,7 +32,12 @@ import {
 } from '../core/game';
 import { shadowDelay, shadowGap, shadowIn } from '../core/tiles';
 import { drawRingBase, paletteOf } from '../ui/forest';
-import { abilities, buyHint, adHint, chapelAvailable, challengeReward, getEconomy, hintsLeft, questEvent, recordWinRewards, spendChapel, spendHint, type ChallengeReward } from '../meta';
+import { abilities, buyHint, adDoubleCoins, adHint, chapelAvailable, challengeReward, freePlus3Available, getEconomy, hintsLeft, questEvent, recordWinRewards, spendChapel, spendFreePlus3, spendHint, type ChallengeReward } from '../meta';
+import { onLevelWin, rewardedReady, starterOfferAfterAlmost, starterOfferAfterWin } from '../monetization/index';
+import { plus3Offer, type Plus3Offer } from '../monetization/rules';
+import { interstitialThen, rewardedButton, rewardedRichButton } from '../ui/adButton';
+import { showStarterOffer } from '../ui/storeUi';
+import { slotOf } from '../levels/curve';
 import { showBloomGift } from '../ui/bloomGift';
 import { showNotEnough } from '../ui/notEnough';
 import { archStyleOf, currentLook, roadStyleOf } from '../ui/skins';
@@ -911,9 +916,10 @@ export class GameScene extends Phaser.Scene {
     sfx.tap();
   }
 
-  /** Подсказки кончились: купить за монеты, получить «за рекламу» (пока заглушка) или закрыть. */
+  /** Подсказки кончились: купить за монеты, «Подсказка за ролик» (если ролик доступен) или закрыть. */
   private showBuyHintPanel() {
-    const { o, top } = this.makeOverlay('rollback', 640);
+    const adOk = rewardedReady();
+    const { o, top } = this.makeOverlay('rollback', adOk ? 640 : 530);
     o.add(text(this, W / 2, top + 100, t('hints_out'), 60, C.text, true, { w: 860 }));
     o.add(text(this, W / 2, top + 180, t('hints_out_sub', { n: freeHintsPerDay(getEconomy()) }), 40, C.textDim, false, { w: 860 }));
     const done = () => {
@@ -938,22 +944,23 @@ export class GameScene extends Phaser.Scene {
     });
     buttonRichLabel(buy, t('buy_for', { n: HINT_PRICE }), 46);
     o.add(buy);
-    o.add(
-      new Button(this, W / 2, top + 470, {
-        w: 600,
-        h: 110,
-        icon: 'play',
-        label: t('free_for_ad'),
-        fontSize: 38,
-        onClick: () => {
-          // Заглушка до Р4: настоящая реклама подключится позже, подсказка выдаётся сразу.
-          adHint();
-          sfx.star(0);
-          done();
-        },
-      }),
-    );
-    o.add(new Button(this, W / 2, top + 585, { w: 300, h: 90, label: t('close'), fontSize: 36, onClick: () => this.closeOverlay() }));
+    const ad = adOk
+      ? rewardedButton(this, W / 2, top + 470, {
+          place: 'hint',
+          level: this.state.level.id,
+          label: t('hint_for_ad'),
+          w: 600,
+          h: 110,
+          fontSize: 38,
+          onReward: () => {
+            adHint();
+            sfx.star(0);
+            done();
+          },
+        })
+      : null;
+    if (ad) o.add(ad);
+    o.add(new Button(this, W / 2, top + (ad ? 585 : 465), { w: 300, h: 90, label: t('close'), fontSize: 36, onClick: () => this.closeOverlay() }));
     o.on('primary', () => this.closeOverlay());
   }
 
@@ -1471,6 +1478,8 @@ export class GameScene extends Phaser.Scene {
     const before = prog ? { stars: prog.stars[s.level.id] ?? 0, ff: prog.fireflies[s.level.id] ?? 0 } : null;
     this.reward = this.custom ? { coins: 0, light: 0, bonusCoins: 0, bonusLight: 0 } : recordWinRewards(s.level.id, stars, ff, nextLevelOf(s.level)?.id ?? null);
     this.challengeGift = this.custom ? null : challengeReward(s.level.id);
+    // Межуровневая реклама: счётчик пройденных уровней (обучение и уровни до 15 не считаются).
+    if (!this.custom) onLevelWin(s.level.num, isTutorialActive(s.level.num));
     if (before) {
       // Задания жителей: победа, звёзды, светлячки, улучшенный результат, механики уровня.
       const improved = before.stars > 0 && (stars > before.stars || ff > before.ff);
@@ -1514,6 +1523,15 @@ export class GameScene extends Phaser.Scene {
       if (this.state !== s) return;
       sfx.lose();
       this.showLosePanel();
+      // Второе «Почти!» за день — предложить стартовый набор (не чаще раза в 3 дня, не больше 3 раз).
+      if (!this.custom && starterOfferAfterAlmost(canShowModal())) {
+        const o = this.overlay;
+        modalOpened();
+        this.time.delayedCall(1200, () => {
+          if (!o || this.overlay !== o) return modalClosed();
+          showStarterOffer(this, 'almost', () => modalClosed());
+        });
+      }
       // Тупик — подсказка «Заново» (один раз за игру).
       // Облачко под кнопкой «Заново», чтобы не закрывать главную кнопку окна.
       if (this.loseRestartPos) this.time.delayedCall(500, () => this.overlay && this.tip('restart', { x: this.loseRestartPos!.x, y: this.loseRestartPos!.y + 58 }, 'below'));
@@ -1550,7 +1568,10 @@ export class GameScene extends Phaser.Scene {
     const isLast = !this.custom && !nextLevelOf(this.level);
     const ffTotal = this.state.level.fireflies.length;
     const rewardRow = this.reward.coins + this.reward.bonusCoins > 0 || this.reward.light + this.reward.bonusLight > 0 ? 90 : 0;
-    const ffRow = (ffTotal > 0 ? 90 : 0) + rewardRow;
+    // «×2 монеты за ролик»: только монеты за уровень (без бонусов деревни и без света), один раз за победу.
+    const doubleCoins = !this.custom && this.reward.coins > 0 && rewardedReady() ? this.reward.coins : 0;
+    const adRow = doubleCoins ? 150 : 0;
+    const ffRow = (ffTotal > 0 ? 90 : 0) + rewardRow + adRow;
     const { o, top: top0 } = this.makeOverlay('win', 910 + ffRow);
     // Строка светлячков встаёт под звёздами — кнопки ниже на её высоту.
     const top = top0;
@@ -1604,12 +1625,39 @@ export class GameScene extends Phaser.Scene {
     const nextLv = this.custom ? null : nextLevelOf(this.level);
     const newWorld = !!nextLv && worldOf(nextLv).id !== worldOf(this.level).id && !hasEnteredWorld(worldOf(nextLv).id);
     const toMenu = isLast || tutorialEnd || !!this.custom || newWorld;
-    const next = () => (toMenu ? this.go('Menu') : this.go('Game', { levelIndex: this.levelIndex + 1 }));
+    // «Дальше» / «На карту»: между уровнями — редкая межуровневая реклама (правила — src/monetization/rules.ts).
+    const adCtx = { levelNum: num, tutorial: !!this.custom || isTutorialActive(num), intro: !!slotOf(num)?.intro || (!!nextLv && !!slotOf(nextLv.num)?.intro), level: this.state.level.id };
+    let leaving = false;
+    const between = (go: () => void) => {
+      if (leaving) return;
+      leaving = true;
+      if (this.custom) return go();
+      interstitialThen(adCtx, go);
+    };
+    const next = () => between(() => (toMenu ? this.go('Menu') : this.go('Game', { levelIndex: this.levelIndex + 1 })));
+    if (doubleCoins) {
+      const ay = top + 610 + ffRow - adRow;
+      const ad = rewardedRichButton(this, W / 2, ay, {
+        place: 'double_coins',
+        level: this.state.level.id,
+        rich: t('double_coins_ad', { n: doubleCoins }),
+        w: 520,
+        h: 110,
+        fontSize: 40,
+        toastY: top - 70,
+        onReward: () => {
+          adDoubleCoins(this.state.level.id, doubleCoins);
+          sfx.star(2);
+          toast(this, t('double_coins_done', { n: doubleCoins }), top - 70);
+        },
+      });
+      if (ad) o.add(ad);
+    }
     const by = top + 610 + ffRow;
     o.add(new Button(this, W / 2, by, { w: 520, h: 140, icon: 'play', label: this.custom ? t('to_editor') : isLast ? t('menu') : t('next'), primary: true, onClick: next }));
     // Маленькие кнопки — заметно ниже главной, чтобы не слипались.
     o.add(new Button(this, W / 2 - 160, by + 185, { w: 120, h: 100, icon: 'restart', onClick: () => this.go('Game', this.again()) }));
-    o.add(new Button(this, W / 2 + 160, by + 185, { w: 120, h: 100, icon: 'menu', onClick: () => this.go('Menu') }));
+    o.add(new Button(this, W / 2 + 160, by + 185, { w: 120, h: 100, icon: 'menu', onClick: () => between(() => this.go('Menu')) }));
     o.on('primary', next);
     // Задания жителей, выполненные этой победой, — короткое сообщение (забрать награду — в деревне).
     if (this.questsDone.length) {
@@ -1626,6 +1674,14 @@ export class GameScene extends Phaser.Scene {
         if (this.overlay !== o) return modalClosed();
         this.events.once('shutdown', () => modalClosed());
         showBloomGift(this, { street: gift.street, coins: gift.coins, onClose: () => modalClosed() });
+      });
+    }
+    // Стартовый набор: после уровня 20 (не чаще раза в 3 дня, не больше 3 раз, не при «Без рекламы»).
+    if (!this.custom && !this.challengeGift && canShowModal() && starterOfferAfterWin(num)) {
+      modalOpened();
+      this.time.delayedCall(1800, () => {
+        if (this.overlay !== o) return modalClosed();
+        showStarterOffer(this, 'win', () => modalClosed());
       });
     }
     // После уровня 6 гостю один раз предлагаем войти или зарегистрироваться (можно «Позже»).
@@ -1647,9 +1703,15 @@ export class GameScene extends Phaser.Scene {
   /** Экран «Почти!»: сколько фонарей зажжено, сколько осталось до выхода, +3 плитки, заново, отменить. */
   private showLosePanel() {
     const s = this.state;
-    // Часовня: раз в день — ещё один бесплатный «+3 плитки» за попытку.
-    const chapelPlus = this.extraUsed && !this.chapelUsed && !this.custom && chapelAvailable();
-    const extra = this.extraUsed && !chapelPlus ? null : findExtraTiles(s, 3);
+    // «+3 плитки»: первый за попытку — бесплатно раз в день, потом от часовни, потом за ролик;
+    // второй за попытку — только от часовни. Свой уровень из редактора — бесплатно, раз за попытку.
+    const offer: Plus3Offer = this.custom
+      ? this.extraUsed
+        ? null
+        : 'free'
+      : plus3Offer({ usedInAttempt: this.extraUsed ? (this.chapelUsed ? 2 : 1) : 0, chapelUsedInAttempt: this.chapelUsed, freeToday: freePlus3Available(), chapelLeft: chapelAvailable() ? 1 : 0, adReady: rewardedReady() });
+    const chapelPlus = offer === 'chapel';
+    const extra = offer ? findExtraTiles(s, 3) : null;
     const showSkip = this.streak >= STUCK.skip;
     const total = s.level.lanterns.length;
     const lit = lanternsOnRoad(s);
@@ -1697,7 +1759,7 @@ export class GameScene extends Phaser.Scene {
       if (chapelPlus) {
         this.chapelUsed = true;
         spendChapel();
-      }
+      } else if (offer === 'free' && !this.custom) spendFreePlus3();
       this.extraUsed = true;
       this.ended = false;
       this.state = extra.state;
@@ -1732,9 +1794,14 @@ export class GameScene extends Phaser.Scene {
       o.add(new Button(this, W / 2, btnY + 175, { w: 420, h: 110, icon: 'restart', label: t('again'), fontSize: 42, onClick: again }));
       o.on('primary', back);
     } else if (extra) {
-      o.add(new Button(this, W / 2, btnY, { w: 560, h: 140, icon: 'plus', label: chapelPlus ? t('plus3_chapel') : t('plus3'), primary: true, onClick: plus3 }));
+      const big =
+        offer === 'ad'
+          ? rewardedButton(this, W / 2, btnY, { place: 'plus3', level: s.level.id, label: t('plus3_ad'), w: 560, h: 140, primary: true, toastY: top - 70, onReward: plus3 })
+          : new Button(this, W / 2, btnY, { w: 560, h: 140, icon: 'plus', label: chapelPlus ? t('plus3_chapel') : t('plus3'), primary: true, onClick: plus3 });
+      if (big) o.add(big);
       o.add(new Button(this, W / 2, btnY + 175, { w: 420, h: 110, icon: 'restart', label: t('again'), fontSize: 42, onClick: again }));
-      o.on('primary', plus3);
+      // Ролик — только по нажатию: Enter / пробел здесь — «Заново».
+      o.on('primary', offer === 'ad' ? again : plus3);
     } else {
       o.add(new Button(this, W / 2, btnY, { w: 560, h: 140, icon: 'restart', label: t('again'), primary: true, onClick: again }));
       o.on('primary', again);

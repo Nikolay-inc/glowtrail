@@ -164,7 +164,7 @@ export function drawTileIcon(g: G, kind: TileKind, s: number, color: number) {
 // ---------------------------------------------------------------------------
 // Иконки интерфейса
 
-export type IconName = 'music' | 'nomusic' | 'stashbox' | 'lantern' | 'gift' | 'rotate' | 'restart' | 'undo' | 'menu' | 'stats' | 'sound' | 'mute' | 'play' | 'lock' | 'copy' | 'back' | 'trash' | 'bulb' | 'skip' | 'plus' | 'cloud' | 'user' | 'help' | 'vibrate' | 'novibrate' | 'close' | 'hammer' | 'globe' | 'chest' | 'wardrobe' | 'scroll' | 'brush' | 'heart' | 'arrowLeft' | 'arrowRight';
+export type IconName = 'music' | 'nomusic' | 'stashbox' | 'lantern' | 'gift' | 'rotate' | 'restart' | 'undo' | 'menu' | 'stats' | 'sound' | 'mute' | 'play' | 'lock' | 'copy' | 'back' | 'trash' | 'bulb' | 'skip' | 'plus' | 'cloud' | 'user' | 'help' | 'vibrate' | 'novibrate' | 'close' | 'hammer' | 'globe' | 'chest' | 'wardrobe' | 'scroll' | 'brush' | 'heart' | 'arrowLeft' | 'arrowRight' | 'video' | 'bag' | 'shield';
 
 export function drawIcon(g: G, name: IconName, s: number, color: number) {
   const lw = s * 0.12;
@@ -421,6 +421,30 @@ export function drawIcon(g: G, name: IconName, s: number, color: number) {
       g.lineStyle(s * 0.13, color, 1);
       g.lineBetween(-s * 0.26, -s * 0.26, s * 0.26, s * 0.26);
       g.lineBetween(-s * 0.26, s * 0.26, s * 0.26, -s * 0.26);
+      break;
+    case 'video':
+      // Ролик: экранчик со скруглёнными углами и треугольником «пуск».
+      g.strokeRoundedRect(-s * 0.36, -s * 0.26, s * 0.72, s * 0.52, s * 0.1);
+      g.fillTriangle(-s * 0.1, -s * 0.14, -s * 0.1, s * 0.14, s * 0.16, 0);
+      break;
+    case 'bag':
+      // Покупки: сумка с ручкой.
+      g.fillRoundedRect(-s * 0.3, -s * 0.12, s * 0.6, s * 0.46, s * 0.08);
+      g.beginPath();
+      g.arc(0, -s * 0.12, s * 0.16, Math.PI, Math.PI * 2, false);
+      g.strokePath();
+      break;
+    case 'shield':
+      // Конфиденциальность: щит.
+      g.beginPath();
+      g.moveTo(0, -s * 0.36);
+      g.lineTo(s * 0.3, -s * 0.24);
+      g.lineTo(s * 0.26, s * 0.08);
+      g.lineTo(0, s * 0.36);
+      g.lineTo(-s * 0.26, s * 0.08);
+      g.lineTo(-s * 0.3, -s * 0.24);
+      g.closePath();
+      g.strokePath();
       break;
     case 'trash':
       g.fillRoundedRect(-s * 0.22, -s * 0.16, s * 0.44, s * 0.48, s * 0.06);

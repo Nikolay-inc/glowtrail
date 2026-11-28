@@ -5,7 +5,7 @@
 import { avatarIndex } from '../core/wardrobe';
 import { defaultEconomy, economyFromProgress, normalizeEconomy, type Economy } from '../core/economy';
 
-export const SAVE_VERSION = 10;
+export const SAVE_VERSION = 11;
 export const SAVE_KEY = 'glowtrail.save';
 /** Старый формат (до SaveService): прогресс и лог лежали в двух ключах. */
 export const LEGACY_KEYS = { progress: 'glowtrail.progress.v1', log: 'glowtrail.log.v1' } as const;
@@ -43,6 +43,11 @@ export interface Progress {
    * «forest» — после сцены «Lumo входит в лес». При слиянии с облаком — объединение.
    */
   worlds: string[];
+  /**
+   * Первый запуск приложения: согласие на рекламу (форма Google UMP) и запрос ATT уже пройдены — второй раз
+   * при запуске не спрашиваем (форму UMP SDK покажет сам, если согласие устарело). Настройка устройства.
+   */
+  privacyAsked: boolean;
 }
 
 export type AnalyticsChoice = '' | 'yes' | 'no';
@@ -75,7 +80,7 @@ export interface Profile {
   bestDayStreak: number;
 }
 
-export type EventType = 'session' | 'start' | 'win' | 'lose' | 'abandon' | 'hint_used' | 'extra_tiles' | 'auto_ease' | 'level_skipped' | 'signup' | 'login' | 'logout' | 'auth_prompt' | 'tutorial_step' | 'tip_shown' | 'drag_place' | 'tap_place' | 'door_locked_attempt' | 'fireflies_collected' | 'tile_jump_used' | 'bridge_rotated_blocked' | 'lantern_expired' | 'currency_earn' | 'currency_spend' | 'village_restore' | 'upgrade_buy' | 'skin_buy' | 'daily_reward' | 'wardrobe_buy' | 'outfit_save' | 'building_upgrade' | 'decor_place' | 'street_upgrade' | 'quest_done' | 'cozy_level' | 'not_enough_hint_click' | 'language_change' | 'chest_open' | 'challenge_reward' | 'tutorial_complete' | 'settings_change' | 'teleport_used' | 'fog_revealed' | 'shadow_caught' | 'shadow_delayed' | 'world_enter';
+export type EventType = 'session' | 'start' | 'win' | 'lose' | 'abandon' | 'hint_used' | 'extra_tiles' | 'auto_ease' | 'level_skipped' | 'signup' | 'login' | 'logout' | 'auth_prompt' | 'tutorial_step' | 'tip_shown' | 'drag_place' | 'tap_place' | 'door_locked_attempt' | 'fireflies_collected' | 'tile_jump_used' | 'bridge_rotated_blocked' | 'lantern_expired' | 'currency_earn' | 'currency_spend' | 'village_restore' | 'upgrade_buy' | 'skin_buy' | 'daily_reward' | 'wardrobe_buy' | 'outfit_save' | 'building_upgrade' | 'decor_place' | 'street_upgrade' | 'quest_done' | 'cozy_level' | 'not_enough_hint_click' | 'language_change' | 'chest_open' | 'challenge_reward' | 'tutorial_complete' | 'settings_change' | 'teleport_used' | 'fog_revealed' | 'shadow_caught' | 'shadow_delayed' | 'world_enter' | 'ad_offer' | 'ad_reward' | 'ad_fail' | 'ad_interstitial' | 'store_view' | 'purchase_start' | 'purchase_done' | 'purchase_fail' | 'restore' | 'starter_offer' | 'privacy_options';
 
 export interface LogEvent {
   /** Время события, ISO. */
@@ -125,6 +130,11 @@ export interface LogEvent {
   value?: string;
   /** Мир (world_enter: valley / forest). */
   world?: string;
+  /** Реклама: место ролика (ad_offer, ad_reward, ad_fail: hint / plus3 / double_coins / daily_double). */
+  place?: string;
+  /** Покупки: товар (purchase_*: noads, starter, hints_10…), откуда открыли магазин (store_view), ошибка. */
+  product?: string;
+  error?: string;
   /** Туман: сколько клеток раскрыто и сколько было скрыто (fog_revealed). */
   cells?: number;
   total?: number;
@@ -187,7 +197,7 @@ export function memoryBackend(initial: Record<string, string> = {}): SaveBackend
 /** Первый уровень игры — открыт всегда. */
 export const FIRST_LEVEL_ID = 'valley-01';
 
-export const defaultProgress = (): Progress => ({ unlocked: [FIRST_LEVEL_ID], stars: {}, attempts: {}, lossStreak: {}, skipped: {}, fireflies: {}, muted: false, music: true, vibration: true, language: '', analytics: '', worlds: ['valley'] });
+export const defaultProgress = (): Progress => ({ unlocked: [FIRST_LEVEL_ID], stars: {}, attempts: {}, lossStreak: {}, skipped: {}, fireflies: {}, muted: false, music: true, vibration: true, language: '', analytics: '', worlds: ['valley'], privacyAsked: false });
 
 /**
  * До версии 4 уровни хранились по номеру 1, 2, 3… Это уровни первого мира «Долина» — они остались на своих местах,
@@ -282,6 +292,7 @@ export function normalizeProgress(raw: unknown): Progress {
   if (typeof raw.vibration === 'boolean') p.vibration = raw.vibration;
   if (raw.language === 'ru' || raw.language === 'en' || raw.language === 'uk') p.language = raw.language;
   if (raw.analytics === 'yes' || raw.analytics === 'no') p.analytics = raw.analytics;
+  if (raw.privacyAsked === true) p.privacyAsked = true;
   if (Array.isArray(raw.worlds)) p.worlds = [...new Set(['valley', ...raw.worlds.filter((x): x is string => typeof x === 'string' && /^[a-z]+$/.test(x))])];
   return p;
 }
@@ -335,7 +346,10 @@ function normalizeLog(raw: unknown): LogEvent[] {
  * v10 — второй мир «Туманный лес» (уровни forest-01…30): `progress.worlds` — миры, куда игрок уже вошёл (сцена входа
  *      показывается один раз). Старые сохранения — ['valley']: игрок, прошедший долину, увидит вход в лес. Прогресс
  *      по id уровней не меняется.
- * Шаги идут цепочкой: v1 → … → v10, поэтому любое старое сохранение доходит до текущей версии.
+ * v11 — покупки и реклама (`economy.shop`: «Без рекламы», стартовый набор, обработанные транзакции стора, счётчики
+ *      роликов и межуровневой рекламы); `progress.privacyAsked` — согласие на рекламу и ATT пройдены. Старые
+ *      сохранения — пустой раздел и false.
+ * Шаги идут цепочкой: v1 → … → v11, поэтому любое старое сохранение доходит до текущей версии.
  */
 export function migrate(raw: unknown, legacy?: { progress: unknown; log: unknown }): SaveData {
   let data: Record<string, unknown> | null = null;
@@ -369,6 +383,8 @@ export function migrate(raw: unknown, legacy?: { progress: unknown; log: unknown
   // v7 → v8: `challenges` пустое (normalizeEconomy); награды за пройденные испытания — syncChallenges в meta.
   // v8 → v9: `progress.analytics` = '' (normalizeProgress) — экран согласия покажется, если он нужен в этой стране.
   // v9 → v10: `progress.worlds` = ['valley'] (normalizeProgress) — вход в лес покажется, когда он откроется.
+  // v10 → v11: `economy.shop` пустой (normalizeEconomy) — ничего не куплено, счётчики рекламы с нуля;
+  // `progress.privacyAsked` = false — в приложении при следующем запуске покажется форма согласия и запрос ATT.
   profile.avatar = avatarIndex(economy.wardrobe.look);
   return {
     version: SAVE_VERSION,

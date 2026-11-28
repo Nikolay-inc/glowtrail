@@ -6,8 +6,8 @@ export type PartSlot = 'hat' | 'face' | 'outfit' | 'staff' | 'accessory' | 'pet'
 export type FieldSlot = 'lamp' | 'road' | 'arch';
 export type Slot = PartSlot | FieldSlot;
 export type Rarity = 'common' | 'rare' | 'epic' | 'special';
-/** Откуда берётся вещь: монеты, постройки и уровни деревни, награда дня, задания жителей, сундуки, уют; «особые» — Р4. */
-export type ItemSource = 'start' | 'coins' | 'village' | 'daily' | 'quest' | 'chest' | 'cozy' | 'special';
+/** Откуда берётся вещь: монеты, постройки и уровни деревни, награда дня, задания жителей, сундуки, уют, стартовый набор (покупка, Р4); «особые» — позже. */
+export type ItemSource = 'start' | 'coins' | 'village' | 'daily' | 'quest' | 'chest' | 'cozy' | 'starter' | 'special';
 
 export const PART_SLOTS: readonly PartSlot[] = ['hat', 'face', 'outfit', 'staff', 'accessory', 'pet', 'trail'];
 export const FIELD_SLOTS: readonly FieldSlot[] = ['lamp', 'road', 'arch'];
@@ -120,6 +120,8 @@ export const WARDROBE: readonly WardrobeItem[] = [
   item('trail-snow', 'trail', 'rare', 'daily'),
   item('trail-leaves', 'trail', 'common', 'quest'),
   item('trail-fireflies', 'trail', 'epic', 'chest'),
+  // Только в стартовом наборе (покупка в приложении, src/core/shop.ts STARTER_ITEM).
+  item('trail-aurora', 'trail', 'rare', 'starter'),
   // Фонари на поле (8).
   item('lamp-classic', 'lamp', 'common', 'start'),
   item('lamp-paper', 'lamp', 'common', 'coins', 90),

@@ -2,7 +2,8 @@
 // готовые наборы) и стили поля — фонари, дороги, арки. В гардеробе сверху крупный анимированный Lumo (ходит,
 // машет, поворачивается пальцем), «Примерить» показывает вещь до покупки, до 3 сохранённых образов.
 // Глаголы по типу вещи — отдельные ключи: одежда и части образа «Надеть» / «Надето», фонарь, дорога, арка,
-// посох, питомец, след — «Выбрать» / «Выбрано». «Особые» вещи — «скоро» (Р4).
+// посох, питомец, след — «Выбрать» / «Выбрано». «Особые» вещи — «скоро».
+// Вкладка «Покупки» (Р4) — src/ui/storeUi.ts: стартовый набор, «Без рекламы», подсказки, монеты, восстановление.
 
 import Phaser from 'phaser';
 import { sfx } from '../audio';
@@ -16,19 +17,21 @@ import { createLumoFigure, type LumoFigure } from '../ui/lumo';
 import { addTabBar, addWallet, buttonRichLabel, toast } from '../ui/meta';
 import { Modal } from '../ui/Modal';
 import { showNotEnough } from '../ui/notEnough';
+import { drawPurchases } from '../ui/storeUi';
 import { currentLook } from '../ui/skins';
 import { uiText } from '../ui/UIText';
 import { edgeRows, stretchLayout } from '../ui/viewport';
 import { C, W } from '../ui/theme';
 
-export type ShopTab = 'wardrobe' | 'lamp' | 'road' | 'arch';
+export type ShopTab = 'wardrobe' | 'lamp' | 'road' | 'arch' | 'purchases';
 type PartTab = PartSlot | 'sets';
 
-const TABS: { tab: ShopTab; key: 'wardrobe' | 'shop_lamps' | 'shop_roads' | 'shop_arches' }[] = [
+const TABS: { tab: ShopTab; key: 'wardrobe' | 'shop_lamps' | 'shop_roads' | 'shop_arches' | 'shop_purchases' }[] = [
   { tab: 'wardrobe', key: 'wardrobe' },
   { tab: 'lamp', key: 'shop_lamps' },
   { tab: 'road', key: 'shop_roads' },
   { tab: 'arch', key: 'shop_arches' },
+  { tab: 'purchases', key: 'shop_purchases' },
 ];
 
 const PART_TABS: PartTab[] = [...PART_SLOTS, 'sets'];
@@ -69,14 +72,18 @@ export class ShopScene extends Phaser.Scene {
 
     // Вкладки магазина
     const tw = (W - 80) / TABS.length;
-    TABS.forEach((k, i) => this.chip(40 + tw * (i + 0.5), topY + 200, tw - 16, 84, t(k.key), k.tab === this.tab, () => this.go({ tab: k.tab })));
+    TABS.forEach((k, i) => this.chip(40 + tw * (i + 0.5), topY + 200, tw - 12, 84, t(k.key), k.tab === this.tab, () => this.go({ tab: k.tab }), undefined, 28));
 
     let gridTop = topY + 290;
-    if (this.tab === 'wardrobe') gridTop = this.drawWardrobeTop(topY + 260);
-    const items = this.tab === 'wardrobe' ? (this.part === 'sets' ? [] : itemsOf(this.part)) : itemsOf(this.tab);
-    const area = { top: gridTop, bottom: rowY - 70 };
-    if (this.tab === 'wardrobe' && this.part === 'sets') this.drawSets(area);
-    else this.drawGrid(items, area, this.tab === 'wardrobe' ? 4 : 3);
+    if (this.tab === 'purchases') drawPurchases(this, { top: gridTop, bottom: rowY - 70 }, () => this.go({}));
+    else {
+      if (this.tab === 'wardrobe') gridTop = this.drawWardrobeTop(topY + 260);
+      const tab = this.tab;
+      const items = tab === 'wardrobe' ? (this.part === 'sets' ? [] : itemsOf(this.part)) : itemsOf(tab);
+      const area = { top: gridTop, bottom: rowY - 70 };
+      if (tab === 'wardrobe' && this.part === 'sets') this.drawSets(area);
+      else this.drawGrid(items, area, tab === 'wardrobe' ? 4 : 3);
+    }
 
     addTabBar(this, 'Shop', rowY + 40, (k) => {
       this.cameras.main.fadeOut(150, 11, 15, 39);

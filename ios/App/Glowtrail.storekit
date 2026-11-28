@@ -1,0 +1,137 @@
+{
+  "identifier": "5A1E2B3C",
+  "nonRenewingSubscriptions": [],
+  "products": [
+    {
+      "displayPrice": "3.99",
+      "familyShareable": false,
+      "internalID": "6740000000",
+      "localizations": [
+        {
+          "description": "Removes ads between levels. Reward videos stay optional.",
+          "displayName": "No Ads",
+          "locale": "en_US"
+        },
+        {
+          "description": "Убирает рекламу между уровнями. Ролики за награду — по желанию.",
+          "displayName": "Без рекламы",
+          "locale": "ru"
+        }
+      ],
+      "productID": "com.severgames.glowtrail.noads",
+      "referenceName": "No Ads",
+      "type": "NonConsumable"
+    },
+    {
+      "displayPrice": "4.99",
+      "familyShareable": false,
+      "internalID": "6740000001",
+      "localizations": [
+        {
+          "description": "No ads, 20 hints, 500 coins and a rare Aurora trail.",
+          "displayName": "Starter Pack",
+          "locale": "en_US"
+        },
+        {
+          "description": "Без рекламы, 20 подсказок, 500 монет и редкий след «Северное сияние».",
+          "displayName": "Стартовый набор",
+          "locale": "ru"
+        }
+      ],
+      "productID": "com.severgames.glowtrail.starter",
+      "referenceName": "Starter Pack",
+      "type": "NonConsumable"
+    },
+    {
+      "displayPrice": "1.99",
+      "familyShareable": false,
+      "internalID": "6740000002",
+      "localizations": [
+        {
+          "description": "10 hints for tricky levels.",
+          "displayName": "10 Hints",
+          "locale": "en_US"
+        },
+        {
+          "description": "10 подсказок для трудных уровней.",
+          "displayName": "10 подсказок",
+          "locale": "ru"
+        }
+      ],
+      "productID": "com.severgames.glowtrail.hints_10",
+      "referenceName": "Hints 10",
+      "type": "Consumable"
+    },
+    {
+      "displayPrice": "4.99",
+      "familyShareable": false,
+      "internalID": "6740000003",
+      "localizations": [
+        {
+          "description": "30 hints for tricky levels.",
+          "displayName": "30 Hints",
+          "locale": "en_US"
+        },
+        {
+          "description": "30 подсказок для трудных уровней.",
+          "displayName": "30 подсказок",
+          "locale": "ru"
+        }
+      ],
+      "productID": "com.severgames.glowtrail.hints_30",
+      "referenceName": "Hints 30",
+      "type": "Consumable"
+    },
+    {
+      "displayPrice": "1.99",
+      "familyShareable": false,
+      "internalID": "6740000004",
+      "localizations": [
+        {
+          "description": "A pouch of 800 coins.",
+          "displayName": "800 Coins",
+          "locale": "en_US"
+        },
+        {
+          "description": "Мешочек: 800 монет.",
+          "displayName": "800 монет",
+          "locale": "ru"
+        }
+      ],
+      "productID": "com.severgames.glowtrail.coins_s",
+      "referenceName": "Coins S",
+      "type": "Consumable"
+    },
+    {
+      "displayPrice": "4.99",
+      "familyShareable": false,
+      "internalID": "6740000005",
+      "localizations": [
+        {
+          "description": "A chest of 2500 coins.",
+          "displayName": "2500 Coins",
+          "locale": "en_US"
+        },
+        {
+          "description": "Сундук: 2500 монет.",
+          "displayName": "2500 монет",
+          "locale": "ru"
+        }
+      ],
+      "productID": "com.severgames.glowtrail.coins_l",
+      "referenceName": "Coins L",
+      "type": "Consumable"
+    }
+  ],
+  "settings": {
+    "_failTransactionsEnabled": false,
+    "_locale": "en_US",
+    "_storefront": "USA",
+    "_storeKitErrors": []
+  },
+  "subscriptionGroups": [],
+  "version": {
+    "major": 3,
+    "minor": 0
+  }
+}

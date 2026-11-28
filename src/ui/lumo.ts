@@ -1676,6 +1676,9 @@ export function trailConfig(trailId: string): TrailConfig | null {
       return { tints: [0x9dff5c, 0x5cae4a, 0xe8a03a, 0xc8ff7a], texture: 'dot', shape: 'leaf' };
     case 'trail-fireflies':
       return { tints: [C.firefly, C.fireflyGlow], texture: 'glow', shape: 'firefly' };
+    case 'trail-aurora':
+      // Северное сияние: бирюза, зелень и сирень, звёздочки.
+      return { tints: [0x7affd8, 0x9dff9a, 0xc9a8ff, 0x8ad8ff], texture: 'glow', shape: 'star' };
     default:
       return null;
   }

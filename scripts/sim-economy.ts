@@ -10,7 +10,9 @@
 //  - «хвост» у среднего с 15 мин в день: все третьи уровни построек, все улицы и по украшению в каждом слоте —
 //    не дольше 45 дней после главы 3;
 //  - в первый час каждой главы новая цель не реже чем раз в 5 минут — у слабого и среднего;
-//  - уровни экономика не блокирует (в модели уровень проходится всегда — проверяем, что все 90 пройдены).
+//  - уровни экономика не блокирует (в модели уровень проходится всегда — проверяем, что все 90 пройдены);
+//  - ролики (Р4, 0 / 2 / 5 в день) и стартовый набор ускоряют, но не ломают: цели выше считаются без роликов и покупок,
+//    а «хвост» у среднего с 15 мин и 5 роликами в день — не меньше 14 дней.
 // Модель — src/core/economyModel.ts, цены — src/core/villageData.ts и wardrobe.ts (общие с игрой).
 
 import ru from '../src/i18n/ru.json';
@@ -154,6 +156,29 @@ for (const r of runs.filter((x) => x.extra > 0)) {
 p();
 
 // ---------------------------------------------------------------------------
+// Ролики и стартовый набор (Р4)
+
+const tailOf = (r: SimResult) => {
+  const ms = r.milestones;
+  return ms.buildings === null || ms.streets === null || ms.decorOne === null ? null : Math.max(ms.buildings, ms.streets, ms.decorOne);
+};
+const adRuns: SimResult[] = [];
+for (const prof of PROFILES) for (const extra of [0, 15]) for (const ads of [0, 2, 5]) adRuns.push(ads === 0 ? runs.find((r) => r.profile === prof.id && r.extra === extra)! : simulate3(ch1, prof, extra, { ads }));
+const avgP = PROFILES.find((x) => x.id === 'average')!;
+for (const extra of [0, 15]) for (const ads of [0, 5]) adRuns.push(simulate3(ch1, avgP, extra, { ads, starterAt: 20 }));
+p('## Ролики и стартовый набор');
+p();
+p('Ролик удваивает монеты: сначала награду дня, потом монеты за уровни этого дня (верхняя оценка: подсказка и «+3 плитки» за ролик монет не дают). Стартовый набор — после уровня 20: 500 мон. и след «Северное сияние» (подсказки и «Без рекламы» на монеты не влияют).');
+p();
+p(head(['Профиль', '+мин/день', 'Роликов в день', 'Стартовый набор', 'Доля 1+2 (гл. 1 / 2 / 3)', 'Гардероб Lumo к гл. 3', 'Монет за ролики', 'Хвост: постройки ур. 3, улицы, украшение в слоте', 'Всё вместе']));
+for (const r of adRuns) {
+  const share = r.chapters.map((c) => `${Math.round(c.share * 100)}%`).join(' / ');
+  const tail = r.extra > 0 ? dd(tailOf(r)) : '—';
+  p(row([NAMES[r.profile], r.extra, r.ads, r.starterAt ? `да (ур. ${r.starterAt})` : 'нет', share, wardrobeOf(r.chapters[2]), r.adCoins, tail, r.extra > 0 ? dd(r.tailDays) : '—']));
+}
+p();
+
+// ---------------------------------------------------------------------------
 // Цели
 
 const problems: string[] = [];
@@ -186,6 +211,10 @@ for (const r of runs.filter((x) => x.profile !== 'strong')) {
   for (const c of r.chapters) if (c.maxGapFirstHour > 5) problems.push(`${NAMES[r.profile]} +${r.extra}, глава ${c.chapter}: пауза ${c.maxGapFirstHour} мин в первый час (нужно ≤ 5)`);
 }
 for (const r of runs) if (r.chapters.length !== 3) problems.push(`${r.profile}: пройдены не все главы`);
+// Ролики не ломают «хвост»: средний с 15 мин и 5 роликами в день — не меньше 14 дней.
+const avgAds5 = adRuns.find((r) => r.profile === 'average' && r.extra === 15 && r.ads === 5 && !r.starterAt)!;
+const tail5 = tailOf(avgAds5);
+if (tail5 === null || tail5 < 14) problems.push(`средний с 15 мин и 5 роликами: хвост ${dd(tail5)} (нужно не меньше 14 дней)`);
 
 console.log(out.join('\n'));
 if (problems.length) {
@@ -193,5 +222,5 @@ if (problems.length) {
   process.exit(1);
 }
 console.log(
-  `\n✓ Цели экономики выполнены: средний ${avg0.chapters.map((c) => pct(c.share)).join('/')} и слабый ${weak0.chapters.map((c) => pct(c.share)).join('/')} построек без перепрохождений; гардероб ${w1} → ${w3} (с 15 мин ${w3x}), стили поля ${f1} → ${f3}, первая вещь на ${Math.round(avg0.firstItemAt!)} мин; свет в конце глав ≤ ${Math.max(...avg0.chapters.map((c) => c.lightLeft))} (с 15 мин ≤ ${Math.max(...avg15.chapters.map((c) => c.lightLeft))}); хвост ${Math.max(m.buildings!, m.streets!, m.decorOne!)} дн.; паузы ≤ 5 мин; уровни не блокируются.`,
+  `\n✓ Цели экономики выполнены: средний ${avg0.chapters.map((c) => pct(c.share)).join('/')} и слабый ${weak0.chapters.map((c) => pct(c.share)).join('/')} построек без перепрохождений; гардероб ${w1} → ${w3} (с 15 мин ${w3x}), стили поля ${f1} → ${f3}, первая вещь на ${Math.round(avg0.firstItemAt!)} мин; свет в конце глав ≤ ${Math.max(...avg0.chapters.map((c) => c.lightLeft))} (с 15 мин ≤ ${Math.max(...avg15.chapters.map((c) => c.lightLeft))}); хвост ${Math.max(m.buildings!, m.streets!, m.decorOne!)} дн. (с 5 роликами в день — ${tail5} дн.); паузы ≤ 5 мин; уровни не блокируются.`,
 );

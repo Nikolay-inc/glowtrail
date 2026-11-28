@@ -50,6 +50,7 @@ export function mergeSaves(local: SaveData, cloud: CloudPayload | null): SaveDat
     language: lp.language, // язык — тоже
     analytics: lp.analytics, // согласие на статистику — выбор на этом устройстве
     worlds: [...new Set([...lp.worlds, ...cp.worlds])], // миры, куда уже вошли, — объединение
+    privacyAsked: lp.privacyAsked, // согласие на рекламу и ATT — на этом устройстве
   };
 
   const l = local.profile;

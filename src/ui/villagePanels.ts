@@ -16,6 +16,7 @@ import { bonusIcon, itemIcon, rewardCaption, rewardIcon } from './itemPreview';
 import { buttonRichLabel, drawCoin, drawLight, richText, smartText, toast } from './meta';
 import { Modal } from './Modal';
 import { addEarnHints } from './notEnough';
+import { showBuyCoins } from './storeUi';
 import { questRewardText, questText, residentName } from './questText';
 import { C } from './theme';
 import { uiText } from './UIText';
@@ -391,7 +392,8 @@ function pickDecor(host: VillageHost, slot: number, v: number) {
     m.add(decorIcon(host, decorType(slot), v, 160), 170, 10);
     m.rich(light ? t('not_enough_light', { n: price.amount - wallet().light }) : t('not_enough_coins', { n: price.amount - coins(e) }), 50, '#ff9a8a');
     addEarnHints(host, m, price.currency);
-    m.buttons([new Button(host, 0, 0, { w: 380, h: 100, icon: 'play', label: t('ad_soon'), fontSize: 32, onClick: () => undefined }).setEnabled(false)]);
+    // Монеты можно докупить (покупка в приложении; в веб-версии окно скажет «в приложении»).
+    if (!light) m.buttons([new Button(host, 0, 0, { w: 380, h: 100, icon: 'bag', label: t('buy_more'), fontSize: 34, primary: true, onClick: () => (host.closeModal(), showBuyCoins(host)) })]);
     m.open();
     return;
   }

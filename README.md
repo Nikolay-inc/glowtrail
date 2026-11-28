@@ -230,3 +230,51 @@ npm run cap:android
    смотри столбцы Day 1 и Day 7. Разбивка — по `chapter` или `game_version`.
 
 Для своих запросов без ограничений GA4 — бесплатный экспорт в BigQuery (Project settings → Integrations → BigQuery).
+
+## Реклама и покупки (Р4)
+
+Только в приложении (в веб-версии рекламы и покупок нет — витрина пишет «доступно в приложении»). Код — `src/monetization/`:
+`config.ts` (ID, `TEST_MODE`), `ads.ts` (AdMob за интерфейсом, веб-заглушка), `store.ts` (RevenueCat за интерфейсом, тестовый
+магазин, веб-заглушка), `rules.ts` (частота рекламы, лимиты, стартовый набор — чистые функции), `index.ts` (связка с сохранением
+и логом). Сохранение — `economy.shop` (v11, `src/core/shop.ts`): «Без рекламы», обработанные транзакции (начисление один раз,
+в облаке — объединение), счётчики роликов.
+
+- **Ролики** — только по кнопке с иконкой ролика: «Подсказка за ролик», «+3 плитки за ролик» (первые «+3 плитки» в день —
+  бесплатно, потом часовня, потом ролик), «×2 монеты» в окне победы (только монеты за уровень), «Удвоить за ролик» в награде
+  дня. Лимит `ads_rewarded_daily_cap` (5) на все места; не загрузился — сообщение, награды нет, кнопки прячутся на 60 с.
+- **Межуровневая** — по «Дальше»/«На карту» в окне победы: с уровня `ads_interstitial_from_level` (15), раз в
+  `ads_interstitial_every_n_levels` (3) побед, не чаще `ads_interstitial_min_gap_sec` (180), не в первые
+  `ads_session_grace_sec` (180) сессии, не через 2 минуты после ролика, не в обучении и не на знакомствах с механикой,
+  никогда у «Без рекламы». `ads_enabled` — выключатель всей рекламы. Всё — Remote Config.
+- **Согласие**: первый запуск — форма Google UMP (в ЕС/ЕЭЗ/UK/CH), решение о статистике — из неё (TCF: цели 1 и 8; своим
+  методом `getTcfConsent`, патч `patches/@capacitor-community+admob+7.2.0.patch`), затем запрос ATT. Профиль →
+  «Настройки конфиденциальности» — форма UMP снова. Текст ATT на всех языках — `npm run ios:strings` (из i18n).
+- **Покупки** (`<bundle id>.<имя>`): `noads` (непотребляемая), `starter` (непотребляемая: без рекламы + 20 подсказок +
+  500 монет + след «Северное сияние»), `hints_10`, `hints_30`, `coins_s` (800), `coins_l` (2500). Цены — только из стора.
+  Магазин → «Покупки», «Восстановить покупки» — там и в профиле. Вход в аккаунт — `Purchases.logIn(user.id)`, выход — `logOut`.
+
+### Тестовый режим и проверка
+
+- Ролики — официальные тестовые ID Google (надпись «Test Ad»). В браузере при разработке: `?ads=fake` (ролик-заглушка),
+  `?ads=fail` (не загружается), `?store=fake` (тестовый магазин).
+- Нет ключа RevenueCat — в приложении работает тестовый магазин: подтверждение покупки системным окном, цены с пометкой
+  «(test)», история покупок на устройстве (проверка начисления и «Восстановить покупки»).
+- С ключом RevenueCat (`VITE_REVENUECAT_IOS_KEY` в `.env.app`) в симуляторе — StoreKit-файл `ios/App/Glowtrail.storekit`
+  (все 6 товаров), он уже выбран в общей схеме `App` (Product → Scheme → Edit Scheme → Run → Options → StoreKit
+  Configuration). Покупки и восстановление — Xcode → Debug → StoreKit → Manage Transactions. Для RevenueCat товары нужно
+  завести в проекте RevenueCat (или ключ Test Store `test_…`), право `no_ads` — у `noads` и `starter`.
+- RevenueCat для iOS пропатчен (`patches/@revenuecat+purchases-capacitor+11.3.3.patch`): purchases-hybrid-common 18.12.0
+  вместо 17.55.2 — SDK purchases-ios 5.67 не собирается Swift из Xcode 27 (исправлено в 5.78).
+
+### Когда появятся боевые ID и Paid Apps Agreement
+
+1. App Store Connect: подписать **Paid Apps Agreement** (Business → Agreements), банк и налоги; завести 6 товаров с теми же
+   id (`com.severgames.glowtrail.noads` …) и ценами (3.99 / 4.99 / 1.99 / 4.99 / 1.99 / 4.99), локализации и скриншот для ревью.
+2. RevenueCat: проект, приложение iOS (App Store Connect API key / In-App Purchase key), товары, право `no_ads` (noads и
+   starter), публичный ключ `appl_…` → `VITE_REVENUECAT_IOS_KEY` в `.env.app`. Android — то же с Google Play (`goog_…`).
+3. AdMob: приложение iOS и Android, блоки rewarded и interstitial → `VITE_ADMOB_*` в `.env.app`, `VITE_ADMOB_TEST=0`;
+   ID приложения — в `Info.plist` (`GADApplicationIdentifier`) и `AndroidManifest.xml`. Privacy & messaging: сообщение
+   GDPR (с IDFA-пояснением не нужно — ATT игра спрашивает сама), app-ads.txt на сайте.
+4. App Store Connect → App Privacy: реклама сторонних (Device ID, Advertising Data, Product Interaction, Coarse Location —
+   с отслеживанием), Purchase History — связана с пользователем. Возраст 4+ остаётся (реклама PG), но в анкете — «есть
+   реклама». Firebase/Remote Config: при желании поменять `ads_*`.

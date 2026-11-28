@@ -1,5 +1,6 @@
 // Экран «Профиль»: Lumo в надетом образе, имя (можно сменить), сводка, настройки (звук, вибрация,
-// статистика, «Как играть»), образ (кнопка в гардероб) и язык интерфейса (ru / en / uk, по умолчанию — системы).
+// статистика, «Как играть»), образ (кнопка в гардероб) и язык интерфейса (ru / en / uk, по умолчанию — системы);
+// в приложении — «Настройки конфиденциальности» (форма Google UMP) и «Восстановить покупки».
 
 import Phaser from 'phaser';
 import { LEVELS } from '../levels/index';
@@ -11,6 +12,9 @@ import { getLocale, LANGS, setLocale, systemLang, t, type Lang } from '../i18n';
 import { getEconomy } from '../meta';
 import { logEvent } from '../storage';
 import { analyticsOn, setAnalyticsChoice } from '../analytics/index';
+import { privacyOptionsAvailable, showPrivacyOptions, storeSupported } from '../monetization/index';
+import { applyConsentAnalytics } from './ConsentScene';
+import { restoreWithToast } from '../ui/storeUi';
 import { SaveService } from '../save/SaveService';
 import { Modal } from '../ui/Modal';
 import { uiText } from '../ui/UIText';
@@ -124,20 +128,25 @@ export class ProfileScene extends Phaser.Scene {
     // Язык интерфейса
     new Button(this, W / 2, cy + 150, { w: 520, h: 96, icon: 'globe', label: t('language_button', { lang: t(`lang_${getLocale() === 'qps' ? 'en' : getLocale()}` as 'lang_en') }), fontSize: 34, onClick: () => this.chooseLanguage() });
 
-    // Анонимная статистика (Firebase Analytics): выбор с экрана согласия или по умолчанию — меняется здесь.
+    // Средний ряд: в приложении — «Восстановить покупки» (требование App Store), в вебе — анонимная статистика.
+    // Статистика и форма согласия Google (UMP) — ещё и в окне «Конфиденциальность».
     const statsLabel = () => t(analyticsOn() ? 'set_analytics_on' : 'set_analytics_off');
-    const statsBtn: Button = new Button(this, W / 2, (cy + 150 + rowY - 320) / 2, {
-      w: 640,
-      h: 88,
-      icon: 'stats',
-      label: statsLabel(),
-      fontSize: 30,
-      onClick: () => {
-        sfx.tap();
-        setAnalyticsChoice(analyticsOn() ? 'no' : 'yes', 'profile');
-        statsBtn.setLabel(statsLabel());
-      },
-    });
+    const midY = (cy + 150 + rowY - 320) / 2;
+    if (storeSupported()) new Button(this, W / 2, midY, { w: 640, h: 88, icon: 'restart', label: t('restore_purchases'), fontSize: 30, onClick: () => void restoreWithToast(this) });
+    else {
+      const statsBtn: Button = new Button(this, W / 2, midY, {
+        w: 640,
+        h: 88,
+        icon: 'stats',
+        label: statsLabel(),
+        fontSize: 30,
+        onClick: () => {
+          sfx.tap();
+          setAnalyticsChoice(analyticsOn() ? 'no' : 'yes', 'profile');
+          statsBtn.setLabel(statsLabel());
+        },
+      });
+    }
 
     // Аккаунт: гость — предложение войти; вошёл — email и управление аккаунтом.
     const user = Account.user;
@@ -167,7 +176,7 @@ export class ProfileScene extends Phaser.Scene {
         void sendFeedback().then((ok) => toast(this, ok ? t('feedback_ok') : t('feedback_no_address'), rowY - 440));
       },
     });
-    const privacyBtn = new Button(this, W / 2 + 200, rowY - 320, { w: 380, h: 96, icon: 'lock', label: t('privacy'), fontSize: 30, onClick: () => (sfx.tap(), openPrivacy()) });
+    const privacyBtn = new Button(this, W / 2 + 200, rowY - 320, { w: 380, h: 96, icon: 'lock', label: t('privacy'), fontSize: 30, onClick: () => (sfx.tap(), this.showPrivacy()) });
     layoutRow([feedbackBtn, privacyBtn], W / 2, 24);
     addTabBar(this, 'Profile', rowY + 40, (k) => this.go(k));
 
@@ -184,6 +193,47 @@ export class ProfileScene extends Phaser.Scene {
   private syncedOnce = false;
 
   /** Выбор языка: ru / en / uk; «как в системе» — снять выбор. */
+  /** «Конфиденциальность»: политика, «Настройки конфиденциальности» (форма Google UMP, в приложении), анонимная статистика. */
+  showPrivacy() {
+    const m = new Modal(this, { w: 900 });
+    m.title(t('privacy'), 56);
+    const statsLabel = () => t(analyticsOn() ? 'set_analytics_on' : 'set_analytics_off');
+    const stats: Button = new Button(this, 0, 0, {
+      w: 700,
+      h: 96,
+      icon: 'stats',
+      label: statsLabel(),
+      fontSize: 32,
+      onClick: () => {
+        sfx.tap();
+        setAnalyticsChoice(analyticsOn() ? 'no' : 'yes', 'profile');
+        stats.setLabel(statsLabel());
+      },
+    });
+    if (privacyOptionsAvailable()) {
+      m.buttons([
+        new Button(this, 0, 0, {
+          w: 700,
+          h: 96,
+          icon: 'shield',
+          label: t('privacy_settings'),
+          fontSize: 32,
+          onClick: () => {
+            sfx.tap();
+            void showPrivacyOptions().then((r) => {
+              applyConsentAnalytics(r?.analytics ?? null);
+              if (stats.scene) stats.setLabel(statsLabel());
+            });
+          },
+        }),
+      ]);
+    }
+    m.buttons([stats]);
+    m.buttons([new Button(this, 0, 0, { w: 700, h: 96, icon: 'lock', label: t('privacy_policy'), fontSize: 32, onClick: () => (sfx.tap(), openPrivacy()) })]);
+    m.open();
+    return m;
+  }
+
   private chooseLanguage() {
     sfx.tap();
     const m = new Modal(this, { w: 760 });

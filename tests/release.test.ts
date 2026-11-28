@@ -36,7 +36,8 @@ describe('подготовка к TestFlight', () => {
     const pm = readFileSync('ios/App/App/PrivacyInfo.xcprivacy', 'utf8');
     expect(pm).toContain('NSPrivacyAccessedAPICategoryUserDefaults');
     expect(pm).toContain('CA92.1');
-    expect(pm).toMatch(/<key>NSPrivacyTracking<\/key>\s*<false\/>/);
+    // Р4: реклама AdMob с IDFA (только по разрешению ATT) — отслеживание объявлено.
+    expect(pm).toMatch(/<key>NSPrivacyTracking<\/key>\s*<true\/>/);
     for (const t of ['EmailAddress', 'UserID', 'GameplayContent']) expect(pm).toContain(`NSPrivacyCollectedDataType${t}`);
   });
 

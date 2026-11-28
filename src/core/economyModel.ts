@@ -227,6 +227,12 @@ export interface ChapterSummary {
 export interface SimResult {
   profile: Profile['id'];
   extra: number;
+  /** Роликов с наградой в день (Р4) и куплен ли стартовый набор (на каком уровне). */
+  ads: number;
+  starterAt: number | null;
+  /** Монет за ролики всего (удвоение уровня, награды дня, повтора) и из стартового набора. */
+  adCoins: number;
+  starterCoins: number;
   chapters: ChapterSummary[];
   events: SimEvent[];
   /** Минута первой покупки вещи гардероба (null — не было). */
@@ -271,7 +277,28 @@ const COZY_LIST = [...COZY_ITEMS];
  * Полная симуляция трёх глав для профиля; extra — минут перепрохождений и заданий в день.
  * levels — настоящие уровни игры (глава 1 и, если есть, глава 2); недостающие главы — по плану.
  */
-export function simulate3(levels: ModelLevel[], p: Profile, extra: number, opts: { tailMaxDays?: number } = {}): SimResult {
+/** Монет в стартовом наборе (src/core/shop.ts PRODUCT_GRANTS.starter) и его вещь. */
+export const STARTER_COINS = 500;
+export const STARTER_ITEM_ID = 'trail-aurora';
+
+/**
+ * opts.ads — роликов с наградой в день (Р4): каждый удваивает монеты — сначала награду дня (если это монеты),
+ * потом монеты за уровни этого дня (первое прохождение, улучшение, повтор) — самое ценное место для игрока, поэтому
+ * модель — верхняя оценка (подсказки и «+3 плитки» за ролик монет не дают). opts.starterAt — после какого уровня куплен
+ * стартовый набор (500 монет и вещь; подсказки и «Без рекламы» на монеты не влияют).
+ */
+export function simulate3(levels: ModelLevel[], p: Profile, extra: number, opts: { tailMaxDays?: number; ads?: number; starterAt?: number } = {}): SimResult {
+  const adsPerDay = opts.ads ?? 0;
+  let adsLeft = adsPerDay;
+  let adCoins = 0;
+  let starterCoins = 0;
+  /** Ролик удваивает эти монеты, если на сегодня ещё остались ролики. */
+  const adDouble = (c: number) => {
+    if (adsLeft <= 0 || c <= 0) return 0;
+    adsLeft--;
+    adCoins += c;
+    return c;
+  };
   const all = chapterLevels(levels);
   let coins = 0;
   let light = 0;
@@ -374,7 +401,8 @@ export function simulate3(levels: ModelLevel[], p: Profile, extra: number, opts:
     dayNew = 0;
     const r = DAILY[calendar % 7];
     calendar++;
-    if ('coins' in r) coins += r.coins;
+    adsLeft = adsPerDay;
+    if ('coins' in r) coins += r.coins + adDouble(r.coins);
     else if ('item' in r && !reward(r.item)) coins += r.orCoins;
     if (bon().chestTier) openChest();
   };
@@ -559,7 +587,7 @@ export function simulate3(levels: ModelLevel[], p: Profile, extra: number, opts:
     const millPct = b0.coinMultPct;
     if (!b) {
       const c = Math.round((10 + 5 * stars) * mult);
-      coins += c + Math.round((c * millPct) / 100) + b0.coinsPerFirefly * ff;
+      coins += c + Math.round((c * millPct) / 100) + b0.coinsPerFirefly * ff + adDouble(c);
       light += 2 * stars + ff + (stars === 3 ? b0.lightPer3Star : 0);
       best[idx] = { stars, ff, total: l.fireflies, ch: l.chapter };
       return { m, improved: true };
@@ -568,7 +596,7 @@ export function simulate3(levels: ModelLevel[], p: Profile, extra: number, opts:
     const df = Math.max(0, ff - b.ff);
     if (ds || df) {
       const c = Math.round(5 * ds * mult);
-      coins += c + Math.round((c * millPct) / 100) + b0.coinsPerFirefly * df;
+      coins += c + Math.round((c * millPct) / 100) + b0.coinsPerFirefly * df + adDouble(c);
       light += 2 * ds + df + (stars === 3 && b.stars < 3 ? b0.lightPer3Star : 0);
       best[idx] = { ...b, stars: Math.max(b.stars, stars), ff: Math.max(b.ff, ff) };
       return { m, improved: true };
@@ -619,7 +647,8 @@ export function simulate3(levels: ModelLevel[], p: Profile, extra: number, opts:
       if (played.has(i)) continue;
       const l = all[b.ch - 1][i - (b.ch - 1) * 30];
       left -= play(i, l, b.stars, b.ff).m;
-      coins += Math.round(REPLAY_COINS[0] * CHAPTERS[b.ch - 1].coinMult);
+      const rc = Math.round(REPLAY_COINS[0] * CHAPTERS[b.ch - 1].coinMult);
+      coins += rc + adDouble(rc);
       questTick();
       spend(true);
     }
@@ -628,7 +657,7 @@ export function simulate3(levels: ModelLevel[], p: Profile, extra: number, opts:
   };
 
   // Награда первого дня.
-  coins += (DAILY[0] as { coins: number }).coins;
+  coins += (DAILY[0] as { coins: number }).coins + adDouble((DAILY[0] as { coins: number }).coins);
   calendar = 1;
   for (let c = 0; c < 3; c++) {
     chapterIdx = c;
@@ -646,6 +675,12 @@ export function simulate3(levels: ModelLevel[], p: Profile, extra: number, opts:
       ffErr = wantFf - ff;
       const r = play(c * 30 + k, l, stars[k], ff);
       dayNew += r.m;
+      // Стартовый набор: 500 монет и вещь, которой больше нигде нет.
+      if (opts.starterAt && l.num === opts.starterAt) {
+        coins += STARTER_COINS;
+        starterCoins += STARTER_COINS;
+        reward(STARTER_ITEM_ID);
+      }
       // Испытание (10, 20, 30 главы): шаг улицы сразу и расцвет постройки на выбор.
       if ((k + 1) % 10 === 0) {
         if (!freeStreet()) coins += CHALLENGE_STREET_COINS;
@@ -723,7 +758,7 @@ export function simulate3(levels: ModelLevel[], p: Profile, extra: number, opts:
       }
     }
   }
-  return { profile: p.id, extra, chapters, events, firstItemAt, tailDays, milestones: ms, extraMinutesTotal: Math.round(extraTotal), waits: waits.sort((a, b) => b.minutes - a.minutes) };
+  return { profile: p.id, extra, ads: adsPerDay, starterAt: opts.starterAt ?? null, adCoins, starterCoins, chapters, events, firstItemAt, tailDays, milestones: ms, extraMinutesTotal: Math.round(extraTotal), waits: waits.sort((a, b) => b.minutes - a.minutes) };
 }
 
 /** Итоговые суммы цен (для таблицы): постройки района по уровням, украшения (монеты / свет), улицы. */

@@ -27,7 +27,7 @@ describe('сохранение v3: профиль', () => {
     const backend = memoryBackend();
     SaveService.setBackend(backend);
     const p = getProfile();
-    expect(SAVE_VERSION).toBe(10);
+    expect(SAVE_VERSION).toBe(11);
     expect(p.playerId).toMatch(UUID);
     expect(p).toMatchObject({ name: null, avatar: 0, nameAsked: false, hintsUsed: 0, dayStreak: 0 });
     // Сразу сохранён: после перезагрузки тот же playerId.

@@ -1,6 +1,6 @@
 // «Не хватает монет / света» в любом окне покупки: «Не хватает N» и 2–3 подсказки, где взять, с кнопкой «Играть»
 // (уровни, где меньше 3 звёзд или есть несобранные светлячки, с ожидаемой наградой; новый уровень; награда дня),
-// плюс заглушка «за рекламу» для монет. Клики по подсказкам пишутся в лог (not_enough_hint_click).
+// для монет — ещё «Докупить» (покупка в приложении, src/ui/storeUi.ts). Клики пишутся в лог (not_enough_hint_click).
 
 import Phaser from 'phaser';
 import { sfx } from '../audio';
@@ -10,6 +10,7 @@ import { questText, questRewardText } from './questText';
 import { Button } from './draw';
 import { richText } from './meta';
 import { Modal } from './Modal';
+import { showBuyCoins } from './storeUi';
 import { C } from './theme';
 import { uiText } from './UIText';
 
@@ -75,25 +76,29 @@ export function addEarnHints(scene: Phaser.Scene, m: Modal, kind: 'light' | 'coi
   } else m.text(t('hint_daily'), 30, C.textDim, 2);
 }
 
-/** Окно «Не хватает N» с подсказками; для монет — ещё «за рекламу» (заглушка до Р4: подсказка-монеты не выдаются). */
+/** Окно «Не хватает N» с подсказками «где заработать»; для монет — ещё «Докупить» (в веб-версии — «в приложении»). */
 export function showNotEnough(scene: Phaser.Scene, kind: 'light' | 'coins', need: number) {
   sfx.invalid();
   const m = new Modal(scene, { w: 920 });
   m.rich(t(kind === 'light' ? 'not_enough_light' : 'not_enough_coins', { n: need }), 52, '#ff9a8a');
   addEarnHints(scene, m, kind);
-  m.buttons([
-    new Button(scene, 0, 0, {
-      w: 380,
-      h: 100,
-      icon: 'play',
-      label: t('ad_soon'),
-      fontSize: 32,
-      onClick: () => {
-        logHintClick('ad_stub');
-        m.close(true);
-      },
-    }).setEnabled(false),
-  ]);
+  if (kind === 'coins') {
+    m.buttons([
+      new Button(scene, 0, 0, {
+        w: 380,
+        h: 100,
+        icon: 'bag',
+        label: t('buy_more'),
+        fontSize: 34,
+        primary: true,
+        onClick: () => {
+          logHintClick('buy_coins');
+          m.close(true);
+          showBuyCoins(scene);
+        },
+      }),
+    ]);
+  }
   m.open();
   return m;
 }

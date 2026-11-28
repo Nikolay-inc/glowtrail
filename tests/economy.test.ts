@@ -293,6 +293,22 @@ const ch1: ModelLevel[] = LEVELS.slice(0, 60).map((l) => ({ num: l.num, chapter:
     expect(extra.tailDays).not.toBeNull();
   });
 
+  it('ролики (Р4) ускоряют, но не ломают «хвост»: средний с 15 мин и 5 роликами в день — не меньше 14 дней', () => {
+    const tail = (r: ReturnType<typeof simulate3>) => Math.max(r.milestones.buildings ?? 999, r.milestones.streets ?? 999, r.milestones.decorOne ?? 999);
+    const ads5 = simulate3(ch1, avg, 15, { ads: 5 });
+    const ads2 = simulate3(ch1, avg, 15, { ads: 2 });
+    expect(tail(ads5)).toBeGreaterThanOrEqual(14);
+    expect(tail(ads5)).toBeLessThanOrEqual(tail(ads2));
+    expect(tail(ads2)).toBeLessThanOrEqual(tail(extra));
+    expect(ads5.adCoins).toBeGreaterThan(ads2.adCoins);
+    // Без роликов и покупок — та же модель, что и раньше (цели «впритык» не меняются).
+    expect(simulate3(ch1, avg, 0, { ads: 0 }).chapters.map((c) => c.share)).toEqual(base.chapters.map((c) => c.share));
+    // Стартовый набор: 500 монет и вещь гардероба.
+    const st = simulate3(ch1, avg, 0, { starterAt: 20 });
+    expect(st.starterCoins).toBe(500);
+    expect(st.chapters[2].wardrobeRewards).toBe(base.chapters[2].wardrobeRewards + 1);
+  });
+
   it('цены: постройки по 3 уровня, украшения в слотах 3–5 вариантов, улицы в 3 шага', () => {
     expect(buildingCost('valley', 0, 1)).toEqual({ light: VILLAGE[0].cost, coins: 0 });
     expect(buildingCost('forest', 9, 3).coins).toBeGreaterThan(buildingCost('forest', 9, 2).coins);

@@ -44,6 +44,7 @@ import { BUILDINGS, type DistrictId } from './core/villageData';
 import { avatarIndex, FIELD_SLOTS, itemById, loadLook, saveLook, wearSet, type WardrobeState } from './core/wardrobe';
 import { isChallenge, LEVELS } from './levels/index';
 import { localDay } from './profile';
+import { freePlus3Today, useFreePlus3 } from './monetization/rules';
 import { SaveService, type LogEvent, type SaveData } from './save/SaveService';
 
 const now = () => new Date().toISOString();
@@ -230,19 +231,30 @@ export function dailyAvailable(): number | null {
   return dailyDay(getEconomy(), today());
 }
 
-export function claimDaily(): { day: number; reward: DailyReward; gotSkin: boolean } | null {
+/**
+ * Забрать награду дня. double — «Удвоить за ролик» (ролик уже досмотрен): монеты и подсказки × 2
+ * (вещь 7-го дня не удваивается — кнопки ролика в этот день нет).
+ */
+export function claimDaily(double = false): { day: number; reward: DailyReward; gotSkin: boolean } | null {
   const before = getEconomy();
   const res = claimDailyCore(before, today());
   if (!res) return null;
   const gotSkin = 'item' in res.reward && !before.wardrobe.owned.includes(res.reward.item);
   SaveService.update((d) => {
     d.economy = res.economy;
-    push(d, { ev: 'daily_reward', amount: res.day, item: JSON.stringify(res.reward) });
+    push(d, { ev: 'daily_reward', amount: res.day, item: JSON.stringify(res.reward), ...(double ? { source: 'ad_double' } : {}) });
     if ('coins' in res.reward) rewardLog(d, res.reward, 'daily');
     else if ('item' in res.reward && !gotSkin) rewardLog(d, { coins: res.reward.orCoins }, 'daily');
+    if (double && 'coins' in res.reward) {
+      d.economy = grant(d.economy, { coins: res.reward.coins });
+      rewardLog(d, res.reward, 'ad_double');
+    } else if (double && 'hints' in res.reward) d.economy = grant(d.economy, { hints: res.reward.hints });
   });
   return { day: res.day, reward: res.reward, gotSkin };
 }
+
+/** Награду дня можно удвоить роликом (монеты и подсказки, не вещь). */
+export const dailyDoublable = (r: DailyReward) => !('item' in r);
 
 export function hintsLeft(): number {
   return hintsAvailable(getEconomy(), today());
@@ -268,11 +280,28 @@ export function buyHint(): MetaResult<number> {
   return { ok: true, value: res.hints.bank };
 }
 
-/** «Бесплатно за рекламу» — заглушка до Р4: подсказка выдаётся сразу. */
+/** Подсказка за досмотренный ролик (src/monetization: лимит дня уже засчитан). */
 export function adHint() {
   SaveService.update((d) => {
     d.economy = grant(d.economy, { hints: 1 });
-    push(d, { ev: 'currency_earn', amount: 1, source: 'ad_stub', item: 'hint' });
+    push(d, { ev: 'currency_earn', amount: 1, source: 'ad', item: 'hint' });
+  });
+}
+
+/** «×2 монеты за ролик» в окне победы: ещё столько же монет за уровень (свет не удваивается). */
+export function adDoubleCoins(level: string, amount: number) {
+  if (amount <= 0) return;
+  SaveService.update((d) => {
+    d.economy = grant(d.economy, { coins: amount });
+    push(d, { ev: 'currency_earn', currency: 'coins', amount, source: 'ad_double', level });
+  });
+}
+
+/** Бесплатный «+3 плитки» на сегодня ещё есть (дальше — часовня или ролик). */
+export const freePlus3Available = () => freePlus3Today(getEconomy().shop, today());
+export function spendFreePlus3() {
+  SaveService.update((d) => {
+    d.economy = { ...d.economy, shop: useFreePlus3(d.economy.shop, today()) };
   });
 }
 
