@@ -1,0 +1,93 @@
+{
+  "id": "peaks-10",
+  "name": "Испытание льда",
+  "grid": [
+    "===...",
+    "...#L.",
+    "#.F.*.",
+    "..L.F#",
+    "S..F#.",
+    "~~~~~~",
+    ".....E"
+  ],
+  "startDir": "E",
+  "deck": [
+    "right",
+    "straight2",
+    "straight",
+    "left",
+    "straight",
+    "straight2",
+    "right",
+    "right",
+    "straight2",
+    "straight",
+    "left",
+    "bridge",
+    "left",
+    "right",
+    "straight",
+    "right",
+    "left",
+    "straight2",
+    "left"
+  ],
+  "stars": {
+    "two": 3,
+    "three": 5
+  },
+  "easeDecks": [
+    [
+      "right",
+      "straight2",
+      "straight",
+      "left",
+      "straight",
+      "straight2",
+      "right",
+      "right",
+      "straight2",
+      "straight",
+      "left",
+      "bridge",
+      "left",
+      "right",
+      "straight",
+      "left",
+      "right",
+      "left",
+      "straight2",
+      "left"
+    ],
+    [
+      "right",
+      "straight2",
+      "straight",
+      "left",
+      "straight",
+      "straight",
+      "straight2",
+      "right",
+      "right",
+      "straight2",
+      "straight",
+      "left",
+      "bridge",
+      "left",
+      "right",
+      "straight",
+      "left",
+      "right",
+      "left",
+      "straight2",
+      "left"
+    ]
+  ],
+  "metrics": {
+    "rating": 5.5,
+    "roads": 5,
+    "minTiles": 13,
+    "reserve": 6,
+    "trap": 0.372
+  }
+}

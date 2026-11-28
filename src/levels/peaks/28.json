@@ -1,0 +1,87 @@
+{
+  "id": "peaks-28",
+  "name": "Белая мгла",
+  "grid": [
+    "......",
+    "......",
+    "...C.E",
+    "===.B.",
+    ".====#",
+    ".#.A..",
+    "#.....",
+    "..S..."
+  ],
+  "startDir": "N",
+  "deck": [
+    "right",
+    "left",
+    "straight",
+    "straight",
+    "straight",
+    "straight2",
+    "right",
+    "left",
+    "straight",
+    "left",
+    "right",
+    "right",
+    "right",
+    "right",
+    "right",
+    "straight2"
+  ],
+  "stars": {
+    "two": 2,
+    "three": 4
+  },
+  "fog": true,
+  "goal": "signals",
+  "easeDecks": [
+    [
+      "right",
+      "left",
+      "straight",
+      "straight",
+      "straight",
+      "straight2",
+      "left",
+      "right",
+      "left",
+      "straight",
+      "left",
+      "right",
+      "right",
+      "right",
+      "right",
+      "right",
+      "straight2"
+    ],
+    [
+      "right",
+      "left",
+      "straight",
+      "straight",
+      "right",
+      "straight",
+      "straight2",
+      "left",
+      "right",
+      "left",
+      "straight",
+      "left",
+      "right",
+      "right",
+      "right",
+      "right",
+      "right",
+      "straight2"
+    ]
+  ],
+  "metrics": {
+    "rating": 5.5,
+    "roads": 10,
+    "minTiles": 11,
+    "reserve": 5,
+    "trap": 0.438
+  }
+}

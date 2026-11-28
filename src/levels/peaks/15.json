@@ -1,0 +1,69 @@
+{
+  "id": "peaks-15",
+  "name": "Горная мельница",
+  "grid": [
+    "#E..#.",
+    "......",
+    "#==..=",
+    "..L.^.",
+    "~~--~~",
+    "..^...",
+    "S...#="
+  ],
+  "startDir": "N",
+  "deck": [
+    "straight",
+    "straight2",
+    "right",
+    "right",
+    "left",
+    "right",
+    "right",
+    "straight2",
+    "straight",
+    "straight",
+    "left"
+  ],
+  "stars": {
+    "two": 2,
+    "three": 4
+  },
+  "easeDecks": [
+    [
+      "left",
+      "straight",
+      "straight2",
+      "right",
+      "right",
+      "left",
+      "right",
+      "right",
+      "straight2",
+      "straight",
+      "straight",
+      "left"
+    ],
+    [
+      "left",
+      "straight",
+      "straight2",
+      "right",
+      "right",
+      "left",
+      "left",
+      "right",
+      "right",
+      "straight2",
+      "straight",
+      "straight",
+      "left"
+    ]
+  ],
+  "metrics": {
+    "rating": 4.1,
+    "roads": 4,
+    "minTiles": 6,
+    "reserve": 5,
+    "trap": 0.39
+  }
+}

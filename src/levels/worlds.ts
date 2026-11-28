@@ -55,7 +55,18 @@ const FOREST: WorldTheme = {
   path: 0x6e6280,
 };
 
-// Миры по порядку; третий («Горный город») добавится сюда же. Название мира — ключ i18n `world.<id>`
+/** «Ледяные вершины»: бело-голубые горы, снег, лёд с бликом, северное сияние. */
+const PEAKS: WorldTheme = {
+  skyTop: 0x0a1430,
+  skyBottom: 0x1d3a66,
+  hillFar: 0x3a5a86,
+  hillNear: 0x5f86b0,
+  tree: 0x1f4a52,
+  water: 0x7fb8e0,
+  path: 0xd8e6f2,
+};
+
+// Миры по порядку. Название мира — ключ i18n `world.<id>`
 // (одинаково на карте и в деревне), поле name — запасное для логов и редактора.
 const WORLD_DEFS: WorldDef[] = [
   {
@@ -69,6 +80,12 @@ const WORLD_DEFS: WorldDef[] = [
     name: 'Туманный лес',
     theme: FOREST,
     files: import.meta.glob<LevelData>('./forest/*.json', { eager: true, import: 'default' }),
+  },
+  {
+    id: 'peaks',
+    name: 'Ледяные вершины',
+    theme: PEAKS,
+    files: import.meta.glob<LevelData>('./peaks/*.json', { eager: true, import: 'default' }),
   },
 ];
 

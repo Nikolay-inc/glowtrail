@@ -1,0 +1,84 @@
+{
+  "id": "peaks-04",
+  "name": "Полынья",
+  "grid": [
+    "...=L.",
+    ".===..",
+    "...F..",
+    "E.#===",
+    "......",
+    "~~~~~~",
+    "..#..S"
+  ],
+  "startDir": "N",
+  "deck": [
+    "left",
+    "straight",
+    "bridge",
+    "left",
+    "straight",
+    "straight",
+    "right",
+    "straight2",
+    "straight",
+    "straight",
+    "left",
+    "straight",
+    "straight",
+    "straight2",
+    "left",
+    "straight"
+  ],
+  "stars": {
+    "two": 3,
+    "three": 5
+  },
+  "easeDecks": [
+    [
+      "right",
+      "left",
+      "straight",
+      "bridge",
+      "left",
+      "straight",
+      "straight",
+      "right",
+      "straight2",
+      "straight",
+      "straight",
+      "left",
+      "straight",
+      "straight",
+      "straight2",
+      "left",
+      "straight"
+    ],
+    [
+      "right",
+      "left",
+      "straight",
+      "bridge",
+      "left",
+      "straight",
+      "straight",
+      "right",
+      "straight2",
+      "straight",
+      "straight",
+      "left",
+      "straight",
+      "straight",
+      "straight2",
+      "right",
+      "left",
+      "straight"
+    ]
+  ],
+  "metrics": {
+    "rating": 4,
+    "roads": 4,
+    "minTiles": 10,
+    "reserve": 6,
+    "trap": 0.227
+  }
+}

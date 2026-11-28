@@ -48,13 +48,13 @@ const REWARDS: Record<DistrictId, readonly [string, Reward][]> = {
     ['swing-bridge', { coins: 100 }],
     ['glow-lake', { coins: 200 }],
   ],
-  // Горный город — пока только структура: силуэты «скоро», не открывается.
+  // Горный город — с главой 3 (после уровня 60).
   mountain: [
     ['mine', { coins: 60 }],
     ['forge', { coins: 70 }],
     ['cable-car', { coins: 80 }],
-    ['crystal-cave', { coins: 90 }],
-    ['goat-farm', { coins: 90 }],
+    ['crystal-cave', { item: 'staff-ice' }],
+    ['goat-farm', { item: 'hat-fur-hood' }],
     ['bell-tower', { coins: 100 }],
     ['hot-springs', { coins: 110 }],
     ['stone-bridge', { coins: 120 }],
@@ -149,6 +149,17 @@ export const BONUS: Record<string, { kind: BonusKind; values: readonly [number, 
   forester: { kind: 'decorDiscountPct', values: [10, 15, 20] },
   'swing-bridge': { kind: 'lightPer3Star', values: [1, 1, 2] },
   'glow-lake': { kind: 'weeklyPct', values: [20, 35, 50] },
+  // Горный город (глава 3): только знакомые виды бонусов и мягкие значения — без новых сильных эффектов.
+  mine: { kind: 'coinMultPct', values: [5, 8, 10] },
+  forge: { kind: 'streetDiscountPct', values: [5, 10, 15] },
+  'cable-car': { kind: 'questRerolls', values: [1, 1, 2] },
+  'crystal-cave': { kind: 'lightPer3Star', values: [1, 1, 2] },
+  'goat-farm': { kind: 'questLight', values: [1, 1, 2] },
+  'bell-tower': { kind: 'weeklyPct', values: [10, 20, 30] },
+  'hot-springs': { kind: 'dailyPlus3', values: [1, 1, 2] },
+  'stone-bridge': { kind: 'decorDiscountPct', values: [5, 10, 15] },
+  'star-temple': { kind: 'wardrobeDiscountPct', values: [5, 10, 15] },
+  'summit-beacon': { kind: 'nightLight', values: [1, 2, 3] },
 };
 
 export type Bonuses = Record<BonusKind, number>;
@@ -182,9 +193,16 @@ export const streetPrice = (d: DistrictId, step: number) => Math.round((STREET_P
 export const DECOR_SLOTS = 24;
 export const DECOR_PRICES: readonly number[] = [15, 30, 55, 85, 120];
 export const DECOR_LIGHT: readonly (number | null)[] = [null, 6, null, 12, null];
-export type DecorType = 'bench' | 'flowers' | 'lamp' | 'tree' | 'sign' | 'cart' | 'statue' | 'birdhouse';
+export type DecorType = 'bench' | 'flowers' | 'lamp' | 'tree' | 'sign' | 'cart' | 'statue' | 'birdhouse' | 'snow-lamp' | 'snow-bench' | 'snow-fir' | 'ice-statue';
+/** Типы слотов долины и леса (по кругу). */
 export const DECOR_TYPE_ORDER: readonly DecorType[] = ['bench', 'flowers', 'lamp', 'tree', 'sign', 'cart', 'statue', 'birdhouse'];
-export const decorType = (slot: number): DecorType => DECOR_TYPE_ORDER[slot % DECOR_TYPE_ORDER.length];
+/** Горный город: фонари-столбики, скамейки, ели в снегу, ледяные скульптуры. */
+export const MOUNTAIN_DECOR_ORDER: readonly DecorType[] = ['snow-lamp', 'snow-bench', 'snow-fir', 'ice-statue'];
+export const ALL_DECOR_TYPES: readonly DecorType[] = [...DECOR_TYPE_ORDER, ...MOUNTAIN_DECOR_ORDER];
+export const decorType = (slot: number, d: DistrictId = 'valley'): DecorType => {
+  const order = d === 'mountain' ? MOUNTAIN_DECOR_ORDER : DECOR_TYPE_ORDER;
+  return order[slot % order.length];
+};
 /** Сколько вариантов в слоте (3, 4 или 5 — по кругу). */
 export const decorVariants = (slot: number) => [3, 4, 3, 5, 4][slot % 5];
 export type Currency = 'coins' | 'light';

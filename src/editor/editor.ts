@@ -2,7 +2,8 @@
 // В продакшен-сборку не попадает: main.ts подключает его через import.meta.env.DEV (Vite вырезает ветку).
 //
 // Сетка выбранного размера, рисование клеток тапом (пусто, камень, вода, фонарь, старт с направлением, выход,
-// светлячок, поворотный мост — повторный тап меняет положение, гаснущий фонарь — повторный тап меняет число),
+// светлячок, поворотный мост — повторный тап меняет положение, гаснущий фонарь — повторный тап меняет число,
+// лёд, сугроб, ветер — повторный тап поворачивает стрелку, сигнальный огонь — повторный тап меняет номер),
 // цель уровня (дверь или «только светлячки»), колода (с прыжком), кнопки «Проверить» (метрики решателя), «Сыграть» (пройти уровень в игре),
 // «Показать решение», «Экспорт JSON» (в буфер) и «Загрузить» (вставить JSON или открыть уровень игры).
 // Обычный HTML поверх игры; черновик сохраняется в localStorage.
@@ -13,6 +14,7 @@ import { starThresholds } from '../core/game';
 import { parseLevel } from '../core/level';
 import { easeDeck, solutionOf } from '../core/solver';
 import { fogFair } from '../core/fog';
+import { windIceChains } from '../core/generator';
 import { CELL_BY_CHAR, CHAR_BY_CELL, TILE_KINDS, type CellType, type GoalType, type LevelData, type TileKind } from '../core/types';
 import { LEVELS } from '../levels/index';
 import { EDITOR_RETURN } from '../scenes/GameScene';
@@ -31,6 +33,10 @@ const CELL_VIEW: Record<CellType, { label: string; bg: string; title: string }> 
   firefly: { label: '✨', bg: '#2f4a2a', title: 'Светлячок' },
   turnbridge: { label: '═', bg: '#2f78ad', title: 'Поворотный мост (тап ещё раз — повернуть)' },
   ring: { label: '🍄', bg: '#4a2f6b', title: 'Грибное кольцо-телепорт (пара — две клетки одной буквы)' },
+  ice: { label: '🧊', bg: '#7fc4e8', title: 'Лёд: закончил ход на льду — скользит дальше' },
+  drift: { label: '❄', bg: '#c8dcf0', title: 'Сугроб: тает, когда загорится соседний фонарь' },
+  wind: { label: '➡', bg: '#5a7aa8', title: 'Ветер: сдвигает на клетку по стрелке (тап ещё раз — повернуть)' },
+  fire: { label: '🔥', bg: '#6b3a1f', title: 'Сигнальный огонь (A → B → C → D; цель «Сигнальные огни»)' },
 };
 /** Палитра: символ → подпись. */
 const TOOLS: { ch: string; title: string }[] = [
@@ -45,7 +51,14 @@ const TOOLS: { ch: string; title: string }[] = [
   { ch: 'F', title: 'Светлячок' },
   { ch: 'a', title: 'Кольцо A (телепорт, ставь два)' },
   { ch: 'b', title: 'Кольцо B (телепорт, ставь два)' },
+  { ch: '=', title: 'Лёд' },
+  { ch: '*', title: 'Сугроб (рядом с фонарём)' },
+  { ch: '>', title: 'Ветер (тап ещё раз — повернуть)' },
+  { ch: 'A', title: 'Сигнальный огонь (номер — по порядку, тап ещё раз — следующий номер)' },
 ];
+const WIND = ['^', '>', 'v', '<'];
+const WIND_ARROW: Record<string, string> = { '^': '⬆', '>': '➡', v: '⬇', '<': '⬅' };
+const FIRES = ['A', 'B', 'C', 'D'];
 const TILE_VIEW: Record<TileKind, string> = { straight: '↑', straight2: '⇈', left: '↰', right: '↱', bridge: '═', jump: '⤴' };
 const TILE_RU: Record<TileKind, string> = { straight: 'прямо', straight2: 'прямо ×2', left: 'налево', right: 'направо', bridge: 'мост', jump: 'прыжок' };
 
@@ -58,6 +71,8 @@ function viewOf(ch: string, startDir: LevelData['startDir']) {
   if (ch === '|') return { ...v, label: '║' };
   if (ch >= '2' && ch <= '9') return { ...v, label: `🏮${ch}`, title: `Гаснущий фонарь: горит ${ch} ходов (тап ещё раз — изменить)` };
   if (ch === 'a' || ch === 'b') return { ...v, label: `🍄${ch.toUpperCase()}`, bg: ch === 'a' ? '#6b3f8a' : '#2f6b6b' };
+  if (type === 'wind') return { ...v, label: `💨${WIND_ARROW[ch] ?? ''}` };
+  if (type === 'fire') return { ...v, label: `🔥${FIRES.indexOf(ch) + 1}` };
   return v;
 }
 const STORE_KEY = 'glowtrail.editor';
@@ -102,7 +117,7 @@ function toData(dr: Draft): LevelData {
   const grid: string[] = [];
   for (let y = 0; y < dr.height; y++) grid.push(dr.cells.slice(y * dr.width, (y + 1) * dr.width).join(''));
   const d: LevelData = { id: dr.id, name: dr.name, grid, startDir: dr.startDir, deck: [...dr.deck], stars: { two: 0, three: 0 } };
-  if (dr.goal === 'fireflies' || dr.goal === 'escape') d.goal = dr.goal;
+  if (dr.goal === 'fireflies' || dr.goal === 'escape' || dr.goal === 'signals') d.goal = dr.goal;
   if (dr.fog) d.fog = true;
   if (dr.shadow) d.shadow = dr.shadow;
   if (dr.tileSet) d.tileSet = [...dr.tileSet];
@@ -176,6 +191,16 @@ export function startEditor(game: Phaser.Game) {
       draft.cells[i] = tool;
     } else if (tool === '-' && (cur === '-' || cur === '|')) {
       draft.cells[i] = cur === '-' ? '|' : '.'; // горизонтальный → вертикальный → стереть
+    } else if (WIND.includes(tool) && WIND.includes(cur)) {
+      draft.cells[i] = cur === '<' ? '.' : WIND[WIND.indexOf(cur) + 1]; // ⬆ → ➡ → ⬇ → ⬅ → стереть
+    } else if (WIND.includes(tool)) {
+      draft.cells[i] = '>';
+    } else if (FIRES.includes(tool) && FIRES.includes(cur)) {
+      draft.cells[i] = cur === 'D' ? '.' : FIRES[FIRES.indexOf(cur) + 1]; // A → B → C → D → стереть
+    } else if (FIRES.includes(tool)) {
+      // Следующий свободный номер костра.
+      draft.cells[i] = FIRES.find((f) => !draft.cells.includes(f)) ?? 'D';
+      if (!draft.goal || draft.goal === 'classic') draft.goal = 'signals';
     } else if (fade(tool) && fade(cur)) {
       draft.cells[i] = cur === '9' ? '.' : String(Number(cur) + 1); // 2 → 3 → … → 9 → стереть
     } else if (fade(tool)) {
@@ -207,6 +232,8 @@ export function startEditor(game: Phaser.Game) {
             m.roads < 2 ? '⚠ одно решение — в мире таких уровней нет' : '',
             l.fog ? (fogFair(l).ok ? 'Туман: решается без угадывания ✓' : '⚠ туман: без угадывания не решить') : '',
             l.shadow ? `Тень появляется через ${l.shadow} ходов` : '',
+            l.goal === 'signals' ? `Сигнальных огней: ${l.fires.length} (зажигать по порядку)` : '',
+            windIceChains(l) > 1 ? `⚠ цепочек «ветер → лёд»: ${windIceChains(l)} (до уровня 81 — не больше одной)` : '',
           ]
             .filter(Boolean)
             .join('\n')
@@ -412,7 +439,7 @@ export function startEditor(game: Phaser.Game) {
     night.checked = draft.night;
     night.onchange = () => ((draft.night = night.checked), save());
     const ffGoal = h('select') as HTMLSelectElement;
-    for (const [v, label] of [['classic', 'цель: арка'], ['fireflies', 'цель: только светлячки'], ['escape', 'цель: побег от тени']]) ffGoal.append(new Option(label, v));
+    for (const [v, label] of [['classic', 'цель: арка'], ['fireflies', 'цель: только светлячки'], ['escape', 'цель: побег от тени'], ['signals', 'цель: сигнальные огни']]) ffGoal.append(new Option(label, v));
     ffGoal.value = draft.goal ?? 'classic';
     ffGoal.onchange = () => {
       draft.goal = ffGoal.value === 'classic' ? undefined : (ffGoal.value as GoalType);

@@ -1,0 +1,90 @@
+{
+  "id": "peaks-07",
+  "name": "Снежный перевал",
+  "grid": [
+    "...#..",
+    ".#L.#.",
+    "E.*...",
+    "..====",
+    "=.FF..",
+    "~~~~~~",
+    "=*LS.."
+  ],
+  "startDir": "N",
+  "deck": [
+    "right",
+    "bridge",
+    "straight2",
+    "left",
+    "left",
+    "bridge",
+    "straight2",
+    "left",
+    "right",
+    "bridge",
+    "straight",
+    "right",
+    "straight2",
+    "right",
+    "right",
+    "bridge",
+    "right",
+    "left"
+  ],
+  "stars": {
+    "two": 3,
+    "three": 5
+  },
+  "easeDecks": [
+    [
+      "straight",
+      "right",
+      "bridge",
+      "straight2",
+      "left",
+      "left",
+      "bridge",
+      "straight2",
+      "left",
+      "right",
+      "bridge",
+      "straight",
+      "right",
+      "straight2",
+      "right",
+      "right",
+      "bridge",
+      "right",
+      "left"
+    ],
+    [
+      "straight",
+      "right",
+      "bridge",
+      "straight2",
+      "left",
+      "straight",
+      "left",
+      "bridge",
+      "straight2",
+      "left",
+      "right",
+      "bridge",
+      "straight",
+      "right",
+      "straight2",
+      "right",
+      "right",
+      "bridge",
+      "right",
+      "left"
+    ]
+  ],
+  "metrics": {
+    "rating": 4.5,
+    "roads": 4,
+    "minTiles": 12,
+    "reserve": 6,
+    "trap": 0.257
+  }
+}

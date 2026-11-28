@@ -1,0 +1,75 @@
+{
+  "id": "peaks-12",
+  "name": "Ветреный склон",
+  "grid": [
+    "#....",
+    ".E...",
+    "...L#",
+    ".....",
+    "...^.",
+    "...L.",
+    "S...."
+  ],
+  "startDir": "N",
+  "deck": [
+    "straight",
+    "left",
+    "right",
+    "left",
+    "right",
+    "straight",
+    "right",
+    "straight",
+    "straight2",
+    "straight",
+    "left",
+    "left",
+    "straight2"
+  ],
+  "stars": {
+    "two": 2,
+    "three": 4
+  },
+  "easeDecks": [
+    [
+      "straight",
+      "left",
+      "right",
+      "left",
+      "right",
+      "straight",
+      "left",
+      "right",
+      "straight",
+      "straight2",
+      "straight",
+      "left",
+      "left",
+      "straight2"
+    ],
+    [
+      "straight",
+      "left",
+      "right",
+      "left",
+      "right",
+      "straight",
+      "right",
+      "left",
+      "right",
+      "straight",
+      "straight2",
+      "straight",
+      "left",
+      "left",
+      "straight2"
+    ]
+  ],
+  "metrics": {
+    "rating": 3,
+    "roads": 50,
+    "minTiles": 8,
+    "reserve": 5,
+    "trap": 0.27
+  }
+}

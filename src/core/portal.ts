@@ -1,6 +1,6 @@
 // Арка-портал (выход): с каких сторон в неё можно войти, где сейчас конец дороги, сколько фонарей ещё не зажжено.
 
-import { lanternsOnRoad, type GameState } from './game';
+import { lanternsOnRoad, signalsLit, type GameState } from './game';
 import { DX, DY, type Dir, type Level } from './types';
 
 export interface PortalSide {
@@ -14,7 +14,8 @@ export function portalSides(level: Level): PortalSide[] {
     const x = level.exit.x + DX[dir];
     const y = level.exit.y + DY[dir];
     const inside = x >= 0 && y >= 0 && x < level.width && y < level.height;
-    const open = inside && level.cells[y * level.width + x] !== 'rock';
+    const c = inside ? level.cells[y * level.width + x] : 'rock';
+    const open = inside && c !== 'rock';
     return { dir, open };
   });
 }
@@ -30,8 +31,8 @@ export function headSide(state: GameState): Dir | null {
   return null;
 }
 
-/** Сколько фонарей ещё не горит — это число на замке арки. */
+/** Сколько фонарей (и сигнальных огней) ещё не горит — это число на замке арки. */
 export function lanternsLeft(state: GameState): number {
   if (state.level.goal === 'escape') return 0; // «Побег»: арка открыта сразу
-  return state.level.lanterns.length - lanternsOnRoad(state);
+  return state.level.lanterns.length - lanternsOnRoad(state) + state.level.fires.length - signalsLit(state);
 }

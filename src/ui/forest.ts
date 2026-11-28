@@ -10,7 +10,7 @@ import { C, FONT } from './theme';
 import { text } from './draw';
 
 /** Палитра поля: «Долина» — сумеречный луг, «Лес» — бирюзово-фиолетовый мох и тёмная вода. */
-export type Palette = 'valley' | 'forest';
+export type Palette = 'valley' | 'forest' | 'peaks';
 
 export interface PaletteColors {
   cell: number;
@@ -23,10 +23,12 @@ export interface PaletteColors {
 export const PALETTES: Record<Palette, PaletteColors> = {
   valley: { cell: C.cell, cellLight: C.cellLight, field: C.field, water: C.water, waterLight: C.waterLight },
   forest: { cell: 0x16303a, cellLight: 0x27495a, field: 0x090f1c, water: 0x15335a, waterLight: 0x7ab8e8 },
+  // «Ледяные вершины»: заснеженные клетки в холодных сумерках, тёмно-синяя вода подо льдом.
+  peaks: { cell: 0x2e4a6e, cellLight: 0x8fb4da, field: 0x0c1830, water: 0x12305a, waterLight: 0x9fd8f2 },
 };
 
-/** Палитра уровня: лес — по id мира. */
-export const paletteOf = (level: Pick<Level, 'id'>): Palette => (level.id.startsWith('forest-') ? 'forest' : 'valley');
+/** Палитра уровня — по id мира. */
+export const paletteOf = (level: Pick<Level, 'id'>): Palette => (level.id.startsWith('forest-') ? 'forest' : level.id.startsWith('peaks-') ? 'peaks' : 'valley');
 
 /** Цвета пар грибных колец: A — сиреневая, B — бирюзовая (у B ещё и точки на шляпках — различимы без цвета). */
 export const RING_COLORS = [0xd78bff, 0x5ef0d8] as const;

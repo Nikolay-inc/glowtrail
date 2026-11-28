@@ -20,7 +20,7 @@ export const TILE_KINDS: readonly TileKind[] = ['straight', 'straight2', 'left',
  * Типы клеток. turnbridge — поворотный мост через воду (после каждой поставленной плитки поворачивается на 90°).
  * Гаснущий фонарь — это lantern с числом ходов (Level.fade).
  */
-export type CellType = 'empty' | 'rock' | 'water' | 'lantern' | 'exit' | 'start' | 'firefly' | 'turnbridge' | 'ring';
+export type CellType = 'empty' | 'rock' | 'water' | 'lantern' | 'exit' | 'start' | 'firefly' | 'turnbridge' | 'ring' | 'ice' | 'drift' | 'wind' | 'fire';
 
 export const CELL_BY_CHAR: Record<string, CellType> = {
   '.': 'empty',
@@ -42,19 +42,38 @@ export const CELL_BY_CHAR: Record<string, CellType> = {
   '9': 'lantern',
   a: 'ring', // грибное кольцо-телепорт пары A (на поле ровно два)
   b: 'ring', // грибное кольцо-телепорт пары B
+  '=': 'ice', // лёд: закончил ход на льду — скользит дальше в том же направлении
+  '*': 'drift', // сугроб: непроходим, пока не загорится соседний (по стороне) фонарь
+  '^': 'wind', // ветер: закончил ход на клетке — сдвигает на 1 клетку по стрелке
+  '>': 'wind',
+  v: 'wind',
+  '<': 'wind',
+  A: 'fire', // сигнальные огни: зажигать по порядку A → B → C → D
+  B: 'fire',
+  C: 'fire',
+  D: 'fire',
 };
+
+/** Символы ветра по направлению (Dir). */
+export const WIND_CHARS = ['^', '>', 'v', '<'] as const;
+/** Символы сигнальных огней: индекс + 1 — номер костра по порядку. */
+export const FIRE_LETTERS = ['A', 'B', 'C', 'D'] as const;
 
 /** Буквы пар грибных колец: индекс + 1 — номер пары в Level.ringId. */
 export const RING_LETTERS = ['a', 'b'] as const;
 
 /** Обратная таблица: тип клетки → символ (редактор, генератор). Для моста и гаснущего фонаря — cellChar в level.ts. */
-export const CHAR_BY_CELL: Record<CellType, string> = { empty: '.', rock: '#', water: '~', lantern: 'L', exit: 'E', start: 'S', firefly: 'F', turnbridge: '-', ring: 'a' };
+export const CHAR_BY_CELL: Record<CellType, string> = { empty: '.', rock: '#', water: '~', lantern: 'L', exit: 'E', start: 'S', firefly: 'F', turnbridge: '-', ring: 'a', ice: '=', drift: '*', wind: '>', fire: 'A' };
 
 /**
  * Цель уровня: classic — дойти до арки через все фонари; fireflies — собрать всех светлячков (арки нет);
- * escape — «Побег»: дойти до арки, пока тень не догнала (арка открыта сразу, фонари задерживают тень).
+ * escape — «Побег»: дойти до арки, пока тень не догнала (арка открыта сразу, фонари задерживают тень);
+ * signals — «Сигнальные огни»: зажечь костры по порядку номеров (и фонари), тогда откроется арка.
  */
-export type GoalType = 'classic' | 'fireflies' | 'escape';
+export type GoalType = 'classic' | 'fireflies' | 'escape' | 'signals';
+
+/** У цели есть фонари, которые нужно зажечь до арки (и гаснущие фонари, которые могут погаснуть). */
+export const goalNeedsLanterns = (g: GoalType) => g === 'classic' || g === 'signals';
 
 /** Уровень в том виде, как он лежит в JSON. */
 export interface LevelData {
@@ -64,7 +83,8 @@ export interface LevelData {
   /**
    * Строки поля сверху вниз: . пусто, # камень, ~ вода, L фонарь, E выход, S старт, F светлячок,
    * - | поворотный мост (горизонтальный / вертикальный на старте), 2–9 гаснущий фонарь (горит N ходов),
-   * a b грибные кольца-телепорты (по два одной буквы).
+   * a b грибные кольца-телепорты (по два одной буквы), = лёд, * сугроб, ^ > v < ветер (по стрелке),
+   * A B C D сигнальные огни (зажигать по порядку букв, цель signals).
    */
   grid: string[];
   /** Туман: клетки скрыты, кроме тех, что рядом с дорогой и зажжёнными фонарями (арка, фонари и кольца светятся сквозь него). */
@@ -141,6 +161,12 @@ export interface Level {
   ringId: number[];
   /** Пары колец: [клетка, клетка]. */
   rings: [number, number][];
+  /** По клеткам: направление ветра (0–3) или -1. */
+  wind: number[];
+  /** По клеткам: номер сигнального огня (1–4) или 0. */
+  fireNo: number[];
+  /** Сигнальные огни по порядку номеров (индексы клеток). */
+  fires: number[];
   /** Туман над полем. */
   fog: boolean;
   /** Через сколько ходов на старте появляется тень (0 — тени нет). */

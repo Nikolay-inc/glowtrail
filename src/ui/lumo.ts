@@ -206,6 +206,8 @@ export function lanternGlowOf(staffId: string): number {
       return 0xffa060;
     case 'staff-crystal':
       return 0x9fe8ff;
+    case 'staff-ice':
+      return 0xc4f0ff;
     case 'staff-moon':
       return 0xfff1cc;
     default:
@@ -413,8 +415,38 @@ function hatBack(p: Pen, hat: string, pal: Palette) {
     p.poly(cat(quad(-0.25, -0.02, -0.26, 0.12, -0.2, 0.17, 6), quad(-0.2, 0.17, 0, 0.21, 0.2, 0.17, 8), quad(0.2, 0.17, 0.26, 0.12, 0.25, -0.02, 6)), pal.dark);
     p.circle(0, HY - 0.008, HR + 0.05, pal.dark);
     p.poly(cat(quad(-0.12, -0.24, 0.0, -0.33, 0.2, -0.36, 8), [0.2, -0.36], quad(0.2, -0.36, 0.16, -0.26, 0.14, -0.2, 6)), pal.dark);
+  } else if (hat === 'hat-fur-hood') {
+    // Меховой капюшон: тёплая накидка на плечи и круглый объём за головой (без острого кончика)
+    p.poly(cat(quad(-0.26, -0.02, -0.28, 0.13, -0.2, 0.18, 6), quad(-0.2, 0.18, 0, 0.23, 0.2, 0.18, 8), quad(0.2, 0.18, 0.28, 0.13, 0.26, -0.02, 6)), pal.dark);
+    p.circle(0, HY - 0.012, HR + 0.075, pal.main);
+    p.poly(cat(arcP(0, HY - 0.012, HR + 0.075, HR + 0.075, Math.PI * 0.05, Math.PI * 0.95, 14), arcP(0, HY + 0.02, HR + 0.03, HR + 0.02, Math.PI * 0.9, Math.PI * 0.1, 14)), pal.dark, 0.5);
+    p.ellipse(-0.1, HY - 0.2, 0.14, 0.06, 0xffffff, 0.14, -0.4);
+    // Шов по макушке
+    p.stroke(arcP(0, HY - 0.012, HR + 0.05, HR + 0.07, Math.PI * 1.32, Math.PI * 1.68, 10), 0.01, pal.dark, 0.6);
   }
 }
+
+/** Мех: пушистая кайма из кружков по дуге (капюшон, манжеты). */
+function furArc(p: Pen, cx: number, cy: number, rx: number, ry: number, a0: number, a1: number, n: number, r: number) {
+  const fur = 0xf4f1ea;
+  const furSh = 0xd6d2cc;
+  for (let i = 0; i <= n; i++) {
+    const a = a0 + ((a1 - a0) * i) / n;
+    p.circle(cx + Math.cos(a) * rx, cy + Math.sin(a) * ry + r * 0.25, r, furSh);
+  }
+  for (let i = 0; i <= n; i++) {
+    const a = a0 + ((a1 - a0) * i) / n;
+    const k = i % 2 ? 0.9 : 1.05;
+    p.circle(cx + Math.cos(a) * rx, cy + Math.sin(a) * ry, r * k, fur);
+  }
+  for (let i = 0; i <= n; i += 2) {
+    const a = a0 + ((a1 - a0) * i) / n;
+    p.circle(cx + Math.cos(a) * rx - r * 0.3, cy + Math.sin(a) * ry - r * 0.3, r * 0.35, 0xffffff, 0.8);
+  }
+}
+
+/** Полуширина купола шапки (эллипс с центром cy, полуосями rx, ry) на высоте y. */
+const domeHalf = (rx: number, ry: number, cy: number, y: number) => rx * Math.sqrt(Math.max(0, 1 - ((y - cy) / ry) ** 2));
 
 function hatFront(p: Pen, hat: string, pal: Palette) {
   switch (hat) {
@@ -561,6 +593,51 @@ function hatFront(p: Pen, hat: string, pal: Palette) {
       }
       break;
     }
+    case 'hat-knit': {
+      // Вязаная шапка: купол цвета одежды, полоски отделки, рельефный отворот и большой помпон
+      const cy = -0.13;
+      const rx = 0.228;
+      const ry = 0.27;
+      p.poly(arcP(0, cy, rx, ry, Math.PI, Math.PI * 2, 22), pal.main);
+      p.poly(cat(arcP(0, cy, rx, ry, Math.PI * 1.58, Math.PI * 2, 10), arcP(0.07, cy, rx - 0.07, ry - 0.04, Math.PI * 2, Math.PI * 1.58, 10)), pal.dark, 0.35);
+      const band = (y1: number, y2: number, c: number, a = 1) => {
+        const h1 = domeHalf(rx, ry, cy, y1);
+        const h2 = domeHalf(rx, ry, cy, y2);
+        p.poly([-h1, y1, h1, y1, h2, y2, -h2, y2], c, a);
+      };
+      band(-0.285, -0.245, pal.trim);
+      band(-0.225, -0.21, pal.trim, 0.85);
+      // Вязка: ряды «косичек»
+      for (const y of [-0.335, -0.175]) {
+        const h = domeHalf(rx, ry, cy, y) - 0.03;
+        for (let x = -h; x <= h + 1e-6; x += 0.05) p.stroke([x - 0.016, y - 0.014, x, y + 0.01, x + 0.016, y - 0.014], 0.011, pal.dark, 0.4);
+      }
+      p.ellipse(-0.09, -0.3, 0.09, 0.05, 0xffffff, 0.16, -0.5);
+      // Отворот с резинкой
+      const cuff = mix(pal.main, 0x000000, 0.15);
+      p.rect(-0.248, -0.185, 0.496, 0.09, cuff, 1, 0.04);
+      for (let i = 0; i < 13; i++) p.line(-0.215 + i * 0.036, -0.172, -0.215 + i * 0.036, -0.108, 0.012, pal.dark, 0.45);
+      p.rect(-0.23, -0.18, 0.46, 0.014, 0xffffff, 0.18, 0.007);
+      // Помпон
+      const px = 0.02;
+      const py = -0.41;
+      for (let i = 0; i < 9; i++) {
+        const a = (i / 9) * Math.PI * 2;
+        p.circle(px + Math.cos(a) * 0.05, py + Math.sin(a) * 0.045, 0.036, 0xdcd6ce);
+      }
+      p.circle(px, py, 0.062, 0xf4f1ea);
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2 + 0.3;
+        p.circle(px + Math.cos(a) * 0.035, py + Math.sin(a) * 0.032, 0.024, 0xffffff, 0.8);
+      }
+      p.circle(px - 0.022, py - 0.024, 0.016, 0xffffff);
+      break;
+    }
+    case 'hat-fur-hood': {
+      // Пушистая меховая кайма вокруг лица
+      furArc(p, 0, HY, HR + 0.03, HR + 0.03, Math.PI * 0.8, Math.PI * 2.2, 18, 0.042);
+      break;
+    }
     default: {
       // hat-cap: колпак с огоньком на кончике (как у прежнего Lumo)
       const cone = cat(quad(-0.225, -0.11, -0.13, -0.36, 0.07, -0.52, 10), quad(0.07, -0.52, 0.13, -0.3, 0.225, -0.11, 10));
@@ -651,7 +728,34 @@ function sleeve(p: Pen, hx: number, hy: number, outfit: string, pal: Palette) {
   }
 }
 
-function hand(p: Pen, x: number, y: number) {
+const MITTEN = 0xd8463a;
+const MITTEN_DARK = 0x9c2a26;
+const KNIT_CREAM = 0xf4efe6;
+
+/** Варежка в точке (x, y): (dx, dy) — направление от локтя к кисти (там, где манжета), k — масштаб. */
+function mitten(p: Pen, x: number, y: number, dx: number, dy: number, k = 1) {
+  const l = Math.hypot(dx, dy) || 1;
+  const ux = dx / l;
+  const uy = dy / l;
+  p.circle(x + ux * 0.012 * k, y + uy * 0.012 * k, 0.058 * k, MITTEN);
+  // Большой палец — сбоку, «сверху» относительно руки
+  p.circle(x + (uy * 0.045 - ux * 0.005) * k, y + (-ux * 0.045 - uy * 0.005) * k, 0.026 * k, MITTEN);
+  p.circle(x + (ux * 0.025 - uy * 0.012) * k, y + (uy * 0.025 + ux * 0.012) * k, 0.038 * k, MITTEN_DARK, 0.35);
+  // Снежинка-узор и блик
+  const sx = x + ux * 0.015 * k;
+  const sy = y + uy * 0.015 * k;
+  for (let i = 0; i < 3; i++) {
+    const a = (i / 3) * Math.PI;
+    p.line(sx - Math.cos(a) * 0.022 * k, sy - Math.sin(a) * 0.022 * k, sx + Math.cos(a) * 0.022 * k, sy + Math.sin(a) * 0.022 * k, 0.008 * k, KNIT_CREAM, 0.9);
+  }
+  p.circle(x - (ux * 0.02 + uy * 0.02) * k, y - (uy * 0.02 - ux * 0.02) * k, 0.014 * k, 0xffffff, 0.35);
+  // Вязаная манжета у запястья
+  p.poly(limb(x - ux * 0.075 * k, y - uy * 0.075 * k, x - ux * 0.035 * k, y - uy * 0.035 * k, 0.1 * k, 0.108 * k), KNIT_CREAM);
+  for (const t of [-0.03, 0, 0.03]) p.line(x - ux * 0.07 * k - uy * t * k, y - uy * 0.07 * k + ux * t * k, x - ux * 0.04 * k - uy * t * k, y - uy * 0.04 * k + ux * t * k, 0.006 * k, 0xc9c0b2, 0.8);
+}
+
+function hand(p: Pen, x: number, y: number, mittens = false, dx = 0, dy = 1) {
+  if (mittens) return mitten(p, x, y, dx, dy);
   p.circle(x, y, 0.047, SKIN);
   p.circle(x + 0.012, y + 0.014, 0.03, SKIN_SH, 0.45);
   p.circle(x - 0.012, y - 0.014, 0.014, 0xffffff, 0.35);
@@ -879,6 +983,42 @@ function accessoryFront(p: Pen, acc: string) {
       p.stroke(quad(-0.185, 0.12, 0, 0.245, 0.185, 0.12, 10), 0.012, 0xfff1cc, 0.9);
       break;
     }
+    case 'acc-knit-scarf': {
+      // Вязаный шарф: толстый виток вокруг шеи, два конца в полоску с бахромой
+      const sc = KNIT_CREAM;
+      const sd = 0xc9bfae;
+      const stripe = 0x3f7fd0;
+      // Задний (короткий) конец
+      p.poly([-0.005, 0.17, 0.055, 0.17, 0.045, 0.31, -0.015, 0.305], sd);
+      for (let i = 0; i < 4; i++) p.line(-0.008 + i * 0.016, 0.305, -0.01 + i * 0.016, 0.335, 0.009, sd);
+      // Передний (длинный) конец
+      const edge = (y: number): [number, number] => {
+        const t = (y - 0.17) / 0.21;
+        return [0.045 + t * 0.025, 0.115 + t * 0.03];
+      };
+      p.poly([0.045, 0.17, 0.115, 0.17, 0.145, 0.38, 0.07, 0.38], sc);
+      for (const y of [0.235, 0.3]) {
+        const [l1, r1] = edge(y);
+        const [l2, r2] = edge(y + 0.028);
+        p.poly([l1, y, r1, y, r2, y + 0.028, l2, y + 0.028], stripe);
+      }
+      for (let i = 0; i < 5; i++) p.line(0.075 + i * 0.016, 0.38, 0.072 + i * 0.017, 0.418, 0.01, sc);
+      p.line(0.12, 0.18, 0.14, 0.37, 0.01, sd, 0.5);
+      // Виток вокруг шеи
+      p.poly(cat(quad(-0.195, 0.07, 0, 0.2, 0.195, 0.07, 12), quad(0.205, 0.15, 0, 0.3, -0.205, 0.15, 12)), sc);
+      p.stroke(quad(-0.2, 0.118, 0, 0.262, 0.2, 0.118, 12), 0.024, stripe);
+      for (let i = 0; i < 9; i++) {
+        const x = -0.16 + i * 0.04;
+        const yTop = 0.07 + 0.13 * (1 - (x / 0.2) ** 2) * 0.95;
+        p.line(x, yTop + 0.01, x, yTop + 0.035, 0.008, sd, 0.45);
+        p.line(x, yTop + 0.065, x, yTop + 0.09, 0.008, sd, 0.45);
+      }
+      p.ellipse(-0.11, 0.135, 0.09, 0.035, 0xffffff, 0.4, 0.45);
+      // Узел у конца
+      p.ellipse(0.08, 0.19, 0.09, 0.06, sd);
+      p.ellipse(0.075, 0.183, 0.05, 0.025, 0xffffff, 0.15);
+      break;
+    }
     case 'acc-backpack': {
       p.line(-0.13, 0.11, -0.12, 0.31, 0.03, 0x6a4226);
       p.line(0.13, 0.11, 0.12, 0.31, 0.03, 0x6a4226);
@@ -1050,6 +1190,58 @@ function drawStaff(p: Pen, staff: string) {
       p.star(L.x + 0.055, L.y - 0.005, 0.035, 0xffffff, 1, 0.4);
       break;
     }
+    case 'staff-ice': {
+      // Ледяной фонарь: посох в инее, шестигранный ледяной фонарь со снежинкой, шапка снега и сосульки
+      shaft(STAFF_T, 0x7fa6c8, 0xe0f2ff);
+      for (const t of [0.25, 0.55, 0.8]) {
+        const x = STAFF_B.x + (STAFF_T.x - STAFF_B.x) * t;
+        const y = STAFF_B.y + (STAFF_T.y - STAFF_B.y) * t;
+        p.circle(x - 0.012, y, 0.017, 0xffffff, 0.85);
+        p.circle(x + 0.006, y - 0.012, 0.011, 0xffffff, 0.7);
+      }
+      p.rect(L.x - 0.035, L.y + 0.08, 0.07, 0.03, 0x5f84ad, 1, 0.01);
+      const hex = (r: number) => {
+        const out: number[] = [];
+        for (let i = 0; i < 6; i++) {
+          const a = -Math.PI / 2 + (i * Math.PI) / 3;
+          out.push(L.x + Math.cos(a) * r, L.y + Math.sin(a) * r * 1.05);
+        }
+        return out;
+      };
+      p.poly(hex(0.118), 0x8fd0f2);
+      p.poly(hex(0.09), 0xe6faff);
+      const h = hex(0.09);
+      p.poly([L.x, L.y, h[6], h[7], h[8], h[9], h[10], h[11], h[0], h[1]], 0xffffff, 0.35);
+      for (let i = 0; i < 3; i++) {
+        const a = Math.PI / 2 + (i * Math.PI) / 3;
+        const ex = Math.cos(a) * 0.058;
+        const ey = Math.sin(a) * 0.058;
+        p.line(L.x - ex, L.y - ey, L.x + ex, L.y + ey, 0.012, 0x6cc0ea);
+        for (const sgn of [-1, 1]) {
+          const bx = L.x + ex * 0.6 * sgn;
+          const by = L.y + ey * 0.6 * sgn;
+          p.line(bx, by, bx + (Math.cos(a + 0.7) * 0.02 - ex * 0.15) * sgn, by + (Math.sin(a + 0.7) * 0.02 - ey * 0.15) * sgn, 0.008, 0x6cc0ea);
+        }
+      }
+      lanternFlame(p, L.x, L.y, 0.026);
+      // Шапка снега
+      p.ellipse(L.x, L.y - 0.108, 0.2, 0.065, 0xffffff);
+      p.circle(L.x - 0.06, L.y - 0.125, 0.03, 0xffffff);
+      p.circle(L.x + 0.035, L.y - 0.13, 0.035, 0xffffff);
+      p.ellipse(L.x + 0.02, L.y - 0.09, 0.16, 0.025, 0xc8e6f8, 0.6);
+      // Сосульки снизу
+      for (const [dx, len] of [
+        [-0.065, 0.06],
+        [-0.03, 0.095],
+        [0.03, 0.05],
+        [0.065, 0.08],
+      ] as const) {
+        const y0 = L.y + 0.062 + ((0.102 - Math.abs(dx)) / 0.102) * 0.062 - 0.006;
+        p.tri(L.x + dx - 0.016, y0, L.x + dx + 0.016, y0, L.x + dx, y0 + len, 0xbfeaff);
+        p.tri(L.x + dx - 0.016, y0, L.x + dx - 0.002, y0, L.x + dx, y0 + len, 0xffffff, 0.6);
+      }
+      break;
+    }
     default: {
       // staff-square: квадратный фонарь с крышей (как у прежнего Lumo)
       shaft(STAFF_T);
@@ -1075,7 +1267,7 @@ function drawArm(p: Pen, look: Look, angle = 0) {
   const rot = (x: number, y: number): [number, number] => [x * c - y * s, x * s + y * c];
   const [hx, hy] = rot(-0.11, 0.115);
   sleeve(p, hx, hy, look.outfit, pal);
-  hand(p, hx, hy);
+  hand(p, hx, hy, look.accessory === 'acc-mittens', hx, hy);
 }
 
 // ---------------------------------------------------------------------------
@@ -1112,7 +1304,7 @@ function renderLumo(p: Pen, look: Look, blink: boolean, parts: Parts) {
   if (parts.hat) hatFront(p, look.hat, pal);
   if (parts.staff) {
     drawStaff(p, look.staff);
-    hand(p, STAFF_HAND.x, STAFF_HAND.y);
+    hand(p, STAFF_HAND.x, STAFF_HAND.y, look.accessory === 'acc-mittens', STAFF_HAND.x - 0.16, STAFF_HAND.y - 0.085);
   }
   if (parts.arm) drawArm(p.at(ARM_PIVOT.x, ARM_PIVOT.y), look);
 }
@@ -1354,15 +1546,42 @@ function fireflyBody(p: Pen) {
   p.stroke(quad(0.17, -0.14, 0.2, -0.24, 0.27, -0.27, 6), 0.018, 0x3a3350);
   p.stroke(quad(0.13, -0.14, 0.12, -0.25, 0.17, -0.3, 6), 0.018, 0x3a3350);
 }
-// Совёнок
-function owletBody(p: Pen) {
-  const b = 0x8a6f5a;
+// Совёнок (бурый) и снежный совёнок (белый, с жёлтыми глазами и крапинками)
+interface OwlColors {
+  body: number;
+  wing: number;
+  belly: number;
+  chevron: number;
+  face: number;
+  lid: number;
+  lidLine: number;
+  iris?: number;
+  speckle?: number;
+}
+const OWL_BROWN: OwlColors = { body: 0x8a6f5a, wing: 0x6e5644, belly: 0xd8c3a5, chevron: 0xa88a6a, face: 0xe8d8c0, lid: 0xb89a7c, lidLine: 0x5a4636 };
+const OWL_SNOW: OwlColors = { body: 0xeef2fa, wing: 0xd2dbec, belly: 0xffffff, chevron: 0x8a94b0, face: 0xffffff, lid: 0xdfe6f4, lidLine: 0x7a84a0, iris: 0xffd23a, speckle: 0x6a7490 };
+function owletBody(p: Pen, o: OwlColors = OWL_BROWN) {
+  const b = o.body;
   p.tri(-0.24, -0.12, -0.16, -0.12, -0.25, -0.3, b);
   p.tri(0.24, -0.12, 0.16, -0.12, 0.25, -0.3, b);
   p.ellipse(0, 0.12, 0.6, 0.66, b);
-  p.ellipse(-0.27, 0.18, 0.16, 0.36, 0x6e5644, 1, 0.2);
-  p.ellipse(0.27, 0.18, 0.16, 0.36, 0x6e5644, 1, -0.2);
-  p.ellipse(0, 0.25, 0.36, 0.36, 0xd8c3a5);
+  p.ellipse(-0.27, 0.18, 0.16, 0.36, o.wing, 1, 0.2);
+  p.ellipse(0.27, 0.18, 0.16, 0.36, o.wing, 1, -0.2);
+  if (o.speckle) {
+    for (const [x, y] of [
+      [-0.28, 0.1],
+      [-0.25, 0.22],
+      [-0.29, 0.28],
+      [0.28, 0.1],
+      [0.25, 0.22],
+      [0.29, 0.28],
+      [-0.17, -0.2],
+      [0.17, -0.2],
+      [0, -0.24],
+    ])
+      p.circle(x, y, 0.018, o.speckle, 0.7);
+  }
+  p.ellipse(0, 0.25, 0.36, 0.36, o.belly);
   for (const [x, y] of [
     [-0.08, 0.18],
     [0.08, 0.18],
@@ -1370,20 +1589,28 @@ function owletBody(p: Pen) {
     [-0.08, 0.32],
     [0.08, 0.32],
   ])
-    p.stroke([x - 0.03, y - 0.015, x, y + 0.012, x + 0.03, y - 0.015], 0.016, 0xa88a6a);
-  p.ellipse(0, -0.04, 0.5, 0.3, 0xe8d8c0);
+    p.stroke([x - 0.03, y - 0.015, x, y + 0.012, x + 0.03, y - 0.015], 0.016, o.chevron);
+  p.ellipse(0, -0.04, 0.5, 0.3, o.face);
   for (const x of [-0.12, 0.12]) {
     p.circle(x, -0.04, 0.105, 0xffffff);
+    if (o.iris) p.circle(x + 0.01, -0.035, 0.082, o.iris);
     p.circle(x + 0.01, -0.035, 0.06, INK);
     p.circle(x + 0.03, -0.055, 0.02, 0xffffff);
   }
-  p.tri(-0.035, 0.04, 0.035, 0.04, 0, 0.1, 0xffa13b);
-  for (const x of [-0.09, 0.09]) for (const d of [-0.03, 0, 0.03]) p.circle(x + d, 0.44, 0.02, 0xffa13b);
+  p.tri(-0.035, 0.04, 0.035, 0.04, 0, 0.1, o.iris ? 0x4a4a5a : 0xffa13b);
+  for (const x of [-0.09, 0.09]) for (const d of [-0.03, 0, 0.03]) p.circle(x + d, 0.44, 0.02, o.iris ? 0x9aa0b4 : 0xffa13b);
+  if (o === OWL_SNOW) {
+    // Крошечный вязаный шарфик
+    p.poly(cat(quad(-0.22, 0.08, 0, 0.15, 0.22, 0.08, 8), quad(0.22, 0.13, 0, 0.2, -0.22, 0.13, 8)), MITTEN);
+    p.poly([0.1, 0.13, 0.17, 0.12, 0.2, 0.27, 0.13, 0.28], MITTEN);
+    p.line(0.115, 0.2, 0.18, 0.195, 0.018, KNIT_CREAM);
+    p.stroke(quad(-0.22, 0.105, 0, 0.175, 0.22, 0.105, 8), 0.014, KNIT_CREAM, 0.9);
+  }
 }
-function owletLids(p: Pen) {
+function owletLids(p: Pen, o: OwlColors = OWL_BROWN) {
   for (const x of [-0.12, 0.12]) {
-    p.circle(x, -0.04, 0.11, 0xb89a7c);
-    p.stroke(arcP(x, -0.04, 0.07, 0.03, 0.2, Math.PI - 0.2, 8), 0.016, 0x5a4636);
+    p.circle(x, -0.04, 0.11, o.lid);
+    p.stroke(arcP(x, -0.04, 0.07, 0.03, 0.2, Math.PI - 0.2, 8), 0.016, o.lidLine);
   }
 }
 // Котик (смотрит вправо, сидит)
@@ -1514,8 +1741,9 @@ export function drawPet(g: G, s: number, petId: string) {
       fireflyBody(p);
       break;
     case 'pet-owlet':
+    case 'pet-snowowl':
       petShadow(p);
-      owletBody(p);
+      owletBody(p, petId === 'pet-snowowl' ? OWL_SNOW : OWL_BROWN);
       break;
     case 'pet-kitten':
       petShadow(p);
@@ -1565,13 +1793,15 @@ export function createPet(scene: Phaser.Scene, s: number, petId: string): Phaser
       tw({ targets: wings, scaleY: 0.5, y: -0.1 * u, duration: 70, yoyo: true, repeat: -1 });
       break;
     }
-    case 'pet-owlet': {
+    case 'pet-owlet':
+    case 'pet-snowowl': {
+      const oc = petId === 'pet-snowowl' ? OWL_SNOW : OWL_BROWN;
       const body = gfx();
       const p = new Pen(body, u);
       petShadow(p);
-      owletBody(p);
+      owletBody(p, oc);
       const lids = gfx();
-      owletLids(new Pen(lids, u));
+      owletLids(new Pen(lids, u), oc);
       lids.setVisible(false);
       c.add([body, lids]);
       const blink = () => {
@@ -1797,6 +2027,7 @@ const LAMP: Record<string, LampStyle> = {
   'lamp-star': { frame: 0xffb84d, glass: 0xfff6e0, glow: 0xffe08a },
   'lamp-moon': { frame: 0x9cb0ff, glass: 0xf4f6ff, glow: 0xcfd8ff },
   'lamp-gold': { frame: 0xffcf4d, glass: 0xfffbe8, glow: 0xffe08a },
+  'lamp-icicle': { frame: 0x7cc8f0, glass: 0xeefcff, glow: 0xb8ecff },
 };
 
 /** Цвет свечения фонаря на поле в этом стиле. */
@@ -1912,6 +2143,34 @@ export function drawFieldLamp(g: G, styleId: string, s: number, lit: boolean) {
       if (on) p.circle(-0.07, -0.3, 0.018, 0xffffff, 0.8);
       break;
     }
+    case 'lamp-icicle': {
+      // Фонарь-сосулька: столб в инее, ледяной фонарь под снежной крышей, по краям свисают сосульки
+      stdPost();
+      p.circle(-0.03, 0.05, 0.03, on ? 0xffffff : 0x8a90a8, 0.8);
+      p.circle(0.025, -0.05, 0.022, on ? 0xffffff : 0x8a90a8, 0.7);
+      const ice = on ? 0xc8f0ff : 0x55607a;
+      const iceHi = on ? 0xffffff : 0x7a84a0;
+      p.rect(-0.15, -0.37, 0.3, 0.3, frame, 1, 0.07);
+      p.rect(-0.11, -0.33, 0.22, 0.22, glass, 1, 0.05);
+      if (on) p.poly([-0.11, -0.33, 0.0, -0.33, -0.11, -0.2], 0xffffff, 0.45);
+      // Сосульки под фонарём
+      for (const [x, len] of [
+        [-0.12, 0.1],
+        [-0.065, 0.16],
+        [0.065, 0.12],
+        [0.12, 0.08],
+      ] as const) {
+        p.tri(x - 0.025, -0.075, x + 0.025, -0.075, x, -0.075 + len, ice);
+        p.tri(x - 0.025, -0.075, x - 0.005, -0.075, x, -0.075 + len, iceHi, 0.55);
+      }
+      // Крыша со снегом и сосульки с крыши
+      p.tri(-0.19, -0.36, 0.19, -0.36, 0, -0.47, C.post);
+      p.poly(cat(quad(-0.21, -0.35, -0.12, -0.44, 0, -0.485, 8), quad(0, -0.485, 0.12, -0.44, 0.21, -0.35, 8), quad(0.21, -0.35, 0, -0.38, -0.21, -0.35, 8)), on ? 0xffffff : 0x8a90a8);
+      for (const x of [-0.17, 0.17]) p.tri(x - 0.022, -0.355, x + 0.022, -0.355, x, -0.27, ice);
+      core(0, -0.22);
+      if (on) for (const [x, y] of [[-0.24, -0.3], [0.25, -0.18], [-0.22, -0.05]] as const) p.star(x, y, 0.03, 0xffffff, 0.85, 0.35);
+      break;
+    }
     default: {
       // lamp-classic: как drawLamp в BoardView
       stdPost();
@@ -1955,6 +2214,13 @@ export function drawItemIcon(g: G, s: number, itemId: string) {
       break;
     }
     case 'accessory': {
+      if (itemId === 'acc-mittens') {
+        // Пара варежек на шнурке крупно
+        p.stroke(quad(-0.2, -0.12, 0, 0.12, 0.2, -0.12, 12), 0.018, KNIT_CREAM, 0.9);
+        mitten(p, -0.17, 0.06, -0.25, -1, 3.2);
+        mitten(new Pen(g, s, -1), -0.17, 0.06, -0.25, -1, 3.2);
+        break;
+      }
       const k = 0.88;
       renderLumo(new Pen(g, s * k, 1, -s * 0.02, s * 0.06), look, false, { ...ALL, staff: false });
       break;

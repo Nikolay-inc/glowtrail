@@ -1,7 +1,7 @@
 // Как плитка ложится на поле. Общая часть для правил игры и решателей.
 // Здесь же — «часы» уровня: поворотные мосты и гаснущие фонари зависят от числа поставленных плиток.
 
-import { DX, DY, turnLeft, turnRight, type Dir, type Level, type Point, type TileKind } from './types';
+import { DX, DY, goalNeedsLanterns, turnLeft, turnRight, type Dir, type Level, type Point, type TileKind } from './types';
 
 export type BlockReason =
   | 'edge'
@@ -12,12 +12,20 @@ export type BlockReason =
   | 'exitPassThrough'
   | 'bridgeNeedsWater'
   /** Поворотный мост стоит поперёк дороги (или на мосту нельзя повернуть). */
-  | 'bridgeTurned';
+  | 'bridgeTurned'
+  /** Сугроб: растает, только когда загорится соседний фонарь. */
+  | 'drift'
+  /** Сигнальный огонь не по порядку: сначала нужно зажечь предыдущий. */
+  | 'fireOrder';
 
 export interface PlacedCell extends Point {
   idx: number;
   /** Грибное кольцо: in — дорога вошла в кольцо, out — вышла из парного (Lumo исчезает и появляется). */
   portal?: 'in' | 'out';
+  /** Направление, в котором дорога вошла в клетку. */
+  din?: Dir;
+  /** Клетку прошли не плиткой, а сами: скольжение по льду (ice) или порыв ветра (wind). */
+  forced?: 'ice' | 'wind';
 }
 
 /** Куда ляжет плитка и можно ли её поставить. */
@@ -33,6 +41,8 @@ export interface Placement {
   /** Клетка, в которую упёрлась плитка, если её нельзя поставить. */
   blocked?: Point;
   reason?: BlockReason;
+  /** Сигнальный огонь, который не загорелся (не по порядку) — мигает номером. */
+  fire?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -131,7 +141,7 @@ export function fadeLeft(level: Level, ts: TimeState, k: number): number {
 
 /** Какой-то гаснущий фонарь уже погас — арку не открыть. */
 export function anyExpired(level: Level, ts: TimeState): boolean {
-  if (level.goal !== 'classic') return false;
+  if (!goalNeedsLanterns(level.goal)) return false;
   for (let k = 0; k < level.fades.length; k++) if (fadeLeft(level, ts, k) === 0) return true;
   return false;
 }
@@ -200,11 +210,37 @@ export function goalReached(level: Level, head: number, isOnRoad: (idx: number) 
   return head === level.exit.y * level.width + level.exit.x;
 }
 
+/** Сугроб в клетке idx растаял: рядом (по стороне) горит фонарь — он на дороге. */
+export function driftMelted(level: Level, isOnRoad: (idx: number) => boolean, idx: number): boolean {
+  const x = idx % level.width;
+  const y = Math.floor(idx / level.width);
+  for (let d = 0; d < 4; d++) {
+    const nx = x + DX[d];
+    const ny = y + DY[d];
+    if (nx < 0 || ny < 0 || nx >= level.width || ny >= level.height) continue;
+    const n = ny * level.width + nx;
+    if (level.cells[n] === 'lantern' && isOnRoad(n)) return true;
+  }
+  return false;
+}
+
+/** Сколько сигнальных огней уже горит (они зажигаются только по порядку — горят первые n). */
+export function firesLit(level: Level, isOnRoad: (idx: number) => boolean): number {
+  let n = 0;
+  while (n < level.fires.length && isOnRoad(level.fires[n])) n++;
+  return n;
+}
+
 /**
  * Проверяет плитку относительно конца дороги. Общая функция для игры и решателя.
  * Плитка всегда идёт на шаг (или два) вперёд от конца дороги; поворот занимает клетку впереди
  * и разворачивает дорогу налево или направо. «Прыжок» перелетает через одну клетку (кроме арки)
  * и встаёт на следующую; перепрыгнутая клетка на дорогу не попадает (фонарь не зажигается).
+ * После плитки — то, что двигает Lumo само: закончил ход на льду — скользит дальше по направлению дороги,
+ * пока не встанет на не-ледяную клетку (камень, край поля и прочие препятствия останавливают на последней
+ * ледяной); закончил ход на ветре — порыв сдвигает на клетку по стрелке (если там не препятствие), дорога
+ * поворачивает по ветру, и на льду скольжение продолжается. Сугроб непроходим, пока рядом не горит фонарь;
+ * сигнальный огонь можно пройти, только если горят все предыдущие (тогда он загорается).
  * ts — время уровня (поворотные мосты, гаснущие фонари); без него — начало уровня.
  */
 export function placeTile(
@@ -218,18 +254,30 @@ export function placeTile(
   const { steps, newDir } = tileShape(kind, dir);
   const t = ts?.t ?? 0;
   const cells: PlacedCell[] = [];
+  // Клетки этого хода — уже дорога (фонарь рядом с сугробом, огонь по порядку, второй раз не пройти).
+  const here = new Set<number>();
+  const onRoad = (i: number) => here.has(i) || isOnRoad(i);
   let jumped: PlacedCell | undefined;
   let x = head % level.width;
   let y = Math.floor(head / level.width);
-  // Сколько фонарей ещё не горит — выход открывается, только когда горят все.
+  // Сколько фонарей и сигнальных огней ещё не горит — выход открывается, только когда горят все.
   let lanternsLeft = 0;
+  let fires = level.fires.length ? firesLit(level, isOnRoad) : 0;
   // «Побег»: арка открыта сразу, фонари только задерживают тень.
-  if (level.goal !== 'escape') for (const l of level.lanterns) {
-    if (!isOnRoad(l)) lanternsLeft++;
-    else if (level.fade[l] > 0 && ts && fadeLeft(level, ts, level.fades.indexOf(l)) <= 0) lanternsLeft++;
+  if (level.goal !== 'escape') {
+    for (const l of level.lanterns) {
+      if (!isOnRoad(l)) lanternsLeft++;
+      else if (level.fade[l] > 0 && ts && fadeLeft(level, ts, level.fades.indexOf(l)) <= 0) lanternsLeft++;
+    }
+    lanternsLeft += level.fires.length - fires;
   }
+  const exitIdx = level.exit.y * level.width + level.exit.x;
+  const push = (c: PlacedCell) => {
+    cells.push(c);
+    here.add(c.idx);
+  };
 
-  const fail = (reason: BlockReason): Placement => ({ ok: false, kind, cells, newDir, jumped, blocked: { x, y }, reason });
+  const fail = (reason: BlockReason, fire?: number): Placement => ({ ok: false, kind, cells, newDir, jumped, blocked: { x, y }, reason, ...(fire !== undefined ? { fire } : {}) });
 
   for (let s = 0; s < steps; s++) {
     x += DX[dir];
@@ -243,8 +291,9 @@ export function placeTile(
       jumped = { x, y, idx };
       continue;
     }
-    if (isOnRoad(idx)) return fail('road');
+    if (onRoad(idx)) return fail('road');
     if (type === 'rock') return fail('rock');
+    if (type === 'drift' && !driftMelted(level, onRoad, idx)) return fail('drift');
     if (type === 'turnbridge') {
       // По поворотному мосту — только прямо и только вдоль моста.
       if (kind === 'bridge') return fail('bridgeNeedsWater');
@@ -256,18 +305,60 @@ export function placeTile(
       if (s !== steps - 1) return fail('exitPassThrough');
       if (lanternsLeft > 0) return fail('exitClosed');
     }
+    if (type === 'fire') {
+      if (level.fireNo[idx] !== fires + 1) return fail('fireOrder', idx);
+      fires++;
+      lanternsLeft--;
+    }
     if (type === 'lantern') lanternsLeft--;
     if (type === 'ring') {
       // Грибное кольцо: дорога выходит из парного кольца в том же направлении.
       const to = level.ringPair[idx];
-      if (to < 0 || isOnRoad(to)) return fail('road');
-      cells.push({ x, y, idx, portal: 'in' });
+      if (to < 0 || onRoad(to)) return fail('road');
+      push({ x, y, idx, portal: 'in', din: dir });
       x = to % level.width;
       y = Math.floor(to / level.width);
-      cells.push({ x, y, idx: to, portal: 'out' });
+      push({ x, y, idx: to, portal: 'out', din: dir });
       continue;
     }
-    cells.push({ x, y, idx });
+    push({ x, y, idx, din: dir });
   }
-  return { ok: true, kind, cells, newDir, jumped };
+
+  // Lumo двигается само: скольжение по льду и порывы ветра (пока есть куда).
+  let d = newDir;
+  for (let guard = 0; guard < 64; guard++) {
+    const last = cells[cells.length - 1];
+    if (!last || last.idx === exitIdx) break;
+    const lt = level.cells[last.idx];
+    let md: Dir;
+    if (lt === 'ice') md = d;
+    else if (lt === 'wind' && level.wind[last.idx] >= 0) md = level.wind[last.idx] as Dir;
+    else break;
+    const nx = last.x + DX[md];
+    const ny = last.y + DY[md];
+    if (nx < 0 || ny < 0 || nx >= level.width || ny >= level.height) break;
+    const idx = ny * level.width + nx;
+    const type = level.cells[idx];
+    if (onRoad(idx) || type === 'rock' || type === 'water') break;
+    if (type === 'drift' && !driftMelted(level, onRoad, idx)) break;
+    if (type === 'turnbridge' && !bridgeAllows(level, idx, t, md)) break;
+    if (type === 'exit' && lanternsLeft > 0) break;
+    if (type === 'fire') {
+      if (level.fireNo[idx] !== fires + 1) break;
+      fires++;
+      lanternsLeft--;
+    }
+    if (type === 'lantern') lanternsLeft--;
+    const forced = lt === 'ice' ? 'ice' : 'wind';
+    d = md;
+    if (type === 'ring') {
+      const to = level.ringPair[idx];
+      if (to < 0 || onRoad(to)) break;
+      push({ x: nx, y: ny, idx, portal: 'in', din: md, forced });
+      push({ x: to % level.width, y: Math.floor(to / level.width), idx: to, portal: 'out', din: md, forced });
+      continue;
+    }
+    push({ x: nx, y: ny, idx, din: md, forced });
+  }
+  return { ok: true, kind, cells, newDir: d, jumped };
 }

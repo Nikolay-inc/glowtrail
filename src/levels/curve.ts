@@ -1,4 +1,4 @@
-// Планы миров: «Долина» (уровни 11–30) и «Туманный лес» (31–60) — роль уровня в «пиле» десятка, целевой
+// Планы миров: «Долина» (уровни 11–30), «Туманный лес» (31–60) и «Ледяные вершины» (61–90) — роль уровня в «пиле» десятка, целевой
 // рейтинг сложности, максимальный размер поля и элементы. По этому плану npm run pick подбирает уровни из
 // кандидатов генератора, а npm run verify проверяет кривую.
 //
@@ -57,7 +57,9 @@ export const needsChoice = (slot: Slot) => slot.role === 'medium' || slot.role =
 export const mustBeEasy = (slot: Slot) => slot.role === 'easy' || !!slot.intro;
 
 /** Что проверяем у блока новинок (verify): признак уровня. */
-export type NoveltyTest = 'firefly' | 'jump' | 'ffgoal' | 'turnbridge' | 'fade' | 'valleyAll' | 'ring' | 'fog' | 'shadow' | 'ringFog' | 'escape' | 'combo' | 'boss';
+export type NoveltyTest =
+  | 'firefly' | 'jump' | 'ffgoal' | 'turnbridge' | 'fade' | 'valleyAll' | 'ring' | 'fog' | 'shadow' | 'ringFog' | 'escape' | 'combo' | 'boss'
+  | 'ice' | 'drift' | 'iceDrift' | 'wind' | 'windPast' | 'signals' | 'signalsMix' | 'summit';
 
 /** Блоки миров: что нового появляется (каждые ~5 уровней). */
 export const NOVELTY: { from: number; to: number; what: string; test: NoveltyTest }[] = [
@@ -74,7 +76,18 @@ export const NOVELTY: { from: number; to: number; what: string; test: NoveltyTes
   { from: 51, to: 55, what: 'цель «Побег»', test: 'escape' },
   { from: 56, to: 58, what: 'сочетания с механиками долины', test: 'combo' },
   { from: 60, to: 60, what: 'босс: побег через туман с кольцами', test: 'boss' },
+  { from: 61, to: 64, what: 'лёд', test: 'ice' },
+  { from: 65, to: 65, what: 'сугроб и тёплый фонарь', test: 'drift' },
+  { from: 66, to: 68, what: 'лёд + сугроб', test: 'iceDrift' },
+  { from: 71, to: 73, what: 'ветер', test: 'wind' },
+  { from: 74, to: 78, what: 'ветер + лёд + механики прошлых миров', test: 'windPast' },
+  { from: 81, to: 83, what: 'цель «Сигнальные огни»', test: 'signals' },
+  { from: 84, to: 88, what: 'огни + лёд/ветер/туман', test: 'signalsMix' },
+  { from: 90, to: 90, what: 'испытание «Вершина»: огни, лёд и ветер', test: 'summit' },
 ];
+
+/** До этого уровня — не больше одной цепочки «ветер → лёд» на уровень. */
+export const WIND_CHAIN_FREE_FROM = 81;
 
 const BASIC: Feature[] = ['lantern', 'rock', 'water', 'firefly'];
 const S = (
@@ -165,10 +178,52 @@ export const FOREST_PLAN: Slot[] = [
 // Светлячки в лесу — по желанию на любом уровне (как в «Долине»: на 1, 3, 7 уровнях десятка — по 2, на испытаниях — 4).
 for (const slot of FOREST_PLAN) if (!slot.allows.includes('firefly')) slot.allows.push('firefly');
 
+// «Ледяные вершины» (61–90): лёд, сугробы у фонарей, ветер, цель «Сигнальные огни». Рейтинг по десяткам
+// ~3,5 → 4 → 4,5, пик ~6 на испытаниях; поле до 6x8.
+const SIG: { goal: GoalType } = { goal: 'signals' };
+export const PEAKS_PLAN: Slot[] = [
+  // 61–64: лёд
+  S(61, 'easy', 2.5, '5x6', ['ice'], ['rock'], 'Первый лёд', { intro: true }),
+  S(62, 'easy', 3, '5x7', ['ice', 'lantern'], ['rock'], 'Скользкая тропа'),
+  S(63, 'easy', 3, '5x7', ['ice', 'rock'], ['lantern'], 'Ледяные валуны'),
+  S(64, 'medium', 4, '6x7', ['ice', 'water'], ['rock', 'lantern'], 'Полынья'),
+  // 65: сугроб и тёплый фонарь; 66–68: лёд + сугроб
+  S(65, 'easy', 2.5, '5x6', ['drift', 'lantern'], ['rock'], 'Тёплый фонарь', { intro: true }),
+  S(66, 'medium', 4, '6x7', ['ice', 'drift', 'lantern'], ['rock'], 'Оттепель'),
+  S(67, 'medium', 4.5, '6x7', ['ice', 'drift', 'lantern'], ['rock', 'water'], 'Снежный перевал'),
+  S(68, 'harder', 5, '6x8', ['ice', 'drift', 'lantern'], ['rock', 'water'], 'Ледник'),
+  S(69, 'breather', 3, '5x6', ['ice'], ['rock', 'lantern'], 'Привал у костра'),
+  S(70, 'challenge', 5.5, '6x8', ['ice', 'drift', 'lantern'], ['rock', 'water', 'jump'], 'Испытание льда'),
+  // 71–73: ветер; 74–78: ветер + лёд + мосты и кольца
+  S(71, 'easy', 2.5, '5x6', ['wind'], ['rock'], 'Первый порыв', { intro: true }),
+  S(72, 'easy', 3, '5x7', ['wind', 'lantern'], ['rock'], 'Ветреный склон'),
+  S(73, 'easy', 3, '5x7', ['wind', 'rock'], ['lantern'], 'Флюгер'),
+  S(74, 'medium', 4, '6x7', ['wind', 'ice'], ['rock', 'lantern'], 'Позёмка'),
+  S(75, 'medium', 4.5, '6x7', ['wind', 'ice', 'turnbridge'], ['water', 'rock', 'lantern'], 'Горная мельница'),
+  S(76, 'medium', 4.5, '6x8', ['wind', 'ring'], ['ice', 'rock', 'lantern'], 'Грибы под снегом'),
+  S(77, 'medium', 5, '6x8', ['wind', 'ice', 'ring'], ['rock', 'lantern'], 'Метель'),
+  S(78, 'harder', 5, '6x8', ['wind', 'ice', 'water'], ['rock', 'lantern'], 'Ледяная река'),
+  S(79, 'breather', 3, '5x6', ['wind'], ['rock', 'lantern'], 'Затишье'),
+  S(80, 'challenge', 6, '6x8', ['wind', 'ice', 'drift', 'lantern'], ['rock', 'water'], 'Испытание ветра'),
+  // 81–83: цель «Сигнальные огни»; 84–88: огни + лёд, ветер, туман
+  S(81, 'easy', 2.5, '5x6', [], ['rock'], 'Сигнальные огни', { ...SIG, intro: true }),
+  S(82, 'easy', 3, '5x7', ['rock'], ['lantern'], 'Цепочка костров', SIG),
+  S(83, 'easy', 3, '5x7', ['ice'], ['rock'], 'Огни на льду', SIG),
+  S(84, 'medium', 4.5, '6x7', ['ice'], ['rock', 'lantern', 'water'], 'Ледяные маяки', SIG),
+  S(85, 'medium', 4.5, '6x7', ['wind'], ['rock', 'lantern', 'ice'], 'Огни на ветру', SIG),
+  S(86, 'medium', 5, '6x7', ['fog'], ['rock', 'lantern'], 'Костры в тумане', SIG),
+  S(87, 'medium', 5, '6x8', ['ice', 'wind'], ['rock', 'lantern'], 'Буран', SIG),
+  S(88, 'harder', 5.5, '6x8', ['fog', 'ice'], ['rock', 'lantern'], 'Белая мгла', SIG),
+  S(89, 'breather', 3, '5x6', [], ['rock', 'ice'], 'Звёздная ночь', SIG),
+  // 90: испытание «Вершина» — огни, лёд и ветер
+  S(90, 'challenge', 6, '6x8', ['ice', 'wind'], ['rock', 'lantern', 'drift', 'water'], 'Вершина', SIG),
+];
+for (const slot of PEAKS_PLAN) if (!slot.allows.includes('firefly')) slot.allows.push('firefly');
+
 /** Планы по мирам (id мира → слоты). */
-export const WORLD_PLANS: Record<string, Slot[]> = { valley: VALLEY_PLAN, forest: FOREST_PLAN };
+export const WORLD_PLANS: Record<string, Slot[]> = { valley: VALLEY_PLAN, forest: FOREST_PLAN, peaks: PEAKS_PLAN };
 /** Все слоты всех миров по порядку. */
-export const ALL_SLOTS: Slot[] = [...VALLEY_PLAN, ...FOREST_PLAN];
+export const ALL_SLOTS: Slot[] = [...VALLEY_PLAN, ...FOREST_PLAN, ...PEAKS_PLAN];
 
 export function slotOf(num: number): Slot | undefined {
   return ALL_SLOTS.find((s) => s.num === num);

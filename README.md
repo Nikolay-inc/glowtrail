@@ -1,7 +1,7 @@
 # Glowtrail
 
 Головоломка: фонарщик Lumo прокладывает дорогу из плиток к арке-выходу и по пути зажигает фонари.
-Два мира: «Долина» (уровни 1–30) и «Туманный лес» (31–60: грибные кольца-телепорты, туман, тень, цель «Побег»).
+Три мира: «Долина» (уровни 1–30), «Туманный лес» (31–60: грибные кольца-телепорты, туман, тень, цель «Побег») и «Ледяные вершины» (61–90: лёд, сугробы и тёплые фонари, ветер, цель «Сигнальные огни»).
 TypeScript + Phaser 3 + Vite. Веб-версия: https://nikolay-inc.github.io/glowtrail/.
 Мобильное приложение собирается из той же игры через Capacitor (iOS и Android).
 
@@ -19,10 +19,10 @@ npm run dev
 
 - `npm test` — тесты (Vitest)
 - `npm run sim-economy` — симуляция экономики первых 2 часов игры
-- `npm run verify` — таблица метрик и проверка всех уровней и кривой сложности (`--world forest --md` — таблица леса в Markdown)
+- `npm run verify` — таблица метрик и проверка всех уровней и кривой сложности (`--world forest --md` — таблица леса в Markdown, `--world peaks --md` — вершин)
 - `npm run ease` — пересчитать колоды облегчения и метрики уровней (после изменения уровня)
 - `npm run gen -- --count 300 --size 5x6 --features lantern,rock,water,firefly,jump,turnbridge,fade,ring,fog,shadow --seed 1 [--goal fireflies|escape]` — сгенерировать кандидатов в уровни (`generated/`)
-- `npm run pick` — подобрать из кандидатов уровни 11–30 под план мира (`src/levels/curve.ts`); `--world forest` — уровни 31–60
+- `npm run pick` — подобрать из кандидатов уровни 11–30 под план мира (`src/levels/curve.ts`); `--world forest` — уровни 31–60, `--world peaks` — 61–90
 - Редактор уровней: `npm run dev` и открыть http://localhost:5173/?editor=1 (только при разработке)
 - `npm run build` — сборка для GitHub Pages в `dist/`
 - Деплой: пуш в `main` → GitHub Actions → GitHub Pages

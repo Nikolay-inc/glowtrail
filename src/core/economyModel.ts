@@ -258,13 +258,14 @@ interface District {
 }
 
 /**
- * Уровни трёх глав: настоящие уровни из списка (глава 1 — «Долина», глава 2 — «Туманный лес», если они
- * переданы), остальные главы — по плану (plannedLevels).
+ * Уровни трёх глав: настоящие уровни из списка (глава 1 — «Долина», глава 2 — «Туманный лес», глава 3 —
+ * «Ледяные вершины», если они переданы); глава, которой в списке нет целиком, — по плану (plannedLevels).
  */
 export function chapterLevels(levels: ModelLevel[]): ModelLevel[][] {
   const real = (c: 1 | 2 | 3) => levels.filter((l) => l.chapter === c);
   const ch2 = real(2);
-  return [real(1), ch2.length >= 30 ? ch2.slice(0, 30) : plannedLevels(2), plannedLevels(3)];
+  const ch3 = real(3);
+  return [real(1), ch2.length >= 30 ? ch2.slice(0, 30) : plannedLevels(2), ch3.length >= 30 ? ch3.slice(0, 30) : plannedLevels(3)];
 }
 
 /** Вещи «за монеты» с ценой в своей валюте (обычные и половина редких — свет). */

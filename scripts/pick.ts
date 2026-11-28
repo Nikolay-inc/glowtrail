@@ -5,18 +5,19 @@
 //
 //   npm run pick                  — «Долина» (11–30): подобрать и записать
 //   npm run pick -- --world forest — «Туманный лес» (31–60)
+//   npm run pick -- --world peaks  — «Ледяные вершины» (61–90)
 //   npm run pick -- --dry         — только показать, что выбрано бы
 //   npm run pick -- --only 14,20  — перевыбрать только эти уровни (номера по порядку, остальные не трогать)
 
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { parseLevel } from '../src/core/level';
 import { analyzeLevel, ratingOf } from '../src/core/difficulty';
-import { featuresOf, GEN_MAX_STATES, type Candidate } from '../src/core/generator';
+import { featuresOf, GEN_MAX_STATES, usesFeatures, windIceChains, type Candidate } from '../src/core/generator';
 import { easeDeck, TooManyStates } from '../src/core/solver';
 import type { DifficultyReport } from '../src/core/difficulty';
 import { starThresholds } from '../src/core/game';
 import type { LevelData } from '../src/core/types';
-import { BREATHER_MAX_RATING, BREATHER_MIN_ROADS, EASY_MAX_RATING, EASY_MIN_ROADS, MEDIUM_MIN_ROADS, mustBeEasy, needsChoice, WORLD_PLANS, type Slot } from '../src/levels/curve';
+import { WIND_CHAIN_FREE_FROM, BREATHER_MAX_RATING, BREATHER_MIN_ROADS, EASY_MAX_RATING, EASY_MIN_ROADS, MEDIUM_MIN_ROADS, mustBeEasy, needsChoice, WORLD_PLANS, type Slot } from '../src/levels/curve';
 
 const dry = process.argv.includes('--dry');
 const onlyArg = process.argv.indexOf('--only');
@@ -61,8 +62,12 @@ function fits(slot: Slot, c: Candidate): boolean {
   // Средние и «сложнее» — не меньше 4 решений; пороги звёзд 2★ и 3★ различаются (запас хотя бы 3 плитки).
   if (needsChoice(slot) && c.metrics.roads < MEDIUM_MIN_ROADS) return false;
   if (c.data.stars.two >= c.data.stars.three) return false;
-  const f = featuresOf(parseLevel(c.data));
+  const lv = parseLevel(c.data);
+  const f = featuresOf(lv);
   if (!slot.needs.every((x) => f.includes(x))) return false;
+  if (slot.num < WIND_CHAIN_FREE_FROM && windIceChains(lv) > 1) return false;
+  // Лёд и ветер из обязательных элементов должны работать в лучшем решении (знакомство без скольжения ничему не учит).
+  if (!usesFeatures(lv, slot.needs)) return false;
   if (!f.every((x) => slot.needs.includes(x) || slot.allows.includes(x))) return false;
   // Туман «без угадывания» генератор уже проверил (fogGuess), итог ещё раз проверяет verify.
   return true;

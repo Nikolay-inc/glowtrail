@@ -1,0 +1,71 @@
+{
+  "id": "peaks-11",
+  "name": "Первый порыв",
+  "grid": [
+    "..E..",
+    ".F..#",
+    "..##.",
+    "..F.<",
+    ".....",
+    "....S"
+  ],
+  "startDir": "N",
+  "deck": [
+    "left",
+    "right",
+    "straight",
+    "straight2",
+    "straight",
+    "straight",
+    "right",
+    "left",
+    "right",
+    "straight2",
+    "right",
+    "right"
+  ],
+  "stars": {
+    "two": 2,
+    "three": 4
+  },
+  "easeDecks": [
+    [
+      "left",
+      "right",
+      "straight",
+      "straight2",
+      "left",
+      "straight",
+      "straight",
+      "right",
+      "left",
+      "right",
+      "straight2",
+      "right",
+      "right"
+    ],
+    [
+      "left",
+      "right",
+      "straight",
+      "straight2",
+      "left",
+      "straight",
+      "right",
+      "straight",
+      "right",
+      "left",
+      "right",
+      "straight2",
+      "right",
+      "right"
+    ]
+  ],
+  "metrics": {
+    "rating": 2.3,
+    "roads": 50,
+    "minTiles": 7,
+    "reserve": 5,
+    "trap": 0.205
+  }
+}

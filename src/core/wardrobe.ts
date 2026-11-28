@@ -151,6 +151,16 @@ export const WARDROBE: readonly WardrobeItem[] = [
   item('arch-leaves', 'arch', 'rare', 'cozy'),
   item('arch-crystal', 'arch', 'epic', 'coins', 480),
   item('arch-gold', 'arch', 'special', 'special'),
+  // Зимняя коллекция (Р2б-3) — в конце списка, чтобы не сдвигать чередование «свет / монеты» у прежних редких вещей.
+  // Меховой капюшон и ледяной фонарь — награды построек Горного города (src/core/villageData.ts).
+  item('hat-knit', 'hat', 'common', 'coins', 130),
+  item('acc-knit-scarf', 'accessory', 'common', 'coins', 120),
+  item('acc-mittens', 'accessory', 'common', 'coins', 110),
+  item('hat-fur-hood', 'hat', 'rare', 'village'),
+  item('staff-ice', 'staff', 'epic', 'village'),
+  item('pet-snowowl', 'pet', 'epic', 'coins', 600),
+  item('road-ice', 'road', 'rare', 'coins', 200),
+  item('lamp-icicle', 'lamp', 'rare', 'coins', 210),
 ];
 
 export const itemById = (id: string) => WARDROBE.find((w) => w.id === id);
@@ -250,6 +260,7 @@ export const SETS: readonly OutfitSet[] = [
   { id: 'set-gardener', parts: { hat: 'hat-wreath', face: 'face-smile', outfit: 'outfit-vest', color: 2, staff: 'staff-round', accessory: 'acc-backpack', pet: 'pet-firefly', trail: 'trail-petals' }, aura: 0xffb3cf },
   { id: 'set-gentleman', parts: { hat: 'hat-tophat', face: 'face-monocle', outfit: 'outfit-robe', color: 2, staff: 'staff-diamond', accessory: 'acc-bowtie', pet: 'pet-kitten', trail: 'trail-stars' }, aura: 0xffe08a },
   { id: 'set-dreamer', parts: { hat: 'hat-beret', face: 'face-sleepy', outfit: 'outfit-poncho', color: 2, staff: 'staff-paper', accessory: 'acc-wings', pet: 'pet-moth', trail: 'trail-fireflies' }, aura: 0xc8ff7a },
+  { id: 'set-frost', parts: { hat: 'hat-knit', face: 'face-blush', outfit: 'outfit-sweater', color: 1, staff: 'staff-ice', accessory: 'acc-knit-scarf', pet: 'pet-snowowl', trail: 'trail-snow' }, aura: 0xb8ecff },
   { id: 'set-royal', parts: { hat: 'hat-firefly-crown', face: 'face-determined', outfit: 'outfit-star-robe', color: 0, staff: 'staff-moon', accessory: 'acc-capelet', pet: 'pet-firefly', trail: 'trail-fireflies' }, aura: 0xfff1cc },
 ];
 

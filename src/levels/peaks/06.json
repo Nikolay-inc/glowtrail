@@ -1,0 +1,90 @@
+{
+  "id": "peaks-06",
+  "name": "Оттепель",
+  "grid": [
+    ".L*..E",
+    "......",
+    "#.=..#",
+    ".#=...",
+    "..=...",
+    "..=...",
+    ".S..#."
+  ],
+  "startDir": "N",
+  "deck": [
+    "straight",
+    "straight",
+    "straight",
+    "right",
+    "left",
+    "right",
+    "left",
+    "straight",
+    "left",
+    "straight",
+    "right",
+    "straight2",
+    "right",
+    "right",
+    "straight2",
+    "right",
+    "right",
+    "straight"
+  ],
+  "stars": {
+    "two": 2,
+    "three": 4
+  },
+  "easeDecks": [
+    [
+      "straight",
+      "straight",
+      "straight",
+      "right",
+      "straight2",
+      "left",
+      "right",
+      "left",
+      "straight",
+      "left",
+      "straight",
+      "right",
+      "straight2",
+      "right",
+      "right",
+      "straight2",
+      "right",
+      "right",
+      "straight"
+    ],
+    [
+      "straight",
+      "straight",
+      "straight",
+      "right",
+      "straight2",
+      "left",
+      "right",
+      "left",
+      "straight",
+      "left",
+      "straight",
+      "right",
+      "left",
+      "straight2",
+      "right",
+      "right",
+      "straight2",
+      "right",
+      "right",
+      "straight"
+    ]
+  ],
+  "metrics": {
+    "rating": 4,
+    "roads": 13,
+    "minTiles": 13,
+    "reserve": 5,
+    "trap": 0.237
+  }
+}

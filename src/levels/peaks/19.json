@@ -1,0 +1,71 @@
+{
+  "id": "peaks-19",
+  "name": "Затишье",
+  "grid": [
+    "...E.",
+    "..#..",
+    ".#..^",
+    ".....",
+    ".....",
+    "S...."
+  ],
+  "startDir": "N",
+  "deck": [
+    "right",
+    "right",
+    "left",
+    "straight2",
+    "right",
+    "straight2",
+    "left",
+    "left",
+    "left",
+    "right",
+    "left",
+    "straight2"
+  ],
+  "stars": {
+    "two": 2,
+    "three": 4
+  },
+  "easeDecks": [
+    [
+      "straight",
+      "right",
+      "right",
+      "left",
+      "straight2",
+      "right",
+      "straight2",
+      "left",
+      "left",
+      "left",
+      "right",
+      "left",
+      "straight2"
+    ],
+    [
+      "straight",
+      "right",
+      "right",
+      "left",
+      "straight2",
+      "straight",
+      "right",
+      "straight2",
+      "left",
+      "left",
+      "left",
+      "right",
+      "left",
+      "straight2"
+    ]
+  ],
+  "metrics": {
+    "rating": 3,
+    "roads": 14,
+    "minTiles": 7,
+    "reserve": 5,
+    "trap": 0.243
+  }
+}

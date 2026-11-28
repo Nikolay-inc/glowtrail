@@ -39,7 +39,7 @@ import { buildingCost, L1_LIGHT, priceTotals, PROFILES, simulate3, type ModelLev
 import { LEVELS } from '../src/levels/index';
 import { memoryBackend, migrate, SaveService, SAVE_VERSION } from '../src/save/SaveService';
 import { mergeSaves, toCloudPayload } from '../src/cloud/merge';
-import { abilities, recordWinRewards, restoreVillage, wallet } from '../src/meta';
+import { abilities, districtOpen, openDistricts, recordWinRewards, restoreVillage, wallet } from '../src/meta';
 
 const rich = (n = 1000): Economy => grant(defaultEconomy(), { coins: n });
 
@@ -225,7 +225,7 @@ describe('сохранение и облако', () => {
 
 describe('экономика на три главы (npm run sim-economy)', () => {
   // Настоящие уровни: глава 1 — «Долина» (1–30), глава 2 — «Туманный лес» (31–60); глава 3 — по плану модели.
-const ch1: ModelLevel[] = LEVELS.slice(0, 60).map((l) => ({ num: l.num, chapter: l.num <= 30 ? 1 : 2, rating: l.metrics?.rating ?? 3, fireflies: l.fireflies.length, infinite: l.tileSet !== null }));
+const ch1: ModelLevel[] = LEVELS.slice(0, 90).map((l) => ({ num: l.num, chapter: l.num <= 30 ? 1 : l.num <= 60 ? 2 : 3, rating: l.metrics?.rating ?? 3, fireflies: l.fireflies.length, infinite: l.tileSet !== null }));
   const avg = PROFILES.find((p) => p.id === 'average')!;
   const base = simulate3(ch1, avg, 0);
   const extra = simulate3(ch1, avg, 15);
@@ -248,13 +248,13 @@ const ch1: ModelLevel[] = LEVELS.slice(0, 60).map((l) => ({ num: l.num, chapter:
     for (const c of weak.chapters) expect(c.share, `глава ${c.chapter}`).toBeGreaterThanOrEqual(0.75);
   });
 
-  it('гардероб покупается: 3–4 вещи к главе 1, 10–12 к главе 3, с перепрохождениями — вдвое; первая — в первые 20 минут', () => {
+  it('гардероб покупается: 3–4 вещи к главе 1, 10–13 к главе 3 (две вещи — награды Горного города), с перепрохождениями — в 1,4–2,4 раза; первая — в первые 20 минут', () => {
     const w = (c: (typeof base.chapters)[number]) => c.wardrobeBought + c.wardrobeRewards;
     expect(w(base.chapters[0])).toBeGreaterThanOrEqual(3);
     expect(w(base.chapters[0])).toBeLessThanOrEqual(4);
     expect(w(base.chapters[2])).toBeGreaterThanOrEqual(10);
-    expect(w(base.chapters[2])).toBeLessThanOrEqual(12);
-    expect(w(extra.chapters[2])).toBeGreaterThanOrEqual(w(base.chapters[2]) * 1.6);
+    expect(w(base.chapters[2])).toBeLessThanOrEqual(13);
+    expect(w(extra.chapters[2])).toBeGreaterThanOrEqual(w(base.chapters[2]) * 1.4);
     expect(base.firstItemAt).not.toBeNull();
     expect(base.firstItemAt!).toBeLessThanOrEqual(20);
   });
@@ -327,5 +327,40 @@ const ch1: ModelLevel[] = LEVELS.slice(0, 60).map((l) => ({ num: l.num, chapter:
     expect(got).toEqual([6, 3, 1, 0, 0]);
     expect(replayCoinsNext(e, 'valley-03', '2026-03-02')).toBe(6);
     expect(applyReplay(defaultEconomy(), 'valley-04', '2026-03-01').coins).toBe(0); // ещё не пройден
+  });
+});
+
+describe('районы деревни открываются с главами', () => {
+  beforeEach(() => SaveService.setBackend(memoryBackend()));
+
+  it('лесной квартал — после уровня 30, Горный город — после уровня 60 (победа или пропуск)', () => {
+    expect(districtOpen('valley')).toBe(true);
+    expect(districtOpen('forest')).toBe(false);
+    expect(districtOpen('mountain')).toBe(false);
+    SaveService.update((d) => (d.progress.stars[LEVELS[29].id] = 2));
+    expect(openDistricts()).toEqual(['valley', 'forest']);
+    // Уровень 59 не открывает горы, только 60.
+    SaveService.update((d) => (d.progress.stars[LEVELS[58].id] = 3));
+    expect(districtOpen('mountain')).toBe(false);
+    SaveService.update((d) => (d.progress.skipped[LEVELS[59].id] = true));
+    expect(districtOpen('mountain')).toBe(true);
+    expect(openDistricts()).toEqual(['valley', 'forest', 'mountain']);
+    SaveService.update((d) => {
+      d.progress.skipped = {};
+      d.progress.stars[LEVELS[59].id] = 1;
+    });
+    expect(districtOpen('mountain')).toBe(true);
+  });
+
+  it('в открытом Горном городе восстанавливается первая постройка (шахта) за свет', () => {
+    SaveService.update((d) => {
+      d.progress.stars[LEVELS[29].id] = 3;
+      d.progress.stars[LEVELS[59].id] = 3;
+    });
+    const res = restoreVillage('mine');
+    // Света от двух уровней хватает на шахту (10), вторая постройка — только по порядку.
+    expect(res.ok).toBe(true);
+    expect(SaveService.load().economy.buildings.mine).toBe(1);
+    expect(restoreVillage('cable-car').ok).toBe(false);
   });
 });

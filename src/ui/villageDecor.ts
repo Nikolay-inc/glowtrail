@@ -1,8 +1,10 @@
-// Украшения деревни, улицы, силуэты закрытых построек Горного города и портреты жителей.
+// Украшения деревни (в Горном городе — зимние: фонари-столбики, скамейки, ели в снегу, ледяные скульптуры),
+// улицы (в горах — снежная тропа и брусчатка) и портреты жителей.
 // Всё — простые фигуры Phaser Graphics в тёплой вечерней палитре (украшения стоят только у восстановленной деревни).
 // Координаты — от точки на земле посередине (y вверх отрицательный), как у построек в village.ts.
 
 import Phaser from 'phaser';
+import { ALL_DECOR_TYPES, type DecorType } from '../core/villageData';
 
 type G = Phaser.GameObjects.Graphics;
 type Pt = [number, number];
@@ -192,8 +194,8 @@ function bird(g: G, x: number, y: number, c = 0x4a6a9a, dir: 1 | -1 = 1) {
 // ---------------------------------------------------------------------------
 // Украшения
 
-export type DecorType = 'bench' | 'flowers' | 'lamp' | 'tree' | 'sign' | 'cart' | 'statue' | 'birdhouse';
-export const DECOR_TYPES: readonly DecorType[] = ['bench', 'flowers', 'lamp', 'tree', 'sign', 'cart', 'statue', 'birdhouse'];
+export type { DecorType };
+export const DECOR_TYPES: readonly DecorType[] = ALL_DECOR_TYPES;
 
 export interface DecorView {
   objects: Phaser.GameObjects.GameObject[];
@@ -1044,6 +1046,403 @@ function birdhouse(g: G, L: Light[], v: number): Size {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Зимние украшения Горного города: фонари-столбики, скамейки, ели в снегу, ледяные скульптуры
+
+const SNOW = 0xf2f6ff;
+const SNOW_SH = 0xc6d2ec;
+const ICE = 0x9ad6ff;
+const ICE_FILL = 0xbfe6ff;
+const ICE_EDGE = 0xeef8ff;
+const ICE_DARK = 0x6aa8d8;
+const FIR = 0x2f5a4a;
+const FIR_D = 0x1f4034;
+
+/** Снежная шапка-подушка: центр x, верх y, ширина w. */
+function snowPad(g: G, x: number, y: number, w: number, h = 7) {
+  g.fillStyle(SNOW_SH, 1);
+  g.fillRoundedRect(x - w / 2, y - h / 2 + 2, w, h, h / 2);
+  g.fillStyle(SNOW, 1);
+  g.fillRoundedRect(x - w / 2, y - h / 2, w, h, h / 2);
+}
+
+/** Сугробик у основания. */
+function snowMound(g: G, x: number, w: number, h = 10) {
+  g.fillStyle(SNOW_SH, 1);
+  g.fillEllipse(x, 2, w, h);
+  g.fillStyle(SNOW, 1);
+  g.fillEllipse(x - w * 0.08, 0, w * 0.82, h * 0.8);
+}
+
+/** Сосульки под перекладиной. */
+function iceDrops(g: G, x0: number, x1: number, y: number, seed = 0) {
+  g.fillStyle(ICE_EDGE, 0.9);
+  for (let x = x0, i = 0; x <= x1; x += 7, i++) {
+    const len = 4 + 9 * rnd(i, seed);
+    g.fillTriangle(x - 2, y, x + 2, y, x, y + len);
+  }
+}
+
+/** Ель в снегу: основание (x, 0), высота h, ширина w. */
+function snowFirShape(g: G, x: number, h: number, w: number) {
+  g.fillStyle(WOOD_D, 1);
+  g.fillRect(x - w * 0.07, -h * 0.14, w * 0.14, h * 0.14);
+  const tiers = 3;
+  for (let i = 0; i < tiers; i++) {
+    const yb = -h * 0.12 - i * h * 0.26;
+    const ww = w * (1 - i * 0.24);
+    const yt = yb - h * 0.42;
+    g.fillStyle(i % 2 ? FIR : FIR_D, 1);
+    g.fillTriangle(x - ww / 2, yb, x + ww / 2, yb, x, yt);
+    g.fillStyle(SNOW, 1);
+    g.fillTriangle(x - ww * 0.22, yb - h * 0.24, x + ww * 0.22, yb - h * 0.24, x, yt);
+    g.fillEllipse(x - ww * 0.3, yb - 2, ww * 0.3, 5);
+    g.fillEllipse(x + ww * 0.28, yb - 1, ww * 0.26, 4);
+  }
+}
+
+/** Ледяная фигура: заливка, блик и светлый край. */
+function iceShape(g: G, pts: number[]) {
+  g.fillStyle(ICE_FILL, 0.78);
+  fp(g, pts);
+  g.lineStyle(2, ICE_EDGE, 0.95);
+  const v: Pt[] = [];
+  for (let i = 0; i < pts.length; i += 2) v.push([pts[i], pts[i + 1]]);
+  sp(g, v, true);
+}
+
+/** Ледяной постамент. */
+function icePlinth(g: G, w: number, h: number) {
+  g.fillStyle(ICE_DARK, 0.85);
+  g.fillRect(-w / 2, -h, w, h);
+  g.fillStyle(ICE_EDGE, 0.8);
+  g.fillRect(-w / 2, -h, w, 3);
+  g.fillStyle(0xffffff, 0.35);
+  g.fillRect(-w / 2 + 4, -h + 5, 4, h - 8);
+}
+
+function snowLamp(g: G, L: Light[], v: number): Size {
+  switch (v) {
+    case 0:
+      shadow(g, 44);
+      snowMound(g, 0, 40, 12);
+      g.fillStyle(WOOD_D, 1);
+      g.fillRect(-4, -84, 8, 82);
+      lantern(g, L, 0, -94, 1);
+      snowPad(g, 0, -112, 22, 6);
+      return [44, 116];
+    case 1:
+      shadow(g, 56);
+      g.fillStyle(IRON, 1);
+      fp(g, [-12, 0, 12, 0, 6, -10, 3, -14, -3, -14, -6, -10]);
+      g.fillRect(-2.5, -100, 5, 90);
+      g.lineStyle(3, IRON, 1);
+      g.beginPath();
+      g.arc(10, -100, 10, Math.PI, 0, false);
+      g.strokePath();
+      g.lineBetween(20, -100, 20, -90);
+      lantern(g, L, 20, -76, 0.9);
+      snowPad(g, 20, -92, 20, 5);
+      snowPad(g, 6, -110, 18, 5);
+      snowMound(g, 0, 46, 10);
+      return [56, 114];
+    case 2:
+      shadow(g, 84);
+      g.fillStyle(IRON, 1);
+      g.fillRect(-3, -96, 6, 96);
+      g.fillRect(-12, -8, 24, 8);
+      g.fillRect(-34, -96, 68, 5);
+      hanging(g, L, -30, -91, 6);
+      hanging(g, L, 30, -91, 6);
+      snowPad(g, 0, -99, 74, 6);
+      snowMound(g, 0, 50, 12);
+      return [84, 106];
+    case 3:
+      shadow(g, 90);
+      g.fillStyle(IRON, 1);
+      g.fillRect(-3, -100, 6, 100);
+      g.fillRect(-38, -100, 76, 5);
+      g.fillStyle(GOLD, 1);
+      g.fillCircle(0, -104, 4);
+      iceDrops(g, -36, 36, -95, 3);
+      lantern(g, L, -24, -64, 0.85);
+      lantern(g, L, 24, -64, 0.85, ICE);
+      g.lineStyle(2, IRON, 1);
+      g.lineBetween(-24, -95, -24, -80);
+      g.lineBetween(24, -95, 24, -80);
+      snowPad(g, 0, -103, 80, 6);
+      snowMound(g, 0, 56, 12);
+      return [90, 110];
+    default: {
+      // Ледяной фонарь: прозрачная колонна, голубой огонь внутри
+      shadow(g, 60);
+      iceShape(g, [-16, 0, 16, 0, 12, -70, -12, -70]);
+      g.fillStyle(0xffffff, 0.3);
+      g.fillRect(-9, -64, 4, 58);
+      iceShape(g, [-20, -70, 20, -70, 14, -104, -14, -104]);
+      g.fillStyle(ICE, 1);
+      g.fillEllipse(0, -86, 14, 20);
+      g.fillStyle(0xffffff, 0.9);
+      g.fillEllipse(0, -84, 6, 9);
+      L.push({ x: 0, y: -86, r: 18, c: ICE });
+      iceShape(g, [-22, -104, 22, -104, 0, -120]);
+      snowMound(g, 0, 48, 10);
+      return [60, 122];
+    }
+  }
+}
+
+function snowBench(g: G, L: Light[], v: number): Size {
+  const wooden = (dx: number, w: number) => {
+    g.fillStyle(WOOD_D, 1);
+    g.fillRect(dx - w / 2 + 4, -26, 6, 26);
+    g.fillRect(dx + w / 2 - 10, -26, 6, 26);
+    g.fillRect(dx - w / 2 + 4, -56, 5, 30);
+    g.fillRect(dx + w / 2 - 9, -56, 5, 30);
+    g.fillStyle(WOOD, 1);
+    g.fillRect(dx - w / 2, -30, w, 7);
+    g.fillRect(dx - w / 2 + 2, -50, w - 4, 6);
+    g.fillRect(dx - w / 2 + 2, -40, w - 4, 6);
+    snowPad(g, dx, -32, w + 4, 7);
+    snowPad(g, dx, -52, w - 6, 5);
+  };
+  switch (v) {
+    case 0:
+      shadow(g, 90);
+      wooden(0, 80);
+      snowMound(g, 30, 40, 10);
+      return [90, 62];
+    case 1:
+      shadow(g, 100);
+      g.fillStyle(STONE_D, 1);
+      g.fillRect(-40, -24, 14, 24);
+      g.fillRect(26, -24, 14, 24);
+      g.fillStyle(STONE, 1);
+      g.fillRect(-48, -32, 96, 10);
+      g.fillStyle(STONE_L, 1);
+      g.fillRect(-48, -32, 96, 3);
+      snowPad(g, -10, -34, 70, 8);
+      snowMound(g, -30, 40, 10);
+      return [100, 44];
+    case 2:
+      shadow(g, 90);
+      wooden(0, 80);
+      // плед в клетку и кружка с паром
+      g.fillStyle(RED, 1);
+      fp(g, [-30, -36, 4, -36, 8, -10, -26, -12]);
+      g.lineStyle(2, WHITE, 0.7);
+      g.lineBetween(-22, -36, -18, -11);
+      g.lineBetween(-10, -36, -6, -11);
+      g.lineBetween(-29, -26, 6, -25);
+      g.fillStyle(0x3a6ad0, 1);
+      g.fillRoundedRect(20, -44, 12, 12, 3);
+      g.lineStyle(1.5, 0xffffff, 0.5);
+      g.lineBetween(24, -48, 22, -56);
+      g.lineBetween(28, -48, 30, -56);
+      return [90, 62];
+    case 3: {
+      // Сани с фонариком
+      shadow(g, 110);
+      g.lineStyle(4, GOLD_D, 1);
+      g.lineBetween(-46, -4, 34, -4);
+      g.beginPath();
+      g.arc(34, -16, 12, Math.PI / 2, -Math.PI / 2, true);
+      g.strokePath();
+      g.fillStyle(WOOD_D, 1);
+      for (const x of [-34, 0, 24]) g.fillRect(x - 2, -18, 4, 14);
+      g.fillStyle(RED, 1);
+      fp(g, [-50, -18, 30, -18, 30, -34, -40, -34, -50, -50]);
+      g.fillStyle(GOLD, 1);
+      g.fillRect(-46, -30, 72, 3);
+      snowPad(g, -6, -36, 60, 7);
+      g.fillStyle(IRON, 1);
+      g.fillRect(16, -70, 3, 34);
+      lantern(g, L, 18, -78, 0.8);
+      return [110, 92];
+    }
+    default: {
+      // Скамейка у костра
+      shadow(g, 120);
+      wooden(-24, 70);
+      const fx = 40;
+      g.fillStyle(STONE_D, 1);
+      for (const [x, y] of [[-14, -2], [-6, 2], [6, 2], [14, -2]] as const) g.fillCircle(fx + x, y, 5);
+      g.lineStyle(5, WOOD_D, 1);
+      g.lineBetween(fx - 12, -2, fx + 10, -10);
+      g.lineBetween(fx + 12, -2, fx - 10, -10);
+      g.fillStyle(ORANGE, 1);
+      g.fillTriangle(fx - 10, -6, fx + 10, -6, fx, -34);
+      g.fillStyle(YELLOW, 1);
+      g.fillTriangle(fx - 5, -6, fx + 5, -6, fx, -22);
+      L.push({ x: fx, y: -16, r: 22, c: 0xffb85a });
+      snowMound(g, -60, 30, 8);
+      return [124, 62];
+    }
+  }
+}
+
+function snowFir(g: G, L: Light[], v: number): Size {
+  switch (v) {
+    case 0:
+      shadow(g, 50);
+      snowFirShape(g, 0, 70, 52);
+      snowMound(g, 0, 50, 10);
+      return [54, 72];
+    case 1:
+      shadow(g, 70);
+      snowFirShape(g, 0, 118, 70);
+      snowMound(g, 0, 64, 12);
+      return [72, 120];
+    case 2:
+      shadow(g, 100);
+      snowFirShape(g, -22, 104, 62);
+      snowFirShape(g, 26, 76, 50);
+      snowMound(g, 0, 96, 12);
+      return [100, 106];
+    case 3: {
+      shadow(g, 76);
+      snowFirShape(g, 0, 116, 72);
+      const cols = [WARM, ICE, ORANGE, WHITE];
+      for (let i = 0; i < 9; i++) {
+        const t = (i + 0.5) / 9;
+        const y = -18 - t * 84;
+        const half = 30 * (1 - t) + 4;
+        const x = (i % 2 ? 1 : -1) * half * 0.6;
+        const c = cols[i % cols.length];
+        g.fillStyle(c, 1);
+        g.fillCircle(x, y, 3);
+        L.push({ x, y, r: 6, c });
+      }
+      snowMound(g, 0, 66, 12);
+      return [76, 118];
+    }
+    default: {
+      shadow(g, 90);
+      snowFirShape(g, 0, 120, 76);
+      const cols = [WARM, RED, ICE, GOLD];
+      for (let i = 0; i < 10; i++) {
+        const t = (i + 0.5) / 10;
+        const y = -20 - t * 82;
+        const x = (i % 2 ? 1 : -1) * (32 * (1 - t) + 3) * 0.65;
+        const c = cols[i % cols.length];
+        g.fillStyle(c, 1);
+        g.fillCircle(x, y, 3.2);
+        L.push({ x, y, r: 6, c });
+      }
+      g.fillStyle(GOLD, 1);
+      star(g, 0, -122, 11, 5);
+      L.push({ x: 0, y: -122, r: 16 });
+      // подарки под ёлкой
+      g.fillStyle(RED, 1);
+      g.fillRect(-36, -14, 16, 14);
+      g.fillStyle(0x3a6ad0, 1);
+      g.fillRect(22, -12, 14, 12);
+      g.fillStyle(GOLD, 1);
+      g.fillRect(-29, -14, 2, 14);
+      g.fillRect(28, -12, 2, 12);
+      return [90, 134];
+    }
+  }
+}
+
+function iceStatue(g: G, L: Light[], v: number): Size {
+  switch (v) {
+    case 0: {
+      // Снеговик
+      shadow(g, 60);
+      for (const [y, r] of [[-20, 22], [-54, 16], [-80, 12]] as const) {
+        g.fillStyle(SNOW_SH, 1);
+        g.fillCircle(2, y + 2, r);
+        g.fillStyle(SNOW, 1);
+        g.fillCircle(0, y, r);
+      }
+      g.fillStyle(IRON, 1);
+      g.fillCircle(-4, -83, 1.8);
+      g.fillCircle(4, -83, 1.8);
+      for (const y of [-58, -48]) g.fillCircle(0, y, 2);
+      g.fillStyle(ORANGE, 1);
+      g.fillTriangle(0, -80, 0, -76, 12, -78);
+      g.fillStyle(RED, 1);
+      g.fillRoundedRect(-13, -70, 26, 6, 3);
+      g.fillRect(6, -68, 6, 16);
+      g.fillStyle(IRON, 1);
+      g.fillRect(-12, -94, 24, 4);
+      g.fillRect(-8, -110, 16, 16);
+      g.lineStyle(3, WOOD_D, 1);
+      g.lineBetween(-14, -56, -32, -70);
+      g.lineBetween(14, -56, 32, -66);
+      return [70, 112];
+    }
+    case 1: {
+      // Ледяная коза на постаменте
+      shadow(g, 76);
+      icePlinth(g, 56, 22);
+      iceShape(g, [-26, -40, -22, -56, 10, -60, 20, -50, 18, -38, -20, -36]);
+      for (const x of [-20, -10, 6, 14]) iceShape(g, [x - 2.5, -22, x + 2.5, -22, x + 2.5, -40, x - 2.5, -40]);
+      iceShape(g, [12, -58, 22, -76, 32, -72, 24, -52]);
+      iceShape(g, [22, -78, 36, -78, 38, -70, 26, -68]);
+      g.lineStyle(3, ICE_EDGE, 1);
+      g.lineBetween(26, -78, 18, -90);
+      g.lineBetween(30, -78, 24, -92);
+      L.push({ x: 0, y: -50, r: 18, c: ICE });
+      return [76, 96];
+    }
+    case 2: {
+      // Ледяной кристалл
+      shadow(g, 70);
+      icePlinth(g, 50, 18);
+      iceShape(g, [-8, -18, 8, -18, 10, -80, 0, -100, -10, -80]);
+      iceShape(g, [-26, -18, -10, -18, -12, -58, -20, -70, -28, -56]);
+      iceShape(g, [10, -18, 26, -18, 28, -52, 20, -64, 12, -52]);
+      g.fillStyle(0xffffff, 0.5);
+      fp(g, [-4, -22, 0, -22, 2, -86, 0, -96, -5, -82]);
+      L.push({ x: 0, y: -60, r: 26, c: ICE });
+      return [70, 102];
+    }
+    case 3: {
+      // Ледяной Lumo с фонарём
+      shadow(g, 70);
+      icePlinth(g, 54, 18);
+      iceShape(g, [-20, -18, 20, -18, 16, -60, 0, -70, -16, -60]);
+      g.fillStyle(ICE_FILL, 0.85);
+      g.fillCircle(0, -78, 16);
+      g.lineStyle(2, ICE_EDGE, 1);
+      g.strokeCircle(0, -78, 16);
+      iceShape(g, [-16, -84, 16, -84, 6, -112, 2, -104]);
+      g.fillStyle(ICE_DARK, 1);
+      g.fillCircle(-5, -78, 2.2);
+      g.fillCircle(5, -78, 2.2);
+      g.lineStyle(3, ICE_EDGE, 1);
+      g.lineBetween(20, -24, 26, -84);
+      g.fillStyle(ICE, 1);
+      g.fillRoundedRect(20, -98, 14, 14, 4);
+      L.push({ x: 27, y: -91, r: 14, c: ICE });
+      return [70, 114];
+    }
+    default: {
+      // Ледяной замок
+      shadow(g, 110);
+      icePlinth(g, 100, 12);
+      const tower = (x: number, w: number, h: number) => {
+        iceShape(g, [x - w / 2, -12, x + w / 2, -12, x + w / 2, -h, x - w / 2, -h]);
+        for (let k = 0; k < 3; k++) iceShape(g, [x - w / 2 + k * (w / 3), -h, x - w / 2 + k * (w / 3) + w / 5, -h, x - w / 2 + k * (w / 3) + w / 5, -h - 7, x - w / 2 + k * (w / 3), -h - 7]);
+      };
+      tower(0, 44, 70);
+      tower(-34, 24, 52);
+      tower(34, 24, 52);
+      iceShape(g, [-6, -70, 6, -70, 0, -100]);
+      g.fillStyle(ICE, 1);
+      g.fillRect(-5, -44, 10, 14);
+      g.fillRect(-37, -36, 6, 8);
+      g.fillRect(31, -36, 6, 8);
+      L.push({ x: 0, y: -40, r: 18, c: ICE });
+      L.push({ x: -34, y: -32, r: 10, c: ICE });
+      L.push({ x: 34, y: -32, r: 10, c: ICE });
+      return [110, 102];
+    }
+  }
+}
+
 const MAX_DECOR_H = 120;
 
 const DECOR: Record<DecorType, (g: G, L: Light[], v: number) => Size> = {
@@ -1055,6 +1454,10 @@ const DECOR: Record<DecorType, (g: G, L: Light[], v: number) => Size> = {
   cart,
   statue,
   birdhouse,
+  'snow-lamp': snowLamp,
+  'snow-bench': snowBench,
+  'snow-fir': snowFir,
+  'ice-statue': iceStatue,
 };
 
 /** Украшение для слота: variant 0..4 — от простого к нарядному. */
@@ -1153,14 +1556,78 @@ function streetLamp(g: G, x: number, y: number): { x: number; y: number } {
   return { x, y: y - 75 };
 }
 
+/** Стиль улиц района: обычный (долина, лес) или снежный (Горный город). */
+export type StreetStyle = 'green' | 'snow';
+
+/**
+ * Снежная улица Горного города: 0 — снежная тропа со следами, 1 — тропа, посыпанная песком и гравием,
+ * 2 — брусчатка в снегу, 3 — мощёная с бордюром и фонарями в снежных валах.
+ */
+function snowStreet(g: G, points: Phaser.Math.Vector2[], step: 0 | 1 | 2 | 3, width: number): { lamps: { x: number; y: number }[] } {
+  const hw = width / 2;
+  const { pts, nor } = pathSamples(points, 8);
+  const tan = (i: number) => new V2(nor[i].y, -nor[i].x);
+  if (step >= 2) {
+    const res = greenStreet(g, points, step, width);
+    // Снежные валы по краям мостовой и шапки на фонарях.
+    band(g, pts, nor, (i) => hw + 7 + 5 * rnd(i, 61), () => -(hw - 1), SNOW_SH);
+    band(g, pts, nor, () => -(hw - 1), (i) => hw + 7 + 5 * rnd(i, 62), SNOW_SH);
+    band(g, pts, nor, (i) => hw + 5 + 4 * rnd(i, 63), () => -(hw + 1), SNOW);
+    band(g, pts, nor, () => -(hw + 1), (i) => hw + 5 + 4 * rnd(i, 64), SNOW);
+    for (const l of res.lamps) snowPad(g, l.x, l.y - 20, 22, 5);
+    return res;
+  }
+  if (step === 0) {
+    // Снежная тропа: неровный край, утоптанная середина, следы
+    band(g, pts, nor, (i) => hw * (0.9 + 0.25 * rnd(i, 71)), (i) => hw * (0.9 + 0.25 * rnd(i, 72)), SNOW_SH);
+    band(g, pts, nor, (i) => hw * (0.8 + 0.2 * rnd(i, 73)), (i) => hw * (0.8 + 0.2 * rnd(i, 74)), 0xdfe8f8);
+    band(g, pts, nor, (i) => hw * (0.35 + 0.1 * rnd(i, 75)), (i) => hw * (0.35 + 0.1 * rnd(i, 76)), 0xc8d4ea);
+    g.fillStyle(0x9aa8c8, 0.8);
+    for (let i = 1; i < pts.length; i += 2) {
+      const o = (i % 4 < 2 ? 1 : -1) * hw * 0.22;
+      const t = tan(i);
+      const x = pts[i].x + nor[i].x * o;
+      const y = pts[i].y + nor[i].y * o;
+      g.fillEllipse(x + t.x * 2, y + t.y * 2, 6, 4);
+      g.fillEllipse(x - t.x * 3, y - t.y * 3, 4, 3);
+    }
+  } else {
+    // Тропа, посыпанная песком и мелким гравием
+    band(g, pts, nor, () => hw + 3, () => hw + 3, SNOW_SH);
+    band(g, pts, nor, () => hw, () => hw, 0xd8e0ee);
+    band(g, pts, nor, (i) => hw * (0.62 + 0.1 * rnd(i, 81)), (i) => hw * (0.62 + 0.1 * rnd(i, 82)), 0xa89a86);
+    const cols = [0x8a7a64, 0x6a5c50, 0xc0b2a0, 0x5e5a6a];
+    for (let i = 0; i < pts.length; i++)
+      for (let k = 0; k < 3; k++) {
+        const o = (rnd(i, k + 90) - 0.5) * width * 0.6;
+        const a = (rnd(i, k + 93) - 0.5) * 6;
+        const t = tan(i);
+        g.fillStyle(cols[(i + k) % cols.length], 1);
+        g.fillCircle(pts[i].x + nor[i].x * o + t.x * a, pts[i].y + nor[i].y * o + t.y * a, 1.4 + rnd(i, k + 96) * 1.4);
+      }
+  }
+  // Снежные кочки у края
+  g.fillStyle(SNOW, 1);
+  for (let i = 2; i < pts.length; i += 5) {
+    const side = i % 10 < 5 ? 1 : -1;
+    g.fillEllipse(pts[i].x + nor[i].x * (hw + 4) * side, pts[i].y + nor[i].y * (hw + 4) * side, 14, 7);
+  }
+  return { lamps: [] };
+}
+
 /**
  * Улица по точкам (сглаживается сплайном): 0 — тропинка, 1 — гравий, 2 — брусчатка, 3 — мощёная с бордюром и фонарями.
+ * В Горном городе (style 'snow') — снежная тропа, посыпанная тропа, брусчатка и мощёная в снегу.
  * Возвращает точки, где у шага 3 стоят фонари (голова фонаря — для света).
  */
-export function drawStreet(g: Phaser.GameObjects.Graphics, points: Phaser.Math.Vector2[], step: 0 | 1 | 2 | 3, width = 44): { lamps: { x: number; y: number }[] } {
+export function drawStreet(g: Phaser.GameObjects.Graphics, points: Phaser.Math.Vector2[], step: 0 | 1 | 2 | 3, width = 44, style: StreetStyle = 'green'): { lamps: { x: number; y: number }[] } {
+  if (points.length < 2) return { lamps: [] };
+  return style === 'snow' ? snowStreet(g, points, step, width) : greenStreet(g, points, step, width);
+}
+
+function greenStreet(g: G, points: Phaser.Math.Vector2[], step: 0 | 1 | 2 | 3, width: number): { lamps: { x: number; y: number }[] } {
   const hw = width / 2;
   const lamps: { x: number; y: number }[] = [];
-  if (points.length < 2) return { lamps };
   const { pts, nor, len } = pathSamples(points, step >= 2 ? 6 : 8);
   const tan = (i: number) => new V2(nor[i].y, -nor[i].x);
   switch (step) {
@@ -1262,16 +1729,17 @@ export function drawStreet(g: Phaser.GameObjects.Graphics, points: Phaser.Math.V
 }
 
 /** Образец куска улицы в прямоугольнике w×h с центром в (0, 0): трава, изогнутая дорожка, фонари со свечением. */
-export function streetSample(scene: Phaser.Scene, step: 0 | 1 | 2 | 3, w: number, h: number): Phaser.GameObjects.Container {
+export function streetSample(scene: Phaser.Scene, step: 0 | 1 | 2 | 3, w: number, h: number, style: StreetStyle = 'green'): Phaser.GameObjects.Container {
   const c = scene.add.container(0, 0);
   const g = scene.add.graphics();
-  g.fillStyle(0x24362a, 1);
+  const snow = style === 'snow';
+  g.fillStyle(snow ? 0x3a4466 : 0x24362a, 1);
   g.fillRoundedRect(-w / 2, -h / 2, w, h, Math.min(24, h * 0.15));
-  g.fillStyle(0x2e4432, 1);
+  g.fillStyle(snow ? 0x8a96b8 : 0x2e4432, snow ? 0.5 : 1);
   for (let i = 0; i < 18; i++) g.fillEllipse(-w / 2 + 14 + rnd(i, 40) * (w - 28), -h / 2 + 10 + rnd(i, 41) * (h - 20), 16, 6);
   const sw = Math.min(44, h * 0.32);
   const pts = [new V2(-w / 2 + 6, h * 0.22), new V2(-w / 6, -h * 0.02), new V2(w / 6, h * 0.12), new V2(w / 2 - 6, -h * 0.08)];
-  const { lamps } = drawStreet(g, pts, step, sw);
+  const { lamps } = drawStreet(g, pts, step, sw, style);
   c.add(g);
   addGlow(
     scene,
@@ -1283,487 +1751,9 @@ export function streetSample(scene: Phaser.Scene, step: 0 | 1 | 2 | 3, w: number
 }
 
 // ---------------------------------------------------------------------------
-// Силуэты закрытых построек Горного города
-
-export interface SilhouetteView {
-  objects: Phaser.GameObjects.GameObject[];
-  height: number;
-  width: number;
-}
-
-type Shape = ['p', number[]] | ['c', number, number, number] | ['r', number, number, number, number] | ['e', number, number, number, number];
-
-const SIL_FILL = 0x0a0d1c;
-const SIL_LINE = 0x7a9ad0;
-
-/** Решётчатая мачта: основание (x, ширина), верх (ширина, высота) — детали-раскосы. */
-function lattice(x: number, wb: number, wt: number, h: number, y0 = 0): { shapes: Shape[]; lines: Pt[][] } {
-  const shapes: Shape[] = [
-    ['p', [x - wb / 2 - 4, y0, x - wb / 2 + 4, y0, x - wt / 2 + 3, y0 - h, x - wt / 2 - 3, y0 - h]],
-    ['p', [x + wb / 2 - 4, y0, x + wb / 2 + 4, y0, x + wt / 2 + 3, y0 - h, x + wt / 2 - 3, y0 - h]],
-  ];
-  const lines: Pt[][] = [];
-  const n = 4;
-  for (let i = 0; i < n; i++) {
-    const t0 = i / n;
-    const t1 = (i + 1) / n;
-    const w0 = (wb + (wt - wb) * t0) / 2;
-    const w1 = (wb + (wt - wb) * t1) / 2;
-    lines.push([
-      [x - w0, y0 - h * t0],
-      [x + w1, y0 - h * t1],
-    ]);
-    lines.push([
-      [x + w0, y0 - h * t0],
-      [x - w1, y0 - h * t1],
-    ]);
-    shapes.push(['r', x - w1, y0 - h * t1 - 2, w1 * 2, 4]);
-  }
-  return { shapes, lines };
-}
-
-function silhouetteShapes(kind: number): { shapes: Shape[]; lines: Pt[][]; w: number; h: number } {
-  switch (kind) {
-    case 0: {
-      // Шахта: холм со входом в штольню, копёр с колесом, вагонетка на рельсах
-      const hill: number[] = [];
-      for (let i = 0; i <= 16; i++) {
-        const a = Math.PI + (i / 16) * Math.PI;
-        hill.push(Math.cos(a) * 130, Math.sin(a) * 110 * (1 + 0.08 * Math.sin(i * 1.7)));
-      }
-      const tower = lattice(70, 56, 18, 150, -60);
-      return {
-        shapes: [['p', hill], ...tower.shapes, ['c', 70, -214, 20], ['p', [-112, -4, -72, -4, -76, -28, -108, -28]], ['c', -102, -4, 6], ['c', -82, -4, 6]],
-        lines: [
-          ...tower.lines,
-          [
-            [-46, 0],
-            [-46, -60],
-            [6, -60],
-            [6, 0],
-          ],
-          [
-            [-54, -60],
-            [14, -60],
-          ],
-          [
-            [-150, 2],
-            [-30, 2],
-          ],
-          [
-            [70, -214],
-            [40, -60],
-          ],
-        ],
-        w: 280,
-        h: 236,
-      };
-    }
-    case 1:
-      // Кузница: дом с высокой трубой, наковальня
-      return {
-        shapes: [
-          ['r', -100, -100, 160, 100],
-          ['p', [-116, -96, 76, -96, 50, -150, -90, -150]],
-          ['p', [12, -150, 46, -150, 42, -230, 16, -230]],
-          ['r', 8, -246, 42, 16],
-          ['p', [86, 0, 120, 0, 112, -14, 128, -28, 132, -40, 76, -40, 92, -28, 94, -14]],
-          ['p', [76, -40, 70, -36, 60, -38, 76, -46]],
-        ],
-        lines: [
-          [
-            [-60, 0],
-            [-60, -60],
-            [-20, -60],
-            [-20, 0],
-          ],
-          [
-            [-90, -70],
-            [-76, -70],
-            [-76, -50],
-            [-90, -50],
-          ],
-          [
-            [26, -250],
-            [20, -270],
-            [30, -290],
-          ],
-          [
-            [104, -54],
-            [98, -66],
-          ],
-          [
-            [116, -50],
-            [124, -62],
-          ],
-        ],
-        w: 260,
-        h: 260,
-      };
-    case 2: {
-      // Канатная дорога: станция, мачта, трос и кабинка
-      const tower = lattice(110, 50, 14, 200);
-      return {
-        shapes: [
-          ['r', -160, -80, 74, 80],
-          ['p', [-172, -76, -74, -76, -123, -118]],
-          ...tower.shapes,
-          ['r', 84, -208, 52, 8],
-          ['p', [-8, -112, 40, -112, 44, -84, -12, -84]],
-          ['r', -6, -128, 40, 16],
-        ],
-        lines: [
-          [
-            [-100, -96],
-            [110, -206],
-            [170, -190],
-          ],
-          [
-            [16, -128],
-            [16, -150],
-          ],
-          [
-            [0, -108],
-            [0, -96],
-          ],
-          [
-            [30, -108],
-            [30, -96],
-          ],
-          ...tower.lines,
-        ],
-        w: 330,
-        h: 210,
-      };
-    }
-    case 3: {
-      // Хрустальная пещера: скала с гротом и кристаллы
-      const crystal = (x: number, y: number, w: number, h: number, a: number): Shape => {
-        const c = Math.cos(a);
-        const s = Math.sin(a);
-        const pt = (u: number, v: number) => [x + u * c - v * s, y + u * s + v * c];
-        return ['p', [...pt(-w / 2, 0), ...pt(-w / 2, -h * 0.75), ...pt(0, -h), ...pt(w / 2, -h * 0.75), ...pt(w / 2, 0)]];
-      };
-      return {
-        shapes: [
-          ['p', [-140, 0, -120, -50, -90, -80, -50, -96, -10, -90, 30, -110, 70, -92, 110, -60, 140, 0]],
-          crystal(-40, -84, 22, 80, -0.25),
-          crystal(-10, -88, 28, 120, 0.05),
-          crystal(26, -100, 20, 76, 0.35),
-          crystal(84, -60, 18, 60, 0.6),
-          crystal(-96, -64, 16, 52, -0.55),
-        ],
-        lines: [
-          [
-            [-40, 0],
-            [-36, -36],
-            [-10, -54],
-            [16, -36],
-            [20, 0],
-          ],
-          [
-            [-10, -88],
-            [-8, -200],
-          ],
-        ],
-        w: 290,
-        h: 210,
-      };
-    }
-    case 4:
-      // Козья ферма: амбар с ломаной крышей, забор и коза
-      return {
-        shapes: [
-          ['p', [-50, 0, -50, -84, -34, -124, 30, -146, 94, -124, 110, -84, 110, 0]],
-          ['r', 120, -40, 8, 40],
-          ['r', 160, -40, 8, 40],
-          ['r', 116, -34, 56, 5],
-          ['r', 116, -18, 56, 5],
-          ['e', -110, -38, 56, 30],
-          ['p', [-86, -44, -70, -66, -60, -64, -66, -40]],
-          ['e', -64, -66, 18, 14],
-          ['p', [-68, -72, -76, -92, -84, -96, -72, -76]],
-          ['p', [-62, -72, -62, -94, -68, -100, -66, -74]],
-          ['p', [-60, -60, -54, -48, -58, -46]],
-          ['r', -132, -26, 6, 26],
-          ['r', -118, -26, 6, 26],
-          ['r', -100, -26, 6, 26],
-          ['r', -88, -26, 6, 26],
-          ['p', [-138, -44, -148, -52, -140, -38]],
-        ],
-        lines: [
-          [
-            [10, 0],
-            [10, -60],
-            [50, -60],
-            [50, 0],
-          ],
-          [
-            [10, -60],
-            [50, 0],
-          ],
-          [
-            [50, -60],
-            [10, 0],
-          ],
-          [
-            [20, -100],
-            [40, -100],
-            [40, -84],
-            [20, -84],
-          ],
-        ],
-        w: 330,
-        h: 150,
-      };
-    case 5:
-      // Колокольня: башня, открытый ярус с колоколом, шпиль
-      return {
-        shapes: [
-          ['r', -56, -20, 112, 20],
-          ['r', -42, -230, 84, 212],
-          ['r', -50, -240, 100, 12],
-          ['p', [-50, -240, 50, -240, 0, -330]],
-          ['r', -2, -352, 4, 24],
-          ['r', -10, -344, 20, 4],
-        ],
-        lines: [
-          [
-            [-24, -150],
-            [-24, -196],
-            [-12, -210],
-            [12, -210],
-            [24, -196],
-            [24, -150],
-            [-24, -150],
-          ],
-          [
-            [-12, -164],
-            [-8, -190],
-            [8, -190],
-            [12, -164],
-            [-12, -164],
-          ],
-          [
-            [-12, -20],
-            [-12, -60],
-            [0, -70],
-            [12, -60],
-            [12, -20],
-          ],
-          [
-            [-8, -110],
-            [8, -110],
-            [8, -126],
-            [-8, -126],
-            [-8, -110],
-          ],
-        ],
-        w: 120,
-        h: 354,
-      };
-    case 6:
-      // Горячие источники: купальня, камни вокруг пруда, пар
-      return {
-        shapes: [
-          ['e', 30, -10, 220, 36],
-          ['e', -76, -18, 40, 26],
-          ['e', -40, -4, 32, 18],
-          ['e', 120, -20, 44, 30],
-          ['e', 90, 0, 34, 16],
-          ['r', -170, -70, 76, 70],
-          ['p', [-190, -64, -178, -74, -86, -74, -74, -64, -100, -96, -164, -96]],
-          ['r', -136, -110, 8, 16],
-        ],
-        lines: [
-          [
-            [0, -36],
-            [-8, -60],
-            [4, -84],
-            [-6, -110],
-          ],
-          [
-            [36, -32],
-            [44, -58],
-            [34, -82],
-            [42, -110],
-            [36, -130],
-          ],
-          [
-            [74, -34],
-            [66, -56],
-            [76, -80],
-          ],
-          [
-            [-148, 0],
-            [-148, -44],
-            [-116, -44],
-            [-116, 0],
-          ],
-        ],
-        w: 330,
-        h: 132,
-      };
-    case 7: {
-      // Каменный мост: две арки, перила
-      const pts: number[] = [-180, 0, -168, -70, 168, -70, 180, 0, 140, 0];
-      for (let i = 0; i <= 10; i++) {
-        const a = (i / 10) * Math.PI;
-        pts.push(85 + Math.cos(a) * 55, -Math.sin(a) * 50);
-      }
-      pts.push(-30, 0);
-      for (let i = 0; i <= 10; i++) {
-        const a = (i / 10) * Math.PI;
-        pts.push(-85 + Math.cos(a) * 55, -Math.sin(a) * 50);
-      }
-      const posts: Shape[] = [];
-      for (let x = -160; x <= 160; x += 40) posts.push(['r', x - 4, -96, 8, 28]);
-      return {
-        shapes: [['p', pts], ['r', -172, -100, 344, 8], ...posts, ['p', [-10, 0, 10, 0, 10, -54, 0, -64, -10, -54]]],
-        lines: [
-          [
-            [-168, -60],
-            [168, -60],
-          ],
-          [
-            [-120, 10],
-            [-60, 10],
-          ],
-          [
-            [50, 10],
-            [120, 10],
-          ],
-        ],
-        w: 360,
-        h: 100,
-      };
-    }
-    case 8: {
-      // Звёздный храм: ступени, колонны, купол, звезда
-      const starPts: number[] = [];
-      for (let i = 0; i < 10; i++) {
-        const a = -Math.PI / 2 + (i * Math.PI) / 5;
-        const r = i % 2 ? 9 : 22;
-        starPts.push(Math.cos(a) * r, -246 + Math.sin(a) * r);
-      }
-      const dome: number[] = [];
-      for (let i = 0; i <= 14; i++) {
-        const a = Math.PI + (i / 14) * Math.PI;
-        dome.push(Math.cos(a) * 70, -150 + Math.sin(a) * 66);
-      }
-      return {
-        shapes: [
-          ['r', -130, -14, 260, 14],
-          ['r', -116, -28, 232, 14],
-          ['r', -102, -40, 204, 12],
-          ['r', -92, -136, 14, 96],
-          ['r', -44, -136, 14, 96],
-          ['r', 30, -136, 14, 96],
-          ['r', 78, -136, 14, 96],
-          ['r', -104, -152, 208, 18],
-          ['p', dome],
-          ['r', -3, -226, 6, 12],
-          ['p', starPts],
-        ],
-        lines: [
-          [
-            [-104, -144],
-            [104, -144],
-          ],
-          [
-            [-14, -40],
-            [-14, -110],
-            [0, -122],
-            [14, -110],
-            [14, -40],
-          ],
-        ],
-        w: 260,
-        h: 270,
-      };
-    }
-    default: {
-      // Маяк на вершине: скала-пик и маяк
-      return {
-        shapes: [
-          ['p', [-150, 0, -110, -40, -84, -36, -50, -90, -30, -86, 0, -140, 30, -120, 56, -96, 80, -70, 104, -60, 150, 0]],
-          ['p', [-18, -136, 18, -136, 12, -262, -12, -262]],
-          ['r', -22, -270, 44, 8],
-          ['r', -12, -296, 24, 26],
-          ['p', [-16, -296, 16, -296, 0, -320]],
-        ],
-        lines: [
-          [
-            [-50, -90],
-            [-36, -70],
-            [-24, -78],
-            [0, -110],
-            [20, -96],
-            [30, -110],
-          ],
-          [
-            [-12, -282],
-            [12, -282],
-          ],
-          [
-            [-60, -308],
-            [-24, -290],
-          ],
-          [
-            [60, -308],
-            [24, -290],
-          ],
-        ],
-        w: 300,
-        h: 322,
-      };
-    }
-  }
-}
-
-/** Силуэт закрытой постройки «скоро» (Горный город, kind 0..9): один тёмный цвет и тонкий холодный контур. */
-export function drawSilhouette(scene: Phaser.Scene, kind: number): SilhouetteView {
-  const g = scene.add.graphics();
-  const { shapes, lines, w, h } = silhouetteShapes(((Math.round(kind) % 10) + 10) % 10);
-  const draw = (fill: boolean) => {
-    for (const s of shapes) {
-      switch (s[0]) {
-        case 'p': {
-          const pts: Phaser.Math.Vector2[] = [];
-          for (let i = 0; i < s[1].length; i += 2) pts.push(new V2(s[1][i], s[1][i + 1]));
-          if (fill) g.fillPoints(pts, true);
-          else g.strokePoints(pts, true);
-          break;
-        }
-        case 'c':
-          if (fill) g.fillCircle(s[1], s[2], s[3]);
-          else g.strokeCircle(s[1], s[2], s[3]);
-          break;
-        case 'r':
-          if (fill) g.fillRect(s[1], s[2], s[3], s[4]);
-          else g.strokeRect(s[1], s[2], s[3], s[4]);
-          break;
-        case 'e':
-          if (fill) g.fillEllipse(s[1], s[2], s[3], s[4]);
-          else g.strokeEllipse(s[1], s[2], s[3], s[4]);
-          break;
-      }
-    }
-  };
-  // Сначала толстый контур всех фигур, затем заливка поверх — снаружи остаётся тонкая кромка.
-  g.lineStyle(5, SIL_LINE, 0.55);
-  draw(false);
-  g.fillStyle(SIL_FILL, 1);
-  draw(true);
-  g.lineStyle(2, SIL_LINE, 0.4);
-  for (const l of lines) sp(g, l);
-  return { objects: [g], height: h, width: w };
-}
-
-// ---------------------------------------------------------------------------
 // Портреты жителей
 
-type Hat = 'cap' | 'toque' | 'goggles' | 'straw' | 'peaked' | 'sunhat' | 'hood' | 'tophat' | 'wizard' | 'beanie' | 'scarf' | 'mushroom' | 'bun' | 'feather' | 'bandana' | 'bucket' | 'none';
+type Hat = 'cap' | 'toque' | 'goggles' | 'straw' | 'peaked' | 'sunhat' | 'hood' | 'tophat' | 'wizard' | 'beanie' | 'scarf' | 'mushroom' | 'bun' | 'feather' | 'bandana' | 'bucket' | 'helmet' | 'ushanka' | 'none';
 type Extra = 'beard' | 'mustache' | 'glasses' | 'apron' | 'strap';
 
 interface Resident {
@@ -1801,6 +1791,17 @@ const RESIDENTS: Record<string, Resident> = {
   forester: { bg: 0x2a3a2a, body: 0x4a6a3a, skin: SKIN[2], hair: 0x6a3a1e, hat: 'feather', hatC: 0x3a6a3a, hatC2: 0xd04a3a, extra: ['beard'] },
   'swing-bridge': { bg: 0x3a3a2a, body: 0x8a6a4a, skin: SKIN[3], hair: 0x2a2020, hat: 'bandana', hatC: 0xd8783a },
   'glow-lake': { bg: 0x1a3a3a, body: 0x2a7a7a, skin: SKIN[1], hair: 0x8a5a30, hat: 'bucket', hatC: 0x3a8a8a },
+  // Горный город: горняк в каске с фонарём, пастушка коз в платке, горный звонарь в ушанке и другие.
+  mine: { bg: 0x2a3048, body: 0x5a5e72, skin: SKIN[2], hair: 0x3a2a20, hat: 'helmet', hatC: 0xe8c040, extra: ['beard'] },
+  forge: { bg: 0x4a2a20, body: 0x3a3a48, skin: SKIN[1], hair: 0x2a2020, hat: 'bandana', hatC: 0x6a4a3a, extra: ['apron', 'mustache'], extraC: 0x6a4428 },
+  'cable-car': { bg: 0x2a3a5a, body: 0xc04040, skin: SKIN[0], hair: 0x6a4428, hat: 'peaked', hatC: 0xc04040, hatC2: GOLD },
+  'crystal-cave': { bg: 0x1a2a4a, body: 0x6a5aa8, skin: SKIN[0], hair: 0xe8e8f8, hat: 'goggles', hatC: 0x4a3a5a, extra: ['strap'], extraC: 0x9ad6ff },
+  'goat-farm': { bg: 0x3a4a3a, body: 0xa86a4a, skin: SKIN[1], hair: 0xe0b860, hat: 'scarf', hatC: 0xd04a3a, hatC2: WHITE },
+  'bell-tower': { bg: 0x2a2a4a, body: 0x4a3a6a, skin: SKIN[0], hair: 0x9a9a9a, hat: 'ushanka', hatC: 0x6a4a3a, hatC2: 0xd8c8b0, extra: ['beard'] },
+  'hot-springs': { bg: 0x2a4a5a, body: 0xe8e0d0, skin: SKIN[2], hair: 0x1a1418, hat: 'bun', hatC: 0x1a1418, hatC2: 0x8ae8f0 },
+  'stone-bridge': { bg: 0x3a3a40, body: 0x7a7a8a, skin: SKIN[3], hair: 0x2a2020, hat: 'cap', hatC: 0x5a5a6a, extra: ['mustache'] },
+  'star-temple': { bg: 0x1e1a3a, body: 0x8a6ac8, skin: SKIN[1], hair: 0xd8d8e0, hat: 'wizard', hatC: 0x3a2a6a, hatC2: 0xffe08a, extra: ['beard'] },
+  'summit-beacon': { bg: 0x2a3a6a, body: 0x3a6ad0, skin: SKIN[0], hair: 0xb06a3a, hat: 'ushanka', hatC: 0x3a6ad0, hatC2: WHITE },
 };
 const DEFAULT_RESIDENT: Resident = { bg: 0x2a3050, body: 0x6a7aa8, skin: SKIN[1], hair: 0x5a3a24, hat: 'none', hatC: 0 };
 
@@ -2092,6 +2093,34 @@ export function drawResident(scene: Phaser.Scene, buildingId: string, size: numb
       fp(g, [-hr * 0.9, top + hr * 0.25, hr * 0.9, top + hr * 0.25, hr * 0.7, top - hr * 0.45, -hr * 0.7, top - hr * 0.45]);
       g.fillStyle(0x000000, 0.2);
       g.fillRect(-hr * 0.85, top + hr * 0.05, hr * 1.7, hr * 0.14);
+      break;
+    case 'helmet':
+      // каска горняка с фонариком
+      g.fillStyle(P.hatC, 1);
+      g.beginPath();
+      g.arc(0, top + hr * 0.62, hr * 1.08, Math.PI, 0, false);
+      g.closePath();
+      g.fillPath();
+      g.fillRoundedRect(-hr * 1.3, top + hr * 0.5, hr * 2.6, hr * 0.24, hr * 0.1);
+      g.fillStyle(0x000000, 0.2);
+      g.fillRect(-hr * 0.08, top - hr * 0.42, hr * 0.16, hr * 0.92);
+      g.fillStyle(IRON, 1);
+      g.fillCircle(0, top + hr * 0.12, hr * 0.3);
+      g.fillStyle(0xfff1a8, 1);
+      g.fillCircle(0, top + hr * 0.12, hr * 0.2);
+      break;
+    case 'ushanka':
+      // ушанка: меховой отворот и уши
+      g.fillStyle(c2, 1);
+      g.fillRoundedRect(-hr * 1.2, hy - hr * 0.35, hr * 0.42, hr * 0.95, hr * 0.18);
+      g.fillRoundedRect(hr * 0.78, hy - hr * 0.35, hr * 0.42, hr * 0.95, hr * 0.18);
+      g.fillStyle(P.hatC, 1);
+      g.beginPath();
+      g.arc(0, top + hr * 0.45, hr * 1.05, Math.PI, 0, false);
+      g.closePath();
+      g.fillPath();
+      g.fillStyle(c2, 1);
+      g.fillRoundedRect(-hr * 1.12, top + hr * 0.2, hr * 2.24, hr * 0.42, hr * 0.2);
       break;
     case 'none':
       break;

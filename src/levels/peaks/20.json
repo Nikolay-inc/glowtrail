@@ -1,0 +1,88 @@
+{
+  "id": "peaks-20",
+  "name": "Испытание ветра",
+  "grid": [
+    "L.*LS.",
+    "*..F..",
+    "FL..F#",
+    ".#.#..",
+    "....v.",
+    "..===.",
+    ".#..F.",
+    "....E."
+  ],
+  "startDir": "S",
+  "deck": [
+    "straight2",
+    "right",
+    "right",
+    "left",
+    "straight2",
+    "left",
+    "right",
+    "straight",
+    "left",
+    "straight",
+    "straight2",
+    "straight",
+    "left",
+    "straight",
+    "right",
+    "straight",
+    "left"
+  ],
+  "stars": {
+    "two": 2,
+    "three": 4
+  },
+  "easeDecks": [
+    [
+      "straight2",
+      "right",
+      "right",
+      "left",
+      "right",
+      "straight2",
+      "left",
+      "right",
+      "straight",
+      "left",
+      "straight",
+      "straight2",
+      "straight",
+      "left",
+      "straight",
+      "right",
+      "straight",
+      "left"
+    ],
+    [
+      "left",
+      "straight2",
+      "right",
+      "right",
+      "left",
+      "right",
+      "straight2",
+      "left",
+      "right",
+      "straight",
+      "left",
+      "straight",
+      "straight2",
+      "straight",
+      "left",
+      "straight",
+      "right",
+      "straight",
+      "left"
+    ]
+  ],
+  "metrics": {
+    "rating": 5.4,
+    "roads": 5,
+    "minTiles": 12,
+    "reserve": 5,
+    "trap": 0.378
+  }
+}

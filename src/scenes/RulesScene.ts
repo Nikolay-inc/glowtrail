@@ -31,6 +31,7 @@ export const RULES_CLOSED = 'rules-closed';
 
 /** Карточки механик леса — на лесном поле. */
 const FOREST_RULES: readonly RuleId[] = ['ring', 'fog', 'shadow', 'escape'];
+const PEAKS_RULES: readonly RuleId[] = ['ice', 'drift', 'wind', 'signals'];
 
 const PANEL_W = 920;
 const PANEL_H = 1330;
@@ -70,7 +71,7 @@ export class RulesScene extends Phaser.Scene {
     text(this, W / 2, top + 72, t(rule.title), 64);
 
     // Мини-поле: то же, что в игре, но без темноты — чтобы всё было хорошо видно.
-    this.board = new BoardView(this, demoLevel(ph), { x: W / 2 - 390, y: top + 140, w: 780, h: 530 }, { look: currentLook(), dark: false, ambient: false, palette: FOREST_RULES.includes(rule.id) ? 'forest' : 'valley' });
+    this.board = new BoardView(this, demoLevel(ph), { x: W / 2 - 390, y: top + 140, w: 780, h: 530 }, { look: currentLook(), dark: false, ambient: false, palette: FOREST_RULES.includes(rule.id) ? 'forest' : PEAKS_RULES.includes(rule.id) ? 'peaks' : 'valley' });
     this.card = new TileCard(this, W / 2, top + 770, 0);
     this.card.disableInteractive();
     this.card.setScale(0.8);

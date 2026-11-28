@@ -1,4 +1,4 @@
-import { CELL_BY_CHAR, CHAR_BY_CELL, DIR_BY_LETTER, RING_LETTERS, TILE_KINDS, type CellType, type Level, type LevelData, type Point } from './types';
+import { CELL_BY_CHAR, CHAR_BY_CELL, DIR_BY_LETTER, FIRE_LETTERS, RING_LETTERS, TILE_KINDS, WIND_CHARS, type CellType, type Level, type LevelData, type Point } from './types';
 
 /** Превращает JSON уровня в структуру для логики и проверяет, что он корректен. */
 export function parseLevel(data: LevelData, num = 0): Level {
@@ -15,6 +15,8 @@ export function parseLevel(data: LevelData, num = 0): Level {
   const turnBridges: number[] = [];
   const ringId: number[] = [];
   const ringCells: number[][] = RING_LETTERS.map(() => []);
+  const wind: number[] = [];
+  const fireNo: number[] = [];
   const goal = data.goal ?? 'classic';
 
   data.grid.forEach((row, y) => {
@@ -38,6 +40,8 @@ export function parseLevel(data: LevelData, num = 0): Level {
       const ring = (RING_LETTERS as readonly string[]).indexOf(ch);
       ringId.push(ring + 1);
       if (ring >= 0) ringCells[ring].push(y * width + x);
+      wind.push((WIND_CHARS as readonly string[]).indexOf(ch));
+      fireNo.push((FIRE_LETTERS as readonly string[]).indexOf(ch) + 1);
       cells.push(type);
     });
   });
@@ -56,6 +60,16 @@ export function parseLevel(data: LevelData, num = 0): Level {
     ringPair[cs[1]] = cs[0];
     rings.push([cs[0], cs[1]]);
   });
+  // Сигнальные огни: номера 1…n без пропусков и повторов, только у цели signals (и у неё — хотя бы два).
+  const fires: number[] = [];
+  const nFires = Math.max(0, ...fireNo);
+  for (let k = 1; k <= nFires; k++) {
+    const at = fireNo.flatMap((n, i) => (n === k ? [i] : []));
+    if (at.length !== 1) throw new Error(`Уровень ${data.id}: сигнальный огонь «${FIRE_LETTERS[k - 1]}» должен быть ровно один (их ${at.length})`);
+    fires.push(at[0]);
+  }
+  if (goal === 'signals' && fires.length < 2) throw new Error(`Уровень ${data.id}: цель «Сигнальные огни» — нужно 2–4 костра`);
+  if (goal !== 'signals' && fires.length) throw new Error(`Уровень ${data.id}: сигнальные огни — только у цели signals`);
   if (goal === 'fireflies') {
     if (exit) throw new Error(`Уровень ${data.id}: у цели «светлячки» арки нет`);
     if (fireflies.length === 0) throw new Error(`Уровень ${data.id}: цель «светлячки», а светлячков нет`);
@@ -88,6 +102,9 @@ export function parseLevel(data: LevelData, num = 0): Level {
     ringPair,
     ringId,
     rings,
+    wind,
+    fireNo,
+    fires,
     fog: data.fog ?? false,
     shadow,
     timed: turnBridges.length > 0 || fade.some((n) => n > 0) || shadow > 0,
@@ -104,8 +121,10 @@ export function parseLevel(data: LevelData, num = 0): Level {
 }
 
 /** Символ клетки в формате JSON (с ориентацией моста и числом гаснущего фонаря). */
-export function cellChar(level: Pick<Level, 'cells' | 'fade' | 'bridgeH'> & { ringId?: number[] }, idx: number): string {
+export function cellChar(level: Pick<Level, 'cells' | 'fade' | 'bridgeH'> & { ringId?: number[]; wind?: number[]; fireNo?: number[] }, idx: number): string {
   const c = level.cells[idx];
+  if (c === 'wind') return WIND_CHARS[Math.max(0, level.wind?.[idx] ?? 1)];
+  if (c === 'fire') return FIRE_LETTERS[Math.max(1, level.fireNo?.[idx] ?? 1) - 1];
   if (c === 'turnbridge') return level.bridgeH[idx] ? '-' : '|';
   if (c === 'ring') return RING_LETTERS[(level.ringId?.[idx] || 1) - 1];
   if (c === 'lantern' && level.fade[idx] > 0) return String(level.fade[idx]);
@@ -113,7 +132,7 @@ export function cellChar(level: Pick<Level, 'cells' | 'fade' | 'bridgeH'> & { ri
 }
 
 /** Строки поля уровня в формате JSON. */
-export function levelRows(level: Pick<Level, 'cells' | 'fade' | 'bridgeH' | 'width'> & { ringId?: number[] }): string[] {
+export function levelRows(level: Pick<Level, 'cells' | 'fade' | 'bridgeH' | 'width'> & { ringId?: number[]; wind?: number[]; fireNo?: number[] }): string[] {
   const rows: string[] = [];
   for (let i = 0; i < level.cells.length; i += level.width) {
     let row = '';

@@ -1,0 +1,90 @@
+{
+  "id": "peaks-14",
+  "name": "Позёмка",
+  "grid": [
+    "E.#...",
+    "...##.",
+    "......",
+    ".L#..L",
+    "...>..",
+    "=.....",
+    ".S...."
+  ],
+  "startDir": "N",
+  "deck": [
+    "left",
+    "right",
+    "left",
+    "right",
+    "right",
+    "straight2",
+    "left",
+    "straight2",
+    "straight",
+    "left",
+    "straight",
+    "right",
+    "left",
+    "right",
+    "left",
+    "left",
+    "right",
+    "right"
+  ],
+  "stars": {
+    "two": 2,
+    "three": 3
+  },
+  "easeDecks": [
+    [
+      "straight",
+      "left",
+      "right",
+      "left",
+      "right",
+      "right",
+      "straight2",
+      "left",
+      "straight2",
+      "straight",
+      "left",
+      "straight",
+      "right",
+      "left",
+      "right",
+      "left",
+      "left",
+      "right",
+      "right"
+    ],
+    [
+      "straight",
+      "left",
+      "right",
+      "left",
+      "right",
+      "straight",
+      "right",
+      "straight2",
+      "left",
+      "straight2",
+      "straight",
+      "left",
+      "straight",
+      "right",
+      "left",
+      "right",
+      "left",
+      "left",
+      "right",
+      "right"
+    ]
+  ],
+  "metrics": {
+    "rating": 3.7,
+    "roads": 32,
+    "minTiles": 14,
+    "reserve": 4,
+    "trap": 0.202
+  }
+}

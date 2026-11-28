@@ -2,12 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { applyAction, createGame, firefliesOnRoad, type GameState } from '../src/core/game';
 import { levelRows, parseLevel } from '../src/core/level';
 import { analyzeLevel, ratingOf, trapRate } from '../src/core/difficulty';
-import { generateOne, mulberry32, randomPath } from '../src/core/generator';
+import { generateOne, mulberry32, randomPath, windIceChains } from '../src/core/generator';
 import { geoMinBounded, geoMinTiles } from '../src/core/geo';
 import { solutionOf, solveLevel, TooManyStates } from '../src/core/solver';
 import type { LevelData, TileKind } from '../src/core/types';
 import { isChallenge, LEVELS, levelById, nextLevelOf, numberInWorld, WORLDS } from '../src/levels/index';
-import { ALL_SLOTS, MEDIUM_MIN_ROADS, needsChoice, BREATHER_MAX_RATING, BREATHER_MIN_ROADS, EASY_MAX_RATING, EASY_MIN_ROADS, FOREST_PLAN, mustBeEasy, MAX_H, MAX_W, NOVELTY, VALLEY_PLAN } from '../src/levels/curve';
+import { ALL_SLOTS, MEDIUM_MIN_ROADS, needsChoice, BREATHER_MAX_RATING, BREATHER_MIN_ROADS, EASY_MAX_RATING, EASY_MIN_ROADS, FOREST_PLAN, PEAKS_PLAN, WIND_CHAIN_FREE_FROM, mustBeEasy, MAX_H, MAX_W, NOVELTY, VALLEY_PLAN } from '../src/levels/curve';
 import { fogFair } from '../src/core/fog';
 import { featuresOf } from '../src/core/generator';
 
@@ -161,7 +161,7 @@ describe('генератор', () => {
 
 describe('мир «Долина»', () => {
   it('30 уровней: постоянные id, номера по порядку, испытания — 10, 20, 30', () => {
-    expect(WORLDS.map((w) => w.id)).toEqual(['valley', 'forest']);
+    expect(WORLDS.map((w) => w.id)).toEqual(['valley', 'forest', 'peaks']);
     const v = WORLDS[0].levels;
     expect(v).toHaveLength(30);
     v.forEach((l, i) => {
@@ -219,6 +219,14 @@ describe('мир «Долина»', () => {
       escape: (l) => l.goal === 'escape' && l.shadow > 0,
       combo: (l) => (l.deck.includes('jump') || l.turnBridges.length > 0 || l.fades.length > 0) && (l.rings.length > 0 || l.fog || l.shadow > 0),
       boss: (l) => l.goal === 'escape' && l.fog && l.rings.length > 0,
+      ice: (l) => l.cells.includes('ice'),
+      drift: (l) => l.cells.includes('drift'),
+      iceDrift: (l) => l.cells.includes('ice') && l.cells.includes('drift'),
+      wind: (l) => l.cells.includes('wind'),
+      windPast: (l) => l.cells.includes('wind') && (l.cells.includes('ice') || l.turnBridges.length > 0 || l.rings.length > 0),
+      signals: (l) => l.goal === 'signals' && l.fires.length >= 2,
+      signalsMix: (l) => l.goal === 'signals' && (l.cells.includes('ice') || l.cells.includes('wind') || l.fog),
+      summit: (l) => l.goal === 'signals' && l.cells.includes('ice') && l.cells.includes('wind'),
     };
     for (const b of NOVELTY) {
       for (let n = b.from; n <= b.to; n++) expect(has[b.test](LEVELS[n - 1]), `${n}: ${b.what}`).toBe(true);
@@ -254,7 +262,7 @@ describe('мир «Туманный лес»', () => {
       expect(numberInWorld(l)).toBe(i + 1);
     });
     expect(forest.levels.filter(isChallenge).map((l) => l.num)).toEqual([40, 50, 60]);
-    expect(nextLevelOf(forest.levels[29])).toBeNull();
+    expect(nextLevelOf(forest.levels[29])?.id).toBe('peaks-01');
   });
 
   it('по плану: поле до 6x8, решений не меньше 2, туман без угадывания, тень у «Побега»', () => {
@@ -274,6 +282,42 @@ describe('мир «Туманный лес»', () => {
     expect(avg(41)).toBeLessThan(avg(51));
     const last = LEVELS.slice(50, 60).map((l) => l.metrics!.rating);
     expect(last[9]).toBe(Math.max(...last));
+  });
+});
+
+describe('мир «Ледяные вершины»', () => {
+  const peaks = WORLDS.find((w) => w.id === 'peaks')!;
+
+  it('30 уровней 61–90: id peaks-01…30, номер в мире 1–30, испытания — 70, 80, 90', () => {
+    expect(peaks.levels).toHaveLength(30);
+    peaks.levels.forEach((l, i) => {
+      expect(l.id).toBe(`peaks-${String(i + 1).padStart(2, '0')}`);
+      expect(l.num).toBe(61 + i);
+      expect(numberInWorld(l)).toBe(i + 1);
+    });
+    expect(peaks.levels.filter(isChallenge).map((l) => l.num)).toEqual([70, 80, 90]);
+    expect(nextLevelOf(peaks.levels[29])).toBeNull();
+  });
+
+  it('по плану: поле до 6x8, решений не меньше 2, туман без угадывания, до 81 — одна цепочка «ветер → лёд»', () => {
+    for (const slot of PEAKS_PLAN) {
+      const l = LEVELS[slot.num - 1];
+      expect(l.width, l.id).toBeLessThanOrEqual(Math.min(slot.maxW, MAX_W));
+      expect(l.height, l.id).toBeLessThanOrEqual(Math.min(slot.maxH, MAX_H));
+      expect(l.metrics!.roads, l.id).toBeGreaterThanOrEqual(2);
+      if (slot.role !== 'challenge') expect(l.metrics!.roads, `${l.id}: 2–3 решения — только у испытаний`).toBeGreaterThanOrEqual(4);
+      if (l.goal === 'signals') expect(l.fires.length, l.id).toBeGreaterThanOrEqual(2);
+      if (l.fog) expect(fogFair(l).ok, `${l.id}: туман без угадывания`).toBe(true);
+      if (slot.num < WIND_CHAIN_FREE_FROM) expect(windIceChains(l), l.id).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('рейтинг растёт по миру: средний 61–70 < 71–80 < 81–90, пик около 6', () => {
+    const avg = (lo: number) => LEVELS.slice(lo - 1, lo + 9).reduce((a, l) => a + l.metrics!.rating, 0) / 10;
+    expect(avg(61)).toBeLessThan(avg(71));
+    expect(avg(71)).toBeLessThan(avg(81));
+    const top = Math.max(...peaks.levels.map((l) => l.metrics!.rating));
+    expect(top).toBeLessThanOrEqual(7);
   });
 });
 

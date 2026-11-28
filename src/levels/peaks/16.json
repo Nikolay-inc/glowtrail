@@ -1,0 +1,76 @@
+{
+  "id": "peaks-16",
+  "name": "Грибы под снегом",
+  "grid": [
+    ".a....",
+    ".Eb.L.",
+    ".^<.==",
+    ".===..",
+    "......",
+    "#.L.#b",
+    ".....a",
+    "#...S."
+  ],
+  "startDir": "N",
+  "deck": [
+    "right",
+    "straight2",
+    "straight",
+    "right",
+    "right",
+    "left",
+    "straight2",
+    "left",
+    "straight2",
+    "straight",
+    "right",
+    "right",
+    "straight2"
+  ],
+  "stars": {
+    "two": 1,
+    "three": 2
+  },
+  "easeDecks": [
+    [
+      "right",
+      "straight2",
+      "straight",
+      "right",
+      "right",
+      "left",
+      "right",
+      "straight2",
+      "left",
+      "straight2",
+      "straight",
+      "right",
+      "right",
+      "straight2"
+    ],
+    [
+      "right",
+      "straight2",
+      "straight",
+      "right",
+      "straight",
+      "right",
+      "left",
+      "right",
+      "straight2",
+      "left",
+      "straight2",
+      "straight",
+      "right",
+      "right",
+      "straight2"
+    ]
+  ],
+  "metrics": {
+    "rating": 4.9,
+    "roads": 10,
+    "minTiles": 10,
+    "reserve": 3,
+    "trap": 0.307
+  }
+}

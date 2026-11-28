@@ -4,14 +4,16 @@
 // Уровни постройки: 1 — восстановлена, 2 — улучшена (вывеска, ещё окна со светом, цветочные ящики, второй фонарь),
 // 3 — расцвет (пристройка сбоку, гирлянда огоньков, флажок или флюгер, золотая отделка).
 // Дым, жители и свечение добавляет VillageScene по полям BuildingView.
-// Украшения, улицы, силуэты Горного города и портреты жителей — в villageDecor.ts (реэкспорт ниже).
+// Постройки Горного города (камень, снег на крышах, сосульки) — в villageMountain.ts.
+// Украшения, улицы и портреты жителей — в villageDecor.ts (реэкспорт ниже).
 
 import Phaser from 'phaser';
+import { mountain, mountainExt, type MountainExt } from './villageMountain';
 
-export { DECOR_TYPES, decorIcon, drawDecor, drawResident, drawSilhouette, drawStreet, streetSample, type DecorType, type DecorView, type SilhouetteView } from './villageDecor';
+export { DECOR_TYPES, decorIcon, drawDecor, drawResident, drawStreet, streetSample, type DecorType, type DecorView, type StreetStyle } from './villageDecor';
 
-type G = Phaser.GameObjects.Graphics;
-type Pt = [number, number];
+export type G = Phaser.GameObjects.Graphics;
+export type Pt = [number, number];
 const V2 = Phaser.Math.Vector2;
 
 /** Точка света: окно, фонарь, огонёк гирлянды. `c` — цвет света (по умолчанию тёплый). */
@@ -43,18 +45,22 @@ export interface BuildingView {
   beam?: { x: number; y: number };
 }
 
-/** Постройки долины (по порядку восстановления) и лесного квартала. */
+/** Постройки долины (по порядку восстановления), лесного квартала и Горного города. */
 export const VALLEY_BUILDINGS = ['well', 'bakery', 'workshop', 'mill', 'bridge', 'garden', 'chapel', 'square', 'lumo', 'lighthouse'] as const;
 export const FOREST_BUILDINGS = ['herbalist', 'observatory', 'owl-post', 'mushroom-farm', 'sawmill', 'lamp-workshop', 'teahouse', 'forester', 'swing-bridge', 'glow-lake'] as const;
+export const MOUNTAIN_BUILDINGS = ['mine', 'forge', 'cable-car', 'crystal-cave', 'goat-farm', 'bell-tower', 'hot-springs', 'stone-bridge', 'star-temple', 'summit-beacon'] as const;
 const FOREST = new Set<string>(FOREST_BUILDINGS);
+const MOUNTAIN = new Set<string>(MOUNTAIN_BUILDINGS);
 
 export const GOLD = 0xe8c25a;
-const GOLD_DARK = 0xb08a2e;
-const IRON = 0x1a1626;
+export const GOLD_DARK = 0xb08a2e;
+export const IRON = 0x1a1626;
 const TEAL = 0x6ae6d8;
+/** Холодный свет Горного города (лёд, кристаллы). */
+export const ICE = 0x9ad6ff;
 const FIREFLY = 0xd8ff7a;
 
-interface Pal {
+export interface Pal {
   wall: number;
   wallDark: number;
   roof: number;
@@ -74,6 +80,8 @@ interface Pal {
   /** Акцент: в лесу светящийся бирюзовый. */
   accent: number;
   forest: boolean;
+  /** Горный город: снег на крышах, сосульки, гирлянды с холодными огоньками. */
+  mountain?: boolean;
   lit: boolean;
 }
 
@@ -91,18 +99,25 @@ function forestPal(lit: boolean): Pal {
     : { wall: 0x1f2430, wallDark: 0x171b26, roof: 0x17231f, roofDark: 0x101915, wood: 0x221f2b, woodDark: 0x18161f, stone: 0x262c37, stoneDark: 0x1b2029, window: 0x0d1024, trim: 0x30364a, leaf: 0x15221b, leafDark: 0x0f1813, moss: 0x1b2a21, lamp: 0x0d1024, accent: 0x1c2836, forest: true, lit };
 }
 
+/** Горная палитра: серо-голубой камень, тёмная черепица под снегом, тёплые окна. До восстановления — холодная, тёмная. */
+function mountainPal(lit: boolean): Pal {
+  return lit
+    ? { wall: 0x8a8ea4, wallDark: 0x62667e, roof: 0x5a3a48, roofDark: 0x3e2632, wood: 0x7a5236, woodDark: 0x4e3424, stone: 0x9a9eb2, stoneDark: 0x6a6e86, window: 0xffd36b, trim: 0xece4d4, leaf: 0x2f5a4a, leafDark: 0x1f4034, moss: 0xeef4ff, lamp: 0xffd36b, accent: ICE, forest: false, mountain: true, lit }
+    : { wall: 0x272c44, wallDark: 0x1d2136, roof: 0x1e2034, roofDark: 0x15172a, wood: 0x2a2236, woodDark: 0x1e1828, stone: 0x2e3350, stoneDark: 0x22263c, window: 0x0d1024, trim: 0x3a3e58, leaf: 0x172426, leafDark: 0x101a1c, moss: 0x8a96b8, lamp: 0x0d1024, accent: 0x2a2c44, forest: false, mountain: true, lit };
+}
+
 // ---------------------------------------------------------------------------
 // Мелкие помощники
 
 /** Залитый многоугольник из плоского списка координат. */
-function fp(g: G, a: number[]) {
+export function fp(g: G, a: number[]) {
   const pts: Phaser.Math.Vector2[] = [];
   for (let i = 0; i < a.length; i += 2) pts.push(new V2(a[i], a[i + 1]));
   g.fillPoints(pts, true);
 }
 
 /** Ломаная из точек. */
-function sp(g: G, pts: Pt[], closed = false) {
+export function sp(g: G, pts: Pt[], closed = false) {
   g.strokePoints(
     pts.map(([x, y]) => new V2(x, y)),
     closed,
@@ -110,7 +125,7 @@ function sp(g: G, pts: Pt[], closed = false) {
 }
 
 /** Повёрнутый прямоугольник (доска, бревно): центр, длина, толщина, угол. */
-function plank(g: G, x: number, y: number, len: number, w: number, ang: number) {
+export function plank(g: G, x: number, y: number, len: number, w: number, ang: number) {
   const c = Math.cos(ang);
   const s = Math.sin(ang);
   const hx = (len / 2) * c;
@@ -121,7 +136,7 @@ function plank(g: G, x: number, y: number, len: number, w: number, ang: number) 
 }
 
 /** Точки на эллипсе от угла a0 до a1 (радианы, y вниз). */
-function arcPts(cx: number, cy: number, rx: number, ry: number, a0: number, a1: number, n: number): Pt[] {
+export function arcPts(cx: number, cy: number, rx: number, ry: number, a0: number, a1: number, n: number): Pt[] {
   const out: Pt[] = [];
   for (let i = 0; i <= n; i++) {
     const a = a0 + ((a1 - a0) * i) / n;
@@ -131,7 +146,7 @@ function arcPts(cx: number, cy: number, rx: number, ry: number, a0: number, a1: 
 }
 
 /** Края двускатной крыши roof(): левый свес, конёк, правый свес. */
-function roofEdge(x: number, y: number, w: number, h: number): Pt[] {
+export function roofEdge(x: number, y: number, w: number, h: number): Pt[] {
   return [
     [x - w / 2 - 16, y],
     [x, y - h],
@@ -140,7 +155,7 @@ function roofEdge(x: number, y: number, w: number, h: number): Pt[] {
 }
 
 /** Тень на земле. */
-function shadow(g: G, w: number) {
+export function shadow(g: G, w: number) {
   g.fillStyle(0x000000, 0.35);
   g.fillEllipse(0, 6, w, 26);
 }
@@ -173,7 +188,7 @@ function roof(g: G, x: number, y: number, w: number, h: number, p: Pal, lit: boo
 }
 
 /** Окно с наличником и ставнями (у тёмной постройки одна ставня покосилась). */
-function windowAt(g: G, v: BuildingView, x: number, y: number, w: number, h: number, p: Pal, lit: boolean, shutters = true) {
+export function windowAt(g: G, v: BuildingView, x: number, y: number, w: number, h: number, p: Pal, lit: boolean, shutters = true) {
   g.fillStyle(p.trim, 1);
   g.fillRect(x - w / 2 - 4, y - h / 2 - 4, w + 8, h + 8);
   g.fillStyle(p.window, 1);
@@ -191,7 +206,7 @@ function windowAt(g: G, v: BuildingView, x: number, y: number, w: number, h: num
 }
 
 /** Круглое окно (дупло, иллюминатор) с крестом рамы. */
-function roundWindow(g: G, v: BuildingView, x: number, y: number, r: number, p: Pal, cross = true) {
+export function roundWindow(g: G, v: BuildingView, x: number, y: number, r: number, p: Pal, cross = true) {
   g.fillStyle(p.trim, 1);
   g.fillCircle(x, y, r + 4);
   g.fillStyle(p.window, 1);
@@ -204,7 +219,7 @@ function roundWindow(g: G, v: BuildingView, x: number, y: number, r: number, p: 
   v.lights.push({ x, y, r: r + 2 });
 }
 
-function door(g: G, x: number, y: number, w: number, h: number, p: Pal, round = false) {
+export function door(g: G, x: number, y: number, w: number, h: number, p: Pal, round = false) {
   g.fillStyle(p.woodDark, 1);
   if (round) {
     g.fillRect(x - w / 2, y - h + w / 2, w, h - w / 2);
@@ -215,7 +230,7 @@ function door(g: G, x: number, y: number, w: number, h: number, p: Pal, round = 
 }
 
 /** Фонарь на столбе у входа (в лесу свет бирюзовый). */
-function lampPost(g: G, v: BuildingView, x: number, y: number, h: number, p: Pal) {
+export function lampPost(g: G, v: BuildingView, x: number, y: number, h: number, p: Pal) {
   g.fillStyle(IRON, 1);
   g.fillRect(x - 3, y - h, 6, h);
   g.fillStyle(p.lamp, 1);
@@ -226,7 +241,7 @@ function lampPost(g: G, v: BuildingView, x: number, y: number, h: number, p: Pal
 }
 
 /** Висячий фонарик на шнурке: x, y — точка подвеса. */
-function hangLantern(g: G, v: BuildingView, x: number, y: number, len: number, color: number, lit: boolean, round = false) {
+export function hangLantern(g: G, v: BuildingView, x: number, y: number, len: number, color: number, lit: boolean, round = false) {
   g.lineStyle(2, IRON, 1);
   g.lineBetween(x, y, x, y + len);
   const cy = y + len + 9;
@@ -239,7 +254,7 @@ function hangLantern(g: G, v: BuildingView, x: number, y: number, len: number, c
 }
 
 /** Штакетник (у тёмной постройки — сломанные доски). */
-function fence(g: G, x0: number, x1: number, y: number, p: Pal, lit: boolean) {
+export function fence(g: G, x0: number, x1: number, y: number, p: Pal, lit: boolean) {
   g.fillStyle(p.wood, 1);
   g.fillRect(x0, y - 22, x1 - x0, 5);
   let i = 0;
@@ -250,7 +265,7 @@ function fence(g: G, x0: number, x1: number, y: number, p: Pal, lit: boolean) {
   }
 }
 
-function chimney(g: G, v: BuildingView, x: number, y: number, h: number, p: Pal) {
+export function chimney(g: G, v: BuildingView, x: number, y: number, h: number, p: Pal) {
   g.fillStyle(p.stoneDark, 1);
   g.fillRect(x - 11, y - h, 22, h);
   g.fillStyle(p.stone, 1);
@@ -310,7 +325,7 @@ function mushroom(g: G, v: BuildingView, x: number, y: number, s: number, p: Pal
 }
 
 /** Торец бревна с кольцами. */
-function logEnd(g: G, x: number, y: number, r: number, p: Pal) {
+export function logEnd(g: G, x: number, y: number, r: number, p: Pal) {
   g.fillStyle(p.woodDark, 1);
   g.fillCircle(x, y, r);
   g.fillStyle(p.lit ? 0xc9a070 : 0x2c2634, 1);
@@ -320,7 +335,7 @@ function logEnd(g: G, x: number, y: number, r: number, p: Pal) {
 }
 
 /** Ящик с цветами под окном (y — верх ящика). */
-function flowerBox(g: G, x: number, y: number, w: number, forest: boolean) {
+export function flowerBox(g: G, x: number, y: number, w: number, forest: boolean) {
   g.fillStyle(0x3e7a4a, 1);
   const n = Math.max(2, Math.round(w / 10));
   for (let k = 0; k < n; k++) g.fillCircle(x - w / 2 + 5 + (k * (w - 10)) / (n - 1), y - 2, 6);
@@ -338,9 +353,9 @@ function flowerBox(g: G, x: number, y: number, w: number, forest: boolean) {
 // ---------------------------------------------------------------------------
 // Знаки на вывесках
 
-type Emblem = 'drop' | 'bread' | 'gear' | 'wheat' | 'arch' | 'apple' | 'bell' | 'star' | 'beam' | 'leaf' | 'moon' | 'letter' | 'mushroom' | 'log' | 'lamp' | 'cup' | 'tree' | 'fish' | 'house';
+export type Emblem = 'drop' | 'bread' | 'gear' | 'wheat' | 'arch' | 'apple' | 'bell' | 'star' | 'beam' | 'leaf' | 'moon' | 'letter' | 'mushroom' | 'log' | 'lamp' | 'cup' | 'tree' | 'fish' | 'house' | 'pick' | 'anvil' | 'gondola' | 'crystal' | 'goat' | 'steam' | 'peak';
 
-function star(g: G, x: number, y: number, r1: number, r2: number, rot = -Math.PI / 2) {
+export function star(g: G, x: number, y: number, r1: number, r2: number, rot = -Math.PI / 2) {
   const pts: Phaser.Math.Vector2[] = [];
   for (let i = 0; i < 10; i++) {
     const a = rot + (i * Math.PI) / 5;
@@ -469,6 +484,57 @@ function emblem(g: G, kind: Emblem, x: number, y: number, s: number, c: number, 
       g.fillStyle(bg, 1);
       g.fillRect(x - s * 0.15, y + s * 0.3, s * 0.3, s * 0.5);
       break;
+    case 'pick':
+      // кирка: рукоять наискосок и изогнутое железо
+      g.lineBetween(x - s * 0.7, y + s * 0.8, x + s * 0.4, y - s * 0.4);
+      g.beginPath();
+      g.arc(x + s * 0.4, y + s * 0.2, s * 0.75, Math.PI * 1.2, Math.PI * 1.85, false);
+      g.strokePath();
+      break;
+    case 'anvil':
+      fp(g, [x - s, y - s * 0.45, x + s * 0.7, y - s * 0.45, x + s * 0.45, y - s * 0.05, x + s * 0.25, y + s * 0.05, x + s * 0.4, y + s * 0.65, x - s * 0.5, y + s * 0.65, x - s * 0.3, y + s * 0.05, x - s * 0.55, y - s * 0.15]);
+      break;
+    case 'gondola':
+      g.lineBetween(x - s * 1.1, y - s * 0.85, x + s * 1.1, y - s * 0.55);
+      g.lineBetween(x, y - s * 0.7, x, y - s * 0.3);
+      g.fillRoundedRect(x - s * 0.6, y - s * 0.3, s * 1.2, s * 1.0, s * 0.2);
+      g.fillStyle(bg, 1);
+      g.fillRect(x - s * 0.4, y - s * 0.15, s * 0.32, s * 0.32);
+      g.fillRect(x + s * 0.08, y - s * 0.15, s * 0.32, s * 0.32);
+      break;
+    case 'crystal':
+      fp(g, [x, y - s, x + s * 0.4, y - s * 0.35, x + s * 0.3, y + s * 0.8, x - s * 0.3, y + s * 0.8, x - s * 0.4, y - s * 0.35]);
+      fp(g, [x - s * 0.55, y - s * 0.3, x - s * 0.3, y + s * 0.1, x - s * 0.4, y + s * 0.8, x - s * 0.8, y + s * 0.8, x - s * 0.85, y + s * 0.05]);
+      g.lineStyle(1.5, bg, 1);
+      g.lineBetween(x, y - s, x, y + s * 0.8);
+      break;
+    case 'goat':
+      g.fillEllipse(x - s * 0.1, y + s * 0.1, s * 1.3, s * 0.7);
+      g.fillCircle(x + s * 0.65, y - s * 0.25, s * 0.28);
+      g.lineBetween(x - s * 0.5, y + s * 0.3, x - s * 0.5, y + s * 0.85);
+      g.lineBetween(x + s * 0.3, y + s * 0.3, x + s * 0.3, y + s * 0.85);
+      g.lineStyle(Math.max(1.5, s * 0.15), c, 1);
+      g.beginPath();
+      g.arc(x + s * 0.45, y - s * 0.5, s * 0.3, Math.PI * 1.1, Math.PI * 1.9, false);
+      g.strokePath();
+      break;
+    case 'steam':
+      g.fillRoundedRect(x - s * 0.9, y + s * 0.35, s * 1.8, s * 0.45, s * 0.2);
+      g.lineStyle(Math.max(1.5, s * 0.18), c, 1);
+      for (const dx of [-0.45, 0, 0.45]) {
+        g.beginPath();
+        g.arc(x + dx * s + s * 0.12, y - s * 0.1, s * 0.22, Math.PI * 0.5, Math.PI * 1.5, false);
+        g.arc(x + dx * s - s * 0.12, y - s * 0.55, s * 0.22, Math.PI * 0.5, Math.PI * 1.5, true);
+        g.strokePath();
+      }
+      break;
+    case 'peak':
+      g.fillTriangle(x - s, y + s * 0.75, x + s, y + s * 0.75, x + s * 0.1, y - s * 0.85);
+      g.fillStyle(bg, 1);
+      g.fillTriangle(x - s * 0.18, y - s * 0.4, x + s * 0.36, y - s * 0.4, x + s * 0.1, y - s * 0.85);
+      g.fillStyle(c, 1);
+      g.fillCircle(x + s * 0.1, y - s * 0.95, s * 0.12);
+      break;
   }
 }
 
@@ -476,7 +542,7 @@ function emblem(g: G, kind: Emblem, x: number, y: number, s: number, c: number, 
 // Уровни постройки: общие детали по разметке Up
 
 /** Вывеска: hang — на кронштейне сбоку от стены, drop — на цепочках вниз, wall — доска на стене, stand — на столбиках. */
-interface SignSpec {
+export interface SignSpec {
   mode: 'hang' | 'drop' | 'wall' | 'stand';
   x: number;
   y: number;
@@ -485,10 +551,10 @@ interface SignSpec {
   emblem: Emblem;
 }
 
-type ExtKind = 'shed' | 'veranda' | 'tower' | 'greenhouse' | 'kiosk' | 'cottage' | 'gazebo' | 'trough';
+type ExtKind = 'shed' | 'veranda' | 'tower' | 'greenhouse' | 'kiosk' | 'cottage' | 'gazebo' | 'trough' | MountainExt;
 
 /** Разметка улучшений постройки (координаты базового рисунка). */
-interface Up {
+export interface Up {
   /** Края по земле и высота базового рисунка. */
   l: number;
   r: number;
@@ -513,7 +579,7 @@ interface Up {
 }
 
 /** Состояние рисования: слои, палитра, уровень и занятая область. */
-interface B {
+export interface B {
   scene: Phaser.Scene;
   g: G;
   back: G;
@@ -527,7 +593,7 @@ interface B {
   top: number;
 }
 
-function grow(b: B, x0: number, x1: number, top = 0) {
+export function grow(b: B, x0: number, x1: number, top = 0) {
   b.l = Math.min(b.l, x0, x1);
   b.r = Math.max(b.r, x0, x1);
   b.top = Math.max(b.top, top);
@@ -579,7 +645,7 @@ function sign(b: B, s: SignSpec, gold: boolean) {
 /** Гирлянда: провисающий провод с огоньками между точками; каждый огонёк — точка света. */
 function garland(b: B, pts: Pt[]) {
   const g = b.front;
-  const cols = b.p.forest ? [TEAL, 0xffd36b, 0x9ad6ff, FIREFLY] : [0xffd36b, 0xff9e6b, 0xfff1cc, 0xffb3cf];
+  const cols = b.p.forest ? [TEAL, 0xffd36b, 0x9ad6ff, FIREFLY] : b.p.mountain ? [0xffd36b, ICE, 0xfff1cc, 0xff9e6b] : [0xffd36b, 0xff9e6b, 0xfff1cc, 0xffb3cf];
   let k = 0;
   for (let i = 0; i < pts.length - 1; i++) {
     const [x0, y0] = pts[i];
@@ -643,7 +709,7 @@ function flag(b: B, x: number, y: number, vane: boolean) {
     g.fillRect(x - 2, y - 58, 4, 58);
     g.fillStyle(GOLD, 1);
     g.fillCircle(x, y - 60, 4);
-    g.fillStyle(b.p.forest ? 0x3aa86a : 0xd0504a, 1);
+    g.fillStyle(b.p.forest ? 0x3aa86a : b.p.mountain ? 0x3a6ad0 : 0xd0504a, 1);
     fp(g, [x + 2, y - 56, x + 20, y - 59, x + 36, y - 52, x + 28, y - 47, x + 36, y - 40, x + 18, y - 42, x + 2, y - 38]);
     g.lineStyle(2, GOLD, 1);
     g.lineBetween(x + 4, y - 47, x + 26, y - 47);
@@ -808,6 +874,14 @@ function extension(b: B, e: Up['ext']): Pt {
       w = 110;
       h = 156;
       top = [X(48), y0 - 152];
+      break;
+    }
+    default: {
+      // Пристройки Горного города (шале, дровяник, ларёк с глинтвейном) — villageMountain.ts.
+      const m = mountainExt(b, e.kind as MountainExt, X, y0);
+      w = m.w;
+      h = m.h;
+      top = m.top;
       break;
     }
     case 'trough': {
@@ -2388,9 +2462,9 @@ export function drawBuilding(scene: Phaser.Scene, id: string, lit: boolean, leve
   const g = scene.add.graphics();
   const front = scene.add.graphics();
   const v: BuildingView = { objects: [back, g, front], height: 200, width: 200, lights: [], chimneys: [], residents: 0 };
-  const p = FOREST.has(id) ? forestPal(lit) : pal(lit);
+  const p = FOREST.has(id) ? forestPal(lit) : MOUNTAIN.has(id) ? mountainPal(lit) : pal(lit);
   const b: B = { scene, g, back, front, v, p, lit, lv, l: 0, r: 0, top: 0 };
-  const u = valley(b, id) ?? forest(b, id) ?? generic(b);
+  const u = valley(b, id) ?? forest(b, id) ?? mountain(b, id) ?? generic(b);
   grow(b, u.l, u.r, u.h);
   if (lv >= 2) level2(b, u);
   if (lv >= 3) level3(b, u);
@@ -2404,7 +2478,7 @@ export function drawBuilding(scene: Phaser.Scene, id: string, lit: boolean, leve
   }
   v.width = Math.round(b.r - b.l);
   v.height = Math.round(Math.max(u.h, b.top));
-  const base = id === 'square' || id === 'well' || id === 'teahouse' ? 2 : 1;
+  const base = id === 'square' || id === 'well' || id === 'teahouse' || id === 'goat-farm' || id === 'hot-springs' ? 2 : 1;
   v.residents = lv === 0 ? 0 : base + lv - 1;
   return v;
 }

@@ -75,7 +75,7 @@ describe('когда показывать карточки', () => {
     expect(RULES_BY_LEVEL[firstWith((l) => l.cells.includes('rock'))]).toContain('rock');
     expect(RULES_BY_LEVEL[firstWith((l) => l.cells.includes('water'))]).toContain('water');
     // Остальное объясняем по содержимому уровня — там, где элемент встретился впервые.
-    const byContent = ['firefly', 'jump', 'ffgoal', 'turnbridge', 'fade', 'ring', 'fog', 'shadow', 'escape'];
+    const byContent = ['firefly', 'jump', 'ffgoal', 'turnbridge', 'fade', 'ring', 'fog', 'shadow', 'escape', 'ice', 'drift', 'wind', 'signals'];
     expect(Object.values(RULES_BY_LEVEL).flat().sort()).toEqual(ALL_RULES.filter((r) => !byContent.includes(r)).sort());
     const ff = LEVELS.find((l) => l.fireflies.length > 0);
     expect(ff?.num).toBe(FIREFLY_FROM);
@@ -93,6 +93,15 @@ describe('когда показывать карточки', () => {
     expect(rulesFor(LEVELS[34])).toContain('fog');
     expect(rulesFor(LEVELS[40])).toContain('shadow');
     expect(rulesFor(LEVELS[50])).toContain('escape');
+    // Вершины: лёд — 61, сугроб — 65, ветер — 71, «Сигнальные огни» — 81 (первая встреча).
+    expect(LEVELS.find((l) => l.cells.includes('ice'))?.num).toBe(61);
+    expect(LEVELS.find((l) => l.cells.includes('drift'))?.num).toBe(65);
+    expect(LEVELS.find((l) => l.cells.includes('wind'))?.num).toBe(71);
+    expect(LEVELS.find((l) => l.goal === 'signals')?.num).toBe(81);
+    expect(rulesFor(LEVELS[60])).toContain('ice');
+    expect(rulesFor(LEVELS[64])).toContain('drift');
+    expect(rulesFor(LEVELS[70])).toContain('wind');
+    expect(rulesFor(LEVELS[80])).toContain('signals');
     // Каждая карточка правил где-то встречается.
     const shown = new Set(LEVELS.flatMap((l) => rulesFor(l)));
     for (const r of ALL_RULES) if (r !== 'side') expect(shown.has(r), r).toBe(true);

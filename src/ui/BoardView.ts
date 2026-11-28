@@ -2,8 +2,8 @@
 // Логики здесь нет — вид только показывает состояние из core/game.
 
 import Phaser from 'phaser';
-import { fadeLeftAt, tilesPlaced, timeOf, type GameState, type Placement } from '../core/game';
-import { bridgeHorizontal } from '../core/tiles';
+import { fadeLeftAt, signalsLit, tilesPlaced, timeOf, type GameState, type Placement } from '../core/game';
+import { bridgeHorizontal, driftMelted } from '../core/tiles';
 import { DX, DY, type Dir, type Level } from '../core/types';
 import { C } from './theme';
 import { createLumo, drawFireflyIcon, drawPadlock } from './draw';
@@ -13,8 +13,10 @@ import { FONT } from './theme';
 import { raysBurst, reducedMotion } from './fx';
 import { sfx } from '../audio';
 import { DEFAULT_LOOK, type Look } from '../core/wardrobe';
-import { ARCH_COLORS, decorateArch, ROAD_COLORS, type ArchStyle, type RoadStyle } from './skins';
+import { ARCH_COLORS, decorateArch, drawIceDetails, ROAD_COLORS, type ArchStyle, type RoadStyle } from './skins';
 import { fogVisible } from '../core/fog';
+import { addSnowfall } from './snow';
+import { DriftView, drawIceBase, drawSnowCap, FireView, peaksCellDecor, SLIDE_BEAM, WindView } from './peaks';
 import { drawRingBase, FogView, forestCellDecor, forestDrops, forestMist, PALETTES, paletteOf, RingView, ShadowView, type Palette, type PaletteColors } from './forest';
 
 /** Точка дороги: центр клетки; jump — к ней дорога пришла прыжком (рисуем дугу, а не линию). */
@@ -145,6 +147,9 @@ export class BoardView {
   private readonly nightLight: number;
   private readonly P: PaletteColors;
   private readonly forest: boolean;
+  private readonly peaks: boolean;
+  private drifts: DriftView[] = [];
+  private fireViews: FireView[] = [];
   private rings: RingView[] = [];
   private fog?: FogView;
   private shadow?: ShadowView;
@@ -169,6 +174,7 @@ export class BoardView {
     this.hasExit = level.goal !== 'fireflies';
     const pal = opts.palette ?? paletteOf(level);
     this.forest = pal === 'forest';
+    this.peaks = pal === 'peaks';
     this.P = PALETTES[pal];
     this.vis = level.cells.map(() => true);
 
@@ -197,6 +203,16 @@ export class BoardView {
         const c = this.center(idx);
         this.rings.push(new RingView(scene, idx, level.ringId[idx], c.x, c.y, this.cell));
       }
+    }
+    // Вершины: сугробы, ветер, сигнальные огни.
+    level.cells.forEach((type, idx) => {
+      const c = this.center(idx);
+      if (type === 'drift') this.drifts.push(new DriftView(scene, idx, c.x, c.y, this.cell));
+      if (type === 'wind' && level.wind[idx] >= 0) new WindView(scene, idx, level.wind[idx] as Dir, c.x, c.y, this.cell);
+    });
+    for (const idx of level.fires) {
+      const c = this.center(idx);
+      this.fireViews.push(new FireView(scene, idx, level.fireNo[idx], c.x, c.y, this.cell));
     }
     if (level.fog) this.fog = new FogView(scene, level, this);
     if (level.shadow) this.shadow = new ShadowView(scene, level, this);
@@ -247,6 +263,8 @@ export class BoardView {
       .setDepth(8);
     if (opts.dark ?? true) this.initDarkness();
     if (opts.ambient !== false) this.ambient();
+    // Вершины: редкий снег над полем (над темнотой, чтобы снежинки светились; на слабых устройствах — меньше).
+    if (this.peaks && opts.ambient !== false) addSnowfall(scene, this.area, { depth: 6.58, size: Math.max(0.5, this.cell / 180), density: 0.8 });
   }
 
   /** Поле в пикселях (для тумана и капель). */
@@ -265,6 +283,12 @@ export class BoardView {
       if (type !== 'empty' && type !== 'firefly') return;
       const x0 = this.ox + (idx % level.width) * cell;
       const y0 = this.oy + Math.floor(idx / level.width) * cell;
+      if (this.peaks) {
+        // Снег вместо травы: искорки и ёлочки.
+        const snow = peaksCellDecor(scene, rnd, x0, y0, cell);
+        if (snow.length) this.decor.set(idx, snow);
+        return;
+      }
       const items: Phaser.GameObjects.GameObject[] = [];
       const spot = () => ({ x: x0 + cell * rnd.realInRange(0.18, 0.82), y: y0 + cell * rnd.realInRange(0.3, 0.86) });
       const tuftN = rnd.weightedPick([0, 1, 1, 2, 2, 3]);
@@ -325,9 +349,10 @@ export class BoardView {
         alpha: { start: 0.75, end: 0 },
         frequency: 900,
         blendMode: Phaser.BlendModes.ADD,
-        tint: level.night ? 0x9dff5c : this.forest ? 0x9df0e0 : 0xffd890,
+        tint: level.night ? 0x9dff5c : this.forest ? 0x9df0e0 : this.peaks ? 0xcfeeff : 0xffd890,
       })
       .setDepth(6.6);
+    if (this.peaks) return; // вершины: вместо бабочек — снег (в конструкторе)
     if (this.forest) {
       // Лес: медленно плывущий туман и редкие капли вместо бабочек.
       forestMist(scene, this.area, cell);
@@ -582,12 +607,17 @@ export class BoardView {
         this.addWaves(x, y);
         return;
       }
+      if (type === 'ice') {
+        drawIceBase(g, x, y, cell, pad, r, idx * 7 + level.width);
+        return;
+      }
       // Клетка тёмного луга: два близких оттенка, чтобы поле не было однотонным.
       const tone = hash(idx, level.width) * 0.5;
       g.fillStyle(this.P.cell, 1);
       g.fillRoundedRect(x + pad, y + pad, cell - pad * 2, cell - pad * 2, r);
       g.fillStyle(this.P.cellLight, 0.3 + tone * 0.35);
       g.fillRoundedRect(x + pad, y + pad, cell - pad * 2, (cell - pad * 2) * 0.5, r);
+      if (this.peaks) drawSnowCap(g, x, y, cell, pad, idx * 3 + level.height);
       if (type === 'ring') drawRingBase(g, x + cell / 2, y + cell / 2, cell, level.ringId[idx]);
       if (type === 'rock') {
         const cx = x + cell / 2;
@@ -983,6 +1013,33 @@ export class BoardView {
     }
     // Тень бежит после шага Lumo.
     this.shadow?.sync(state, animate, animate ? STEP_MS + 60 : 0);
+    this.syncPeaks(state, animate);
+  }
+
+  /** Сугробы тают у зажжённых фонарей, сигнальные огни горят по порядку (после шага Lumo). */
+  private syncPeaks(state: GameState, animate: boolean) {
+    if (!this.drifts.length && !this.fireViews.length) return;
+    const on = (i: number) => state.onRoad[i];
+    const lit = signalsLit(state);
+    const apply = () => {
+      for (const d of this.drifts) d.set(driftMelted(this.level, on, d.idx), animate);
+      this.fireViews.forEach((f, k) => {
+        f.setLit(k < lit, animate);
+        f.setNext(k === lit && state.status === 'playing');
+      });
+    };
+    if (animate) this.scene.time.delayedCall(STEP_MS * 0.8, apply);
+    else apply();
+  }
+
+  /** Сигнальный огонь не по порядку: мигает номером. */
+  blinkFire(idx: number) {
+    this.fireViews.find((f) => f.idx === idx)?.blink();
+  }
+
+  /** Где горит костёр с номером (для подсказки Lumo). */
+  fireCenter(idx: number) {
+    return this.center(idx);
   }
 
   /** Клетки, видимые сквозь туман сейчас. */
@@ -1070,11 +1127,13 @@ export class BoardView {
         },
         onUpdate: () => {
           const k = prog.k;
-          const hop = Math.sin(k * Math.PI) * s * (jump ? 0.55 : 0.12);
+          // Скольжение по льду и порыв ветра — Lumo едет, не подпрыгивая, чуть наклонившись.
+          const glide = !!r.forced && !jump;
+          const hop = glide ? 0 : Math.sin(k * Math.PI) * s * (jump ? 0.55 : 0.12);
           this.lumo.x = from.x + (p.x - from.x) * k;
           this.lumo.y = from.y + (p.y - from.y) * k - hop;
           // Фонарь покачивается в такт шагу.
-          this.lumo.angle = Math.sin(k * Math.PI * 2) * (jump ? 10 : 7);
+          this.lumo.angle = glide ? (r.forced === 'wind' ? 12 : 6) * Math.sign(this.lumo.scaleX || 1) * Math.sin(k * Math.PI) : Math.sin(k * Math.PI * 2) * (jump ? 10 : 7);
           if (jump) this.lumo.setScale(Math.sign(this.lumo.scaleX || 1) * (1 + Math.sin(k * Math.PI) * 0.18), 1 + Math.sin(k * Math.PI) * 0.18);
         },
         onComplete: () => {
@@ -1083,9 +1142,9 @@ export class BoardView {
           this.face(r.dirOut);
           // Свет дошёл до клетки: искры, мягкое «бум» и лёгкая вибрация шага.
           const c = this.center(r.idx);
-          this.dust.explode(jump ? 10 : 6, c.x, c.y + s * 0.2);
+          this.dust.explode(jump ? 10 : r.forced ? 3 : 6, c.x, c.y + s * 0.2);
           this.flash(c.x, c.y, s * 2.4);
-          if (this.sound) {
+          if (this.sound && !r.forced) {
             sfx.thump();
             sfx.footstep(i);
           }
@@ -1193,6 +1252,7 @@ export class BoardView {
       this.polyline(g, pts, upTo, s * 0.3, rc.band, 0.95);
       this.polyline(g, pts, upTo, s * 0.11, rc.core, 0.85);
       this.motes(g, pts, upTo);
+      if (this.roadStyle === 'ice') this.iceDetails(g, pts, upTo);
     }
     // Пока свет растекается — на его краю горит яркий огонёк.
     const full = Math.floor(upTo);
@@ -1263,6 +1323,17 @@ export class BoardView {
   }
 
   /** Искорки света вдоль дороги (неподвижные, разной яркости). */
+  /** Скин «Ледяная дорога»: трещинки во льду и искры инея; проступают, когда свет доходит до середины отрезка. */
+  private iceDetails(g: Phaser.GameObjects.Graphics, pts: RoadPt[], upTo: number) {
+    for (let i = 0; i < pts.length - 1; i++) {
+      const b = pts[i + 1];
+      if (b.jump || b.gap || i >= upTo) continue;
+      const a = pts[i];
+      const alpha = Phaser.Math.Clamp((upTo - i - 0.5) * 2, 0, 1);
+      if (alpha > 0) drawIceDetails(g, a.x, a.y, b.x, b.y, this.cell, i + 1, alpha);
+    }
+  }
+
   private motes(g: Phaser.GameObjects.Graphics, pts: RoadPt[], upTo: number) {
     const s = this.cell;
     for (let i = 0; i < pts.length - 1; i++) {
@@ -1432,6 +1503,21 @@ export class BoardView {
         g.arc(jc.x, jc.y, s * 0.3, a0, a0 + Math.PI / 8, false);
         g.strokePath();
       }
+    }
+    if (p.ok && target === 'ghost' && p.cells.some((c) => c.forced)) {
+      // Луч-превью: лёд и ветер понесут Lumo дальше — голубой луч до клетки, где он остановится, и мишень там.
+      const k = p.cells.findIndex((c) => c.forced);
+      const from = k > 0 ? this.center(p.cells[k - 1].idx) : head;
+      const beam: RoadPt[] = [from, ...p.cells.slice(k).map((c) => ({ ...this.center(c.idx), gap: c.portal === 'out' }))];
+      this.polyline(g, beam, beam.length - 1, s * 0.36, SLIDE_BEAM, 0.28);
+      this.polyline(g, beam, beam.length - 1, s * 0.1, 0xffffff, 0.85);
+      const end = beam[beam.length - 1];
+      g.lineStyle(s * 0.05, SLIDE_BEAM, 0.95);
+      g.strokeCircle(end.x, end.y, s * 0.36);
+      g.lineStyle(s * 0.03, 0xffffff, 0.9);
+      g.strokeCircle(end.x, end.y, s * 0.22);
+      g.fillStyle(SLIDE_BEAM, 0.35);
+      g.fillCircle(end.x, end.y, s * 0.22);
     }
     if (p.ok) {
       const last = pts[pts.length - 1];

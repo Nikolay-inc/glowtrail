@@ -1,0 +1,88 @@
+{
+  "id": "peaks-08",
+  "name": "Ледник",
+  "grid": [
+    "=.....",
+    "=F....",
+    "E...*.",
+    ".*L#L.",
+    "....==",
+    "..L#..",
+    "....=.",
+    ".#S.=."
+  ],
+  "startDir": "N",
+  "deck": [
+    "straight",
+    "straight",
+    "right",
+    "straight",
+    "straight",
+    "straight",
+    "left",
+    "left",
+    "straight",
+    "left",
+    "left",
+    "right",
+    "straight",
+    "right",
+    "straight",
+    "right",
+    "straight"
+  ],
+  "stars": {
+    "two": 2,
+    "three": 4
+  },
+  "easeDecks": [
+    [
+      "right",
+      "straight",
+      "straight",
+      "right",
+      "straight",
+      "straight",
+      "straight",
+      "left",
+      "left",
+      "straight",
+      "left",
+      "left",
+      "right",
+      "straight",
+      "right",
+      "straight",
+      "right",
+      "straight"
+    ],
+    [
+      "left",
+      "right",
+      "straight",
+      "straight",
+      "right",
+      "straight",
+      "straight",
+      "straight",
+      "left",
+      "left",
+      "straight",
+      "left",
+      "left",
+      "right",
+      "straight",
+      "right",
+      "straight",
+      "right",
+      "straight"
+    ]
+  ],
+  "metrics": {
+    "rating": 4.9,
+    "roads": 11,
+    "minTiles": 12,
+    "reserve": 5,
+    "trap": 0.357
+  }
+}

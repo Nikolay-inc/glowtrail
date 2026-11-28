@@ -1,0 +1,85 @@
+{
+  "id": "peaks-22",
+  "name": "Цепочка костров",
+  "grid": [
+    ".....",
+    ".F.C.",
+    "E.BFF",
+    "#....",
+    "..A.#",
+    "....#",
+    "...S."
+  ],
+  "startDir": "N",
+  "deck": [
+    "straight",
+    "left",
+    "right",
+    "left",
+    "right",
+    "straight",
+    "straight2",
+    "right",
+    "left",
+    "right",
+    "left",
+    "straight2",
+    "left",
+    "left",
+    "right",
+    "left"
+  ],
+  "stars": {
+    "two": 3,
+    "three": 5
+  },
+  "goal": "signals",
+  "easeDecks": [
+    [
+      "straight",
+      "left",
+      "right",
+      "straight",
+      "left",
+      "right",
+      "straight",
+      "straight2",
+      "right",
+      "left",
+      "right",
+      "left",
+      "straight2",
+      "left",
+      "left",
+      "right",
+      "left"
+    ],
+    [
+      "straight",
+      "left",
+      "right",
+      "straight",
+      "left",
+      "right",
+      "straight",
+      "straight2",
+      "right",
+      "left",
+      "right",
+      "left",
+      "straight2",
+      "left",
+      "left",
+      "right",
+      "straight",
+      "left"
+    ]
+  ],
+  "metrics": {
+    "rating": 3,
+    "roads": 60,
+    "minTiles": 10,
+    "reserve": 6,
+    "trap": 0.245
+  }
+}

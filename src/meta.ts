@@ -356,12 +356,15 @@ export function logHintClick(kind: string, level?: string) {
 // ---------------------------------------------------------------------------
 // Деревня 2.0: районы, уровни построек, улицы, украшения, уют
 
-/** Район открыт: долина — сразу, лесной квартал — с главой 2 (после уровня 30), горный город — скоро. */
+/** Последний уровень главы перед районом: лесной квартал — после уровня 30, горный город — после уровня 60. */
+const DISTRICT_AFTER: Record<DistrictId, number> = { valley: 0, forest: 30, mountain: 60 };
+
+/** Район открыт: долина — сразу, лесной квартал — с главой 2, горный город — с главой 3 (победа или пропуск последнего уровня главы). */
 export function districtOpen(d: DistrictId): boolean {
-  if (d === 'valley') return true;
-  if (d === 'mountain') return false;
+  const n = DISTRICT_AFTER[d];
+  if (!n) return true;
   const p = SaveService.load().progress;
-  const last = LEVELS[29]?.id;
+  const last = LEVELS[n - 1]?.id;
   return !!last && ((p.stars[last] ?? 0) > 0 || !!p.skipped[last]);
 }
 export const openDistricts = (): DistrictId[] => (['valley', 'forest', 'mountain'] as const).filter(districtOpen);
@@ -420,7 +423,7 @@ export function setDecor(d: DistrictId, slot: number, variant: number): MetaResu
 export const cozy = () => cozyLevel(getEconomy());
 
 export function claimCozy(): CozyGrant | null {
-  const res = claimCozyCore(getEconomy(), rewardMult(), openDistricts().filter((d) => d !== 'mountain'));
+  const res = claimCozyCore(getEconomy(), rewardMult(), openDistricts());
   if (!res) return null;
   SaveService.update((x) => {
     x.economy = res.economy;
@@ -481,7 +484,7 @@ export function questEvent(ev: QuestEvent) {
 }
 
 export function claimQuest(id: string) {
-  const res = claimQuestCore(getEconomy(), id, villageBonuses(getEconomy()).questLight, openDistricts().filter((d) => d !== 'mountain'));
+  const res = claimQuestCore(getEconomy(), id, villageBonuses(getEconomy()).questLight, openDistricts());
   if (!res) return null;
   SaveService.update((x) => {
     x.economy = res.economy;
@@ -509,8 +512,8 @@ export const rerollsLeft = () => {
 // ---------------------------------------------------------------------------
 // Награды испытаний (уровни 10, 20, 30 главы): шаг улицы сразу, расцвет постройки — на выбор игрока
 
-/** Районы, где действуют подарки (горный город ещё закрыт). */
-const giftDistricts = () => openDistricts().filter((d) => d !== 'mountain');
+/** Районы, где действуют подарки (открытые). */
+const giftDistricts = () => openDistricts();
 
 export type ChallengeReward = { street: string | null; coins: number };
 

@@ -17,7 +17,7 @@ import uk from '../src/i18n/uk.json';
 import { SETS, WARDROBE } from '../src/core/wardrobe';
 import { UPGRADES, defaultEconomy } from '../src/core/economy';
 import { QUEST_KINDS } from '../src/core/questState';
-import { BUILDINGS, DECOR_TYPE_ORDER, DISTRICTS, STREETS_PER_DISTRICT } from '../src/core/villageData';
+import { ALL_DECOR_TYPES, BUILDINGS, DISTRICTS, STREETS_PER_DISTRICT } from '../src/core/villageData';
 import { WORLDS, LEVELS } from '../src/levels/index';
 import { emptySave } from '../src/save/SaveService';
 
@@ -111,12 +111,12 @@ for (const k of keys) {
 const need = [
   ...WARDROBE.map((w) => `item.${w.id}`),
   ...SETS.map((s) => `set.${s.id}`),
-  ...BUILDINGS.filter((b) => b.district === 'mountain').map((v) => `building.${v.id}.name`),
-  ...BUILDINGS.filter((b) => b.district !== 'mountain').flatMap((v) => [`building.${v.id}.name`, `building.${v.id}.story`, `building.${v.id}.lit`, `bonus.${v.id}`, `resident.${v.id}`]),
+  ...BUILDINGS.flatMap((v) => [`building.${v.id}.name`, `building.${v.id}.story`, `building.${v.id}.lit`, `bonus.${v.id}`, `resident.${v.id}`]),
   ...DISTRICTS.map((d) => `district.${d}`),
-  ...DECOR_TYPE_ORDER.flatMap((d) => [`decor.${d}`, ...[0, 1, 2, 3, 4].map((v) => `decor.${d}.${v}`)]),
-  ...(['valley', 'forest'] as const).flatMap((d) => Array.from({ length: STREETS_PER_DISTRICT }, (_, i) => `street.${d}.${i}`)),
-  ...[0, 1, 2, 3].map((i) => `street_step.${i}`),
+  ...DISTRICTS.filter((d) => d !== 'valley').map((d) => `district_locked_${d}`),
+  ...ALL_DECOR_TYPES.flatMap((d) => [`decor.${d}`, ...[0, 1, 2, 3, 4].map((v) => `decor.${d}.${v}`)]),
+  ...DISTRICTS.flatMap((d) => Array.from({ length: STREETS_PER_DISTRICT }, (_, i) => `street.${d}.${i}`)),
+  ...[0, 1, 2, 3].flatMap((i) => [`street_step.${i}`, `street_step_snow.${i}`]),
   ...QUEST_KINDS.map((k) => `quest.${k}`),
   ...Object.keys(UPGRADES).flatMap((u) => [`upgrade.${u}.name`, `upgrade.${u}.descr`, `upgrade.${u}.value`]),
   ...WORLDS.map((w) => `world.${w.id}`),
@@ -140,11 +140,12 @@ console.log(`Ключей: ${keys.length} × ${Object.keys(TABLES).length} яз�
 // 2. Вёрстка в браузере
 
 /** Экраны деревни для проверки перекрытий подписей на настоящих языках (в qps подписи искусственно длинные). */
-const VILLAGE_VIEWS = ['village', 'village-edit', 'village-all', 'village-all-edit', 'village-forest', 'village-forest-edit'];
+const VILLAGE_VIEWS = ['village', 'village-edit', 'village-all', 'village-all-edit', 'village-forest', 'village-forest-edit', 'village-mountain-open', 'village-mountain-edit', 'village-mountain-bloom', 'village-mountain-ruins'];
 
 async function layout(lang = flag('lang') ?? 'qps', only = flag('only')?.split(','), size = flag('size') ?? '375x667') {
   const [vw, vh] = size.split('x').map(Number);
-  const port = 5199;
+  // Порт можно сменить (I18N_PORT), если 5199 занят параллельной проверкой.
+  const port = Number(process.env.I18N_PORT) || 5199;
   const out = `artifacts/i18n${lang === 'qps' ? '' : `-${lang}`}`;
   mkdirSync(out, { recursive: true });
   // Своя группа процессов: npx запускает vite дочерним процессом, и kill одного npx оставлял vite
@@ -225,7 +226,7 @@ async function layout(lang = flag('lang') ?? 'qps', only = flag('only')?.split('
   // экранные и мировые координаты касания различаются; раньше тап принимался за свайп).
   if (!only || only.includes('village-tap')) {
     type A = { tapTargets: (id: string, d?: string) => Promise<Record<string, { x: number; y: number } | null>>; modalOpen: () => boolean };
-    for (const [id, d] of [['mill', 'valley'], ['well', 'valley'], ['lighthouse', 'valley'], ['observatory', 'forest']] as const) {
+    for (const [id, d] of [['mill', 'valley'], ['well', 'valley'], ['lighthouse', 'valley'], ['observatory', 'forest'], ['bell-tower', 'mountain']] as const) {
       const pts = await page.evaluate(([id, d]) => (window as unknown as { __audit: A }).__audit.tapTargets(id, d), [id, d] as const);
       for (const where of ['art', 'label'] as const) {
         const p = pts[where];

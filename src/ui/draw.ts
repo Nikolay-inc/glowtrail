@@ -6,6 +6,7 @@ import { DEFAULT_LOOK, type Look } from '../core/wardrobe';
 import { createLumoFigure, type LumoFigure } from './lumo';
 import { addDust, addFog, addVignette, createFxTextures } from './fx';
 import { keepFitted, type ViewRect } from './viewport';
+import { addAurora, addSnowfall, type AuroraHandle, type SnowHandle } from './snow';
 import type { TileKind } from '../core/types';
 import { C, FONT, H, W } from './theme';
 import { setFitted, type UITextOpts } from './UIText';
@@ -849,15 +850,31 @@ export function createAvatarBadge(
 // Ночной фон: градиент, мерцающие звёзды и светлячки
 
 /**
- * Фон сцены. evening — тёплый вечер «Долины» (закатное небо и тёмные холмы внизу), иначе ночное небо.
+ * Фон сцены. evening — тёплый вечер «Долины» (закатное небо и тёмные холмы внизу), forest — «Туманный лес»,
+ * peaks — «Ледяные вершины» (холодное небо, северное сияние, снежные пики внизу, редкий снегопад; снег —
+ * src/ui/snow.ts, поле может добавить свой через addSnowfall), иначе ночное небо.
  */
-export function addBackground(scene: Phaser.Scene, opts: { dust?: boolean; evening?: boolean; forest?: boolean } = {}) {
+export function addBackground(scene: Phaser.Scene, opts: { dust?: boolean; evening?: boolean; forest?: boolean; peaks?: boolean } = {}) {
   // Фон на весь экран (а не только на раскладку 1080×1920): градиент перерисовывается при смене размера.
   const g = scene.add.graphics().setDepth(-10);
   let vignette: Phaser.GameObjects.Image | null = null;
+  let aurora: AuroraHandle | null = null;
+  let snow: SnowHandle | null = null;
   const paint = (v: ViewRect) => {
     g.clear();
-    if (opts.forest) {
+    if (opts.peaks) {
+      // «Ледяные вершины»: глубокое холодное небо, к низу светлее; снежные пики в два ряда.
+      const mid = v.y + v.h * 0.55;
+      g.fillGradientStyle(0x050b20, 0x050b20, 0x10244a, 0x10244a, 1);
+      g.fillRect(v.x - 4, v.y - 4, v.w + 8, mid - v.y + 4);
+      g.fillGradientStyle(0x10244a, 0x10244a, 0x1d3a66, 0x1d3a66, 1);
+      g.fillRect(v.x - 4, mid, v.w + 8, v.y + v.h - mid + 4);
+      const by = v.y + v.h;
+      paintPeaks(g, v.x, v.w, by - v.h * 0.07, v.h * 0.2, 0x22406c, 0xdce9fa, 0.55, 'peaks-bg-far');
+      paintPeaks(g, v.x, v.w, by + 4, v.h * 0.14, 0x0a1830, 0xc4d8f0, 0.4, 'peaks-bg-near');
+      aurora?.redraw({ x: v.x, y: v.y, w: v.w, h: v.h });
+      snow?.setArea({ x: v.x, y: v.y, w: v.w, h: v.h });
+    } else if (opts.forest) {
       // «Туманный лес»: бирюзово-фиолетовые сумерки, полосы тумана и чёрные силуэты елей.
       const mid = v.y + v.h * 0.5;
       g.fillGradientStyle(0x080820, 0x080820, 0x1c1446, 0x1c1446, 1);
@@ -909,9 +926,10 @@ export function addBackground(scene: Phaser.Scene, opts: { dust?: boolean; eveni
   const Y1 = H + 1000;
   const rnd = new Phaser.Math.RandomDataGenerator(['glowtrail']);
   // В сумерках звёзды только в верхней части неба.
-  for (let i = 0; i < (opts.evening || opts.forest ? 60 : 90); i++) {
+  const upper = opts.evening || opts.forest || opts.peaks;
+  for (let i = 0; i < (upper ? 60 : 90); i++) {
     const st = scene.add
-      .image(rnd.between(X0, X1), opts.evening || opts.forest ? rnd.between(Y0, H * 0.55) : rnd.between(Y0, Y1), 'dot')
+      .image(rnd.between(X0, X1), upper ? rnd.between(Y0, H * 0.55) : rnd.between(Y0, Y1), 'dot')
       .setScale(rnd.realInRange(0.15, 0.35))
       .setAlpha(rnd.realInRange(0.15, 0.5))
       .setDepth(-9);
@@ -924,7 +942,12 @@ export function addBackground(scene: Phaser.Scene, opts: { dust?: boolean; eveni
       delay: rnd.between(0, 2000),
     });
   }
-  for (let i = 0; i < 9; i++) {
+  // В горах вместо светлячков — северное сияние и снег.
+  if (opts.peaks) {
+    aurora = addAurora(scene, view, { seed: 'peaks-bg' });
+    snow = addSnowfall(scene, view, { depth: -8 });
+  }
+  for (let i = 0; i < (opts.peaks ? 0 : 9); i++) {
     const f = scene.add
       .image(rnd.between(view.x, view.x + view.w), rnd.between(view.y, view.y + view.h), 'glow')
       .setTint(0xd8ff8a)
@@ -950,6 +973,40 @@ export function addBackground(scene: Phaser.Scene, opts: { dust?: boolean; eveni
   addFog(scene, view);
   if (opts.dust !== false) addDust(scene, view);
   vignette = addVignette(scene, view);
+}
+
+/**
+ * Гряда снежных пиков в Graphics: основание base, высота до h, от x0 шириной w (с запасом за краями),
+ * тело — color, снежные шапки — cap (доля высоты пика capK). Одинаковая при каждом вызове (seed).
+ */
+export function paintPeaks(g: G, x0: number, w: number, base: number, h: number, color: number, cap: number, capK: number, seed: string) {
+  const rnd = new Phaser.Math.RandomDataGenerator([seed]);
+  for (let x = x0 - 200; x < x0 + w + 200; ) {
+    const pw = rnd.realInRange(1.1, 1.8) * h;
+    const ph = h * rnd.realInRange(0.65, 1);
+    const tipX = x + pw / 2 + rnd.realInRange(-0.12, 0.12) * pw;
+    g.fillStyle(color, 1);
+    g.fillTriangle(x, base, x + pw, base, tipX, base - ph);
+    // Снежная шапка — тот же треугольник у вершины, нижний край «зубцами».
+    const ck = capK * rnd.realInRange(0.8, 1.1);
+    const lx = tipX + (x - tipX) * ck;
+    const rx = tipX + (x + pw - tipX) * ck;
+    const cy = base - ph + ph * ck;
+    g.fillStyle(cap, 1);
+    g.fillTriangle(lx, cy, rx, cy, tipX, base - ph);
+    const teeth = 4;
+    for (let k = 0; k < teeth; k++) {
+      const ax = lx + ((rx - lx) * k) / teeth;
+      const bx = lx + ((rx - lx) * (k + 1)) / teeth;
+      g.fillTriangle(ax, cy - 1, bx, cy - 1, (ax + bx) / 2, cy + ph * 0.06 * rnd.realInRange(0.6, 1.2));
+    }
+    // Тень на правом склоне.
+    g.fillStyle(0x000000, 0.18);
+    g.fillTriangle(tipX, base - ph, x + pw, base, tipX + (x + pw - tipX) * 0.35, base);
+    x += pw * rnd.realInRange(0.45, 0.7);
+  }
+  g.fillStyle(color, 1);
+  g.fillRect(x0 - 200, base - 1, w + 400, 4000);
 }
 
 /**

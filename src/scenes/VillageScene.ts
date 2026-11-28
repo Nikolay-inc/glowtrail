@@ -1,4 +1,4 @@
-// «Деревня 2.0»: районы (Долина, Лесной квартал за мостом — с главой 2, Горный город — «скоро»), переключение
+// «Деревня 2.0»: районы (Долина, Лесной квартал за мостом — с главой 2, Горный город — с главой 3), переключение
 // свайпом или стрелками у названия. В районе 10 построек трёх уровней (восстановить за свет → улучшить за монеты →
 // расцвет), 4 улицы (тропинка → гравий → брусчатка → мощёная с фонарями) и 24 слота украшений (режим «Украсить»).
 // Сверху — валюты, уют (уровень деревни и награды) и ближайшая цель; снизу — Мастерская, Задания жителей, Украсить
@@ -17,7 +17,7 @@ import { addTabBar, addWallet, buttonRichLabel, drawLight, richText } from '../u
 import type { Modal } from '../ui/Modal';
 import { currentLook } from '../ui/skins';
 import { uiText } from '../ui/UIText';
-import { drawBuilding, drawDecor, drawSilhouette, drawStreet, type BuildingView } from '../ui/village';
+import { drawBuilding, drawDecor, drawStreet, type BuildingView } from '../ui/village';
 import * as P from '../ui/villagePanels';
 import { BRIDGE_X, drawCrossing, drawRiver, RIVER_HW_BRIDGE, riverShape } from '../ui/villageRiver';
 import { currentView, edgeRows, stretchLayout } from '../ui/viewport';
@@ -31,6 +31,8 @@ import { C, H, W } from '../ui/theme';
 export const buildingName = (id: string) => tk(`building.${id}.name`);
 export const bonusText = (id: string, n: number) => tk(`bonus.${id}`, { n });
 export const districtName = (d: DistrictId) => tk(`district.${d}`);
+/** Текст закрытого района: когда он откроется. */
+const lockedText = (d: DistrictId) => t(d === 'mountain' ? 'district_locked_mountain' : 'district_locked_forest');
 
 type Spot = { x: number; f: number; s: number };
 
@@ -69,17 +71,18 @@ const LAYOUT: Record<DistrictId, Spot[]> = {
     { x: 540, f: 0.58, s: 0.85 },
     { x: 575, f: 0.2, s: 0.8 },
   ],
+  // шахта, кузница, канатная дорога, хрустальная пещера, козья ферма, колокольня, источники, каменный мост, храм, маяк
   mountain: [
-    { x: 390, f: 1, s: 0.85 },
-    { x: 210, f: 0.81, s: 0.78 },
-    { x: 870, f: 0.81, s: 0.72 },
-    { x: 820, f: 0.48, s: 0.7 },
-    { x: 540, f: 0.58, s: 0.85 },
-    { x: 545, f: 0.83, s: 0.76 },
-    { x: 220, f: 0.2, s: 0.78 },
-    { x: 250, f: 0.46, s: 0.8 },
-    { x: 545, f: 0.2, s: 0.78 },
-    { x: 870, f: 0.2, s: 0.72 },
+    { x: 400, f: 0.995, s: 0.44 },
+    { x: 210, f: 0.81, s: 0.48 },
+    { x: 860, f: 0.88, s: 0.49 },
+    { x: 850, f: 0.39, s: 0.5 },
+    { x: 860, f: 0.655, s: 0.51 },
+    { x: 180, f: 0.13, s: 0.54 },
+    { x: 220, f: 0.355, s: 0.5 },
+    { x: 220, f: 0.58, s: 0.47 },
+    { x: 540, f: 0.19, s: 0.54 },
+    { x: 890, f: 0.16, s: 0.52 },
   ],
 };
 
@@ -98,14 +101,19 @@ const SLOTS: Record<DistrictId, [number, number][]> = {
     [710, 0.67], [1030, 0.67], [40, 0.88], [350, 0.83], [660, 0.71], [1030, 0.84],
     [40, 1.03], [420, 1.04], [420, 0.95], [950, 1.04], [1000, 1.03], [1050, 1.01],
   ],
-  mountain: VALLEY_SLOTS,
+  mountain: [
+    [40, 0.12], [325, 0.12], [715, 0.12], [355, 0.24], [70, 0.25], [1045, 0.31],
+    [670, 0.35], [40, 0.43], [445, 0.5], [730, 0.5], [970, 0.5], [475, 0.63],
+    [70, 0.65], [685, 0.65], [1045, 0.69], [370, 0.73], [40, 0.88], [325, 0.88],
+    [610, 0.88], [1045, 0.88], [40, 1.05], [265, 1.07], [745, 1.07], [1045, 1.07],
+  ],
 };
 
 /** Где на каждой улице табличка в режиме «Украсить»: доля длины отрезка и сдвиг вбок от тропинки. */
 const STREET_SIGN: Record<DistrictId, [number, number][]> = {
   valley: [[0.14, 120], [0.19, -50], [0.75, 0], [0.6, 0]],
   forest: [[0.23, 0], [0.72, 0], [0.75, 0], [0.52, 0]],
-  mountain: [[0.45, 0], [0.25, 0], [0.75, 0], [0.6, 0]],
+  mountain: [[0.45, 70], [0.25, 0], [0.75, 0], [0.25, 0]],
 };
 
 /** Масштаб построек и украшений по высоте свободной области (на коротких экранах — помельче, без наложений). */
@@ -117,7 +125,7 @@ const DISTRICT_ORDER: DistrictId[] = ['valley', 'forest', 'mountain'];
 const GROUND: Record<DistrictId, { far: number; near: number; water: number; ripple: number; tree: number }> = {
   valley: { far: 0x0d1a1a, near: 0x112220, water: 0x173a66, ripple: 0x5a9ad6, tree: 0x08110f },
   forest: { far: 0x0a1712, near: 0x0e1f17, water: 0x0f4a52, ripple: 0x5ad6c8, tree: 0x050d09 },
-  mountain: { far: 0x10121e, near: 0x161826, water: 0x1a2a4a, ripple: 0x6a8ad6, tree: 0x0a0c16 },
+  mountain: { far: 0x1e2540, near: 0x2c3654, water: 0x1a2a4a, ripple: 0x6a8ad6, tree: 0x16302c },
 };
 
 export class VillageScene extends Phaser.Scene implements P.VillageHost {
@@ -262,7 +270,7 @@ export class VillageScene extends Phaser.Scene implements P.VillageHost {
     this.header.add(g);
     const d = this.district;
     if (!districtOpen(d)) {
-      g.add(text(this, W / 2, y, t(d === 'forest' ? 'district_locked_forest' : 'district_soon'), 34, C.textDim, true, { w: W - 120, lines: 2 }));
+      g.add(text(this, W / 2, y, lockedText(d), 34, C.textDim, true, { w: W - 120, lines: 2 }));
       return;
     }
     const e = getEconomy();
@@ -478,14 +486,14 @@ export class VillageScene extends Phaser.Scene implements P.VillageHost {
   /** Точки тропинки снизу вверх; 4 улицы — 4 отрезка. */
   private streetPoints(): Phaser.Math.Vector2[][] {
     const V = Phaser.Math.Vector2;
-    const sp = (i: number) => this.spot(i);
-    // Через реку тропинка идёт прямо по мосту: от ближнего конца к дальнему.
+    const at = (x: number, f: number) => new V(x, this.yTop + (this.yBot - this.yTop) * f);
+    // Через реку тропинка идёт прямо по мосту: от ближнего конца к дальнему. В Горном городе реки нет —
+    // тропа петляет вверх между постройками к храму.
     const near = this.riverCY() + RIVER_HW_BRIDGE + 16;
     const far = near - this.bridgeLen();
     const pts = this.hasRiver()
-      ? [new V(545, this.yBot + 80), new V(500, this.yTop + (this.yBot - this.yTop) * 0.83 + 20), new V(BRIDGE_X, near + 40), new V(BRIDGE_X, far - 30), new V(520, this.yTop + (this.yBot - this.yTop) * 0.41 + 20), new V(545, this.yTop + (this.yBot - this.yTop) * 0.2 + 30)]
-      : [new V(545, this.yBot + 80), new V(500, sp(5).y + 20), new V(560, sp(4).y - 10), new V(520, sp(7).y + 20), new V(545, sp(8).y + 30)];
-    void sp;
+      ? [new V(545, this.yBot + 80), at(500, 0.83).add(new V(0, 20)), new V(BRIDGE_X, near + 40), new V(BRIDGE_X, far - 30), at(520, 0.41).add(new V(0, 20)), at(545, 0.2).add(new V(0, 30))]
+      : [new V(560, this.yBot + 80), at(520, 0.9), at(560, 0.68), at(520, 0.47), at(540, 0.29)];
     const all = new Phaser.Curves.Spline(pts).getPoints(80);
     const n = all.length - 1;
     return Array.from({ length: STREETS_PER_DISTRICT }, (_, k) => all.slice(Math.round((k * n) / 4), Math.round(((k + 1) * n) / 4) + 1));
@@ -506,7 +514,7 @@ export class VillageScene extends Phaser.Scene implements P.VillageHost {
     this.map.add(sg);
     this.streetPoints().forEach((pts, i) => {
       const step = open ? streetStep(e, d, i) : 0;
-      const res = drawStreet(sg, pts, step as 0 | 1 | 2 | 3, 44);
+      const res = drawStreet(sg, pts, step as 0 | 1 | 2 | 3, 44, d === 'mountain' ? 'snow' : 'green');
       for (const l of res.lamps) this.map.add(this.add.image(l.x, l.y - 40, 'glow').setTint(0xffd27a).setBlendMode(Phaser.BlendModes.ADD).setScale(0.9).setAlpha(0.55));
       if (this.editMode && open) {
         const [f, dx] = STREET_SIGN[d][i];
@@ -524,20 +532,20 @@ export class VillageScene extends Phaser.Scene implements P.VillageHost {
     }
     // Постройки, украшения — по глубине (ниже на экране — ближе).
     const items: { y: number; obj: Phaser.GameObjects.GameObject }[] = [];
-    districtBuildings(d).forEach((b, i) => items.push({ y: this.spot(i).y, obj: d === 'mountain' ? this.drawSilhouetteAt(i) : this.drawBuildingAt(b.id, i, open) }));
+    districtBuildings(d).forEach((b, i) => items.push({ y: this.spot(i).y, obj: this.drawBuildingAt(b.id, i, open) }));
     if (open) {
       for (let s = 0; s < DECOR_SLOTS; s++) {
         const v = decorPlaced(e, d, s);
         const p = this.slotPos(s);
         if (v >= 0) {
-          const art = drawDecor(this, decorType(s), v);
+          const art = drawDecor(this, decorType(s, d), v);
           const c = this.add.container(p.x, p.y, art.objects).setScale(p.s);
           for (const l of art.lights ?? []) c.add(this.add.image(l.x, l.y, 'glow').setTint(0xffc65c).setBlendMode(Phaser.BlendModes.ADD).setScale(l.r / 30).setAlpha(0.6));
           items.push({ y: p.y, obj: c });
         }
         if (this.editMode) this.slotMarker(s, p, v >= 0);
       }
-      if (d === 'valley' || d === 'forest') {
+      {
         items.push({ y: this.spot(0).y + 30, obj: this.addWalker(this.editMode) });
         // Где гуляет Lumo (с питомцем): x от 520 до 900. В режиме «Украсить» он уходит — не мешает слотам и знакам улиц.
         const wy = this.spot(0).y + 30;
@@ -571,13 +579,7 @@ export class VillageScene extends Phaser.Scene implements P.VillageHost {
     g.fillRect(-200, top + 260, 1480, H * 2);
     g.fillStyle(pal.near, 1);
     g.fillEllipse(540, (top + this.yBot) / 2 + 200, 1600, this.yBot - top + 400);
-    if (d === 'mountain') {
-      // Горы на горизонте.
-      g.fillStyle(0x1c2034, 1);
-      for (const [x, w, h] of [[120, 420, 300], [520, 520, 380], [900, 460, 320]] as const) g.fillTriangle(x - w / 2, top + 280, x + w / 2, top + 280, x, top + 280 - h);
-      g.fillStyle(0xdfe6ff, 0.5);
-      for (const [x, h] of [[120, 300], [520, 380], [900, 320]] as const) g.fillTriangle(x - 40, top + 280 - h + 60, x + 40, top + 280 - h + 60, x, top + 280 - h);
-    }
+    if (d === 'mountain') this.drawMountainGround(g, top);
     // Река рисуется в drawMap (поверх тропинки). Ели по краям (в лесу — гуще и выше), не в русле.
     const river = this.hasRiver() ? riverShape(this.riverCY()) : null;
     const inRiver = (x: number, y: number) => !!river && y > river.y(x) - river.hw(x) - 8 && y < river.y(x) + river.hw(x) + 18;
@@ -591,6 +593,13 @@ export class VillageScene extends Phaser.Scene implements P.VillageHost {
       g.fillStyle(pal.tree, 1);
       g.fillTriangle(x - 36 * s, y, x + 36 * s, y, x, y - 100 * s);
       g.fillTriangle(x - 28 * s, y - 40 * s, x + 28 * s, y - 40 * s, x, y - 128 * s);
+      if (d === 'mountain') {
+        // Снег на ветках.
+        g.fillStyle(0xdfe8f8, 0.85);
+        g.fillTriangle(x - 12 * s, y - 92 * s, x + 12 * s, y - 92 * s, x, y - 128 * s);
+        g.fillTriangle(x - 14 * s, y - 58 * s, x + 14 * s, y - 58 * s, x, y - 84 * s);
+        g.fillEllipse(x - 20 * s, y - 2, 26 * s, 8 * s);
+      }
     }
     if (d === 'forest') {
       // Светящиеся грибы и мох по краям.
@@ -604,6 +613,42 @@ export class VillageScene extends Phaser.Scene implements P.VillageHost {
         g.fillEllipse(x, y - 11, 16, 8);
         this.map.add(this.add.image(x, y - 10, 'glow').setTint(0x5ad6c8).setBlendMode(Phaser.BlendModes.ADD).setScale(0.35).setAlpha(0.5));
       }
+    }
+  }
+
+  /** Горный город: снежные вершины на горизонте, сугробы и снежинки на земле. */
+  private drawMountainGround(g: Phaser.GameObjects.Graphics, top: number) {
+    const base = top + 280;
+    // Дальний хребет и ближние вершины со снежными шапками.
+    g.fillStyle(0x161c34, 1);
+    for (const [x, w, h] of [[-40, 380, 250], [300, 420, 300], [700, 460, 270], [1080, 420, 290]] as const) g.fillTriangle(x - w / 2, base, x + w / 2, base, x, base - h);
+    g.fillStyle(0x222a48, 1);
+    for (const [x, w, h] of [[120, 420, 300], [520, 520, 380], [900, 460, 320]] as const) g.fillTriangle(x - w / 2, base, x + w / 2, base, x, base - h);
+    for (const [x, w, h] of [[120, 420, 300], [520, 520, 380], [900, 460, 320]] as const) {
+      const k = 0.3;
+      const pts = [
+        new Phaser.Math.Vector2(x, base - h),
+        new Phaser.Math.Vector2(x + (w / 2) * k, base - h * (1 - k)),
+        new Phaser.Math.Vector2(x + (w / 2) * k * 0.5, base - h * (1 - k) - 10),
+        new Phaser.Math.Vector2(x, base - h * (1 - k) + 8),
+        new Phaser.Math.Vector2(x - (w / 2) * k * 0.55, base - h * (1 - k) - 12),
+        new Phaser.Math.Vector2(x - (w / 2) * k, base - h * (1 - k)),
+      ];
+      g.fillStyle(0xdfe8ff, 0.75);
+      g.fillPoints(pts, true);
+    }
+    // Снежная земля: светлые пятна-сугробы.
+    const rnd = new Phaser.Math.RandomDataGenerator(['village-mountain-snow']);
+    for (let i = 0; i < 26; i++) {
+      const x = rnd.between(0, W);
+      const y = rnd.between(base + 40, this.yBot + 120);
+      g.fillStyle(0x4a5880, rnd.realInRange(0.35, 0.6));
+      g.fillEllipse(x, y, rnd.between(120, 260), rnd.between(24, 46));
+    }
+    // Снежинки над землёй.
+    for (let i = 0; i < 40; i++) {
+      g.fillStyle(0xffffff, rnd.realInRange(0.25, 0.6));
+      g.fillCircle(rnd.between(0, W), rnd.between(top + 60, this.yBot + 80), rnd.realInRange(1.5, 3));
     }
   }
 
@@ -695,26 +740,16 @@ export class VillageScene extends Phaser.Scene implements P.VillageHost {
     return c;
   }
 
-  private drawSilhouetteAt(i: number): Phaser.GameObjects.Container {
-    const sp = this.spot(i);
-    const art = drawSilhouette(this, i);
-    const c = this.add.container(sp.x, sp.y, art.objects).setScale(sp.s);
-    const zone = this.add.zone(0, -art.height * 0.4, Math.max(200, art.width), art.height + 80).setInteractive();
-    zone.on('pointerup', (p: Phaser.Input.Pointer) => !this.wasSwipe(p) && !this.modal && this.lockedTap());
-    c.add(zone);
-    return c;
-  }
-
   private lockedTap() {
     sfx.invalid();
-    P.toastMsg(this, t(this.district === 'forest' ? 'district_locked_forest' : 'district_soon'));
+    P.toastMsg(this, lockedText(this.district));
   }
 
   /** Плашка закрытого района по центру карты. */
   private lockedPlaque(d: DistrictId) {
     const y = (this.yTop + this.yBot) / 2 - 40;
     const c = this.add.container(W / 2, y);
-    const msg = t(d === 'forest' ? 'district_locked_forest' : 'district_soon');
+    const msg = lockedText(d);
     const label = uiText(this, 0, 30, msg, { w: 720, lines: 3, size: 38, color: C.text, bold: true });
     const title = uiText(this, 0, -60, districtName(d), { w: 720, size: 54, color: '#ffd36b', bold: true });
     const h = 120 + label.height * label.scaleY + 60;

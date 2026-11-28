@@ -1,0 +1,72 @@
+{
+  "id": "peaks-29",
+  "name": "Звёздная ночь",
+  "grid": [
+    ".==E.",
+    ".B#.#",
+    "=.A..",
+    "=....",
+    "=....",
+    ".S..."
+  ],
+  "startDir": "N",
+  "deck": [
+    "right",
+    "left",
+    "straight",
+    "straight",
+    "right",
+    "left",
+    "right",
+    "left",
+    "straight",
+    "straight",
+    "right",
+    "left"
+  ],
+  "stars": {
+    "two": 2,
+    "three": 4
+  },
+  "goal": "signals",
+  "easeDecks": [
+    [
+      "straight2",
+      "right",
+      "left",
+      "straight",
+      "straight",
+      "right",
+      "left",
+      "right",
+      "left",
+      "straight",
+      "straight",
+      "right",
+      "left"
+    ],
+    [
+      "straight2",
+      "right",
+      "left",
+      "straight",
+      "straight",
+      "right",
+      "left",
+      "right",
+      "left",
+      "straight",
+      "straight",
+      "right",
+      "left",
+      "right"
+    ]
+  ],
+  "metrics": {
+    "rating": 3,
+    "roads": 17,
+    "minTiles": 7,
+    "reserve": 5,
+    "trap": 0.252
+  }
+}

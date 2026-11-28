@@ -1,0 +1,78 @@
+{
+  "id": "peaks-02",
+  "name": "Скользкая тропа",
+  "grid": [
+    "#....",
+    "#...S",
+    ".#==.",
+    "..=..",
+    "F....",
+    "E...F",
+    ".LF.."
+  ],
+  "startDir": "W",
+  "deck": [
+    "left",
+    "straight2",
+    "left",
+    "straight",
+    "straight",
+    "right",
+    "straight2",
+    "right",
+    "left",
+    "straight",
+    "right",
+    "left",
+    "straight2",
+    "straight"
+  ],
+  "stars": {
+    "two": 3,
+    "three": 6
+  },
+  "easeDecks": [
+    [
+      "left",
+      "straight2",
+      "left",
+      "straight",
+      "right",
+      "straight",
+      "right",
+      "straight2",
+      "right",
+      "left",
+      "straight",
+      "right",
+      "left",
+      "straight2",
+      "straight"
+    ],
+    [
+      "left",
+      "straight2",
+      "left",
+      "straight",
+      "right",
+      "straight",
+      "left",
+      "right",
+      "straight2",
+      "right",
+      "left",
+      "straight",
+      "right",
+      "left",
+      "straight2",
+      "straight"
+    ]
+  ],
+  "metrics": {
+    "rating": 3,
+    "roads": 28,
+    "minTiles": 7,
+    "reserve": 7,
+    "trap": 0.267
+  }
+}

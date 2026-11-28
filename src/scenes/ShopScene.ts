@@ -156,7 +156,7 @@ export class ShopScene extends Phaser.Scene {
     fig.walk(true);
     this.time.delayedCall(1600, () => fig.walk(false));
     const set = fullSet(look);
-    if (set) uiText(this, fx, y0 + 445, t('set_full', { name: tk(`set.${set.id}`) }), { w: 460, size: 26, color: hexColor(set.aura) });
+    if (set) uiText(this, fx, y0 + 445, t('set_full', { name: tk(`set.${set.id}`) }), { w: 560, lines: 2, h: 70, size: 26, color: hexColor(set.aura) });
 
     // Цвета одежды
     this.drawSwatches(look, fx, y0 + 28);

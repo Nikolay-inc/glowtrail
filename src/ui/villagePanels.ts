@@ -287,14 +287,17 @@ export function showStreet(host: VillageHost, i: number) {
   // До → после: кусок улицы сейчас и на следующем шаге.
   const stage = host.add.container(0, 0);
   const w = (m.inner - 120) / 2;
-  const a = streetSample(host, step as 0 | 1 | 2 | 3, w, 220).setPosition(-w / 2 - 60, 0);
+  // Горный город — снежные улицы (снежная тропа → тропа с песком → брусчатка → мощёная с фонарями).
+  const style = d === 'mountain' ? 'snow' : 'green';
+  const stepName = (n: number) => (style === 'snow' ? tk(`street_step_snow.${n}`) : tk(`street_step.${n}`));
+  const a = streetSample(host, step as 0 | 1 | 2 | 3, w, 220, style).setPosition(-w / 2 - 60, 0);
   stage.add(a);
-  stage.add(uiText(host, -w / 2 - 60, 140, tk(`street_step.${step}`), { w, size: 28, color: C.textDim }));
+  stage.add(uiText(host, -w / 2 - 60, 140, stepName(step), { w, size: 28, color: C.textDim }));
   if (price !== null) {
-    const b = streetSample(host, (step + 1) as 0 | 1 | 2 | 3, w, 220).setPosition(w / 2 + 60, 0);
+    const b = streetSample(host, (step + 1) as 0 | 1 | 2 | 3, w, 220, style).setPosition(w / 2 + 60, 0);
     const arrow = host.add.graphics();
     drawIcon(arrow, 'arrowRight', 60, 0xffd36b);
-    stage.add([b, arrow, uiText(host, w / 2 + 60, 140, tk(`street_step.${step + 1}`), { w, size: 28, color: '#ffd36b', bold: true })]);
+    stage.add([b, arrow, uiText(host, w / 2 + 60, 140, stepName(step + 1), { w, size: 28, color: '#ffd36b', bold: true })]);
   } else a.setPosition(0, 0);
   m.add(stage, 320, 24);
   m.text(t('street_text'), 32, C.textDim, 2);
@@ -328,7 +331,7 @@ export function showDecor(host: VillageHost, slot: number) {
   sfx.tap();
   const d = host.district;
   const e = getEconomy();
-  const type = decorType(slot);
+  const type = decorType(slot, d);
   const n = decorVariants(slot);
   const placed = decorPlaced(e, d, slot);
   const m = newModal(host, 980);
@@ -389,7 +392,7 @@ function pickDecor(host: VillageHost, slot: number, v: number) {
     const m = newModal(host, 920);
     sfx.invalid();
     const light = price.currency === 'light';
-    m.add(decorIcon(host, decorType(slot), v, 160), 170, 10);
+    m.add(decorIcon(host, decorType(slot, d), v, 160), 170, 10);
     m.rich(light ? t('not_enough_light', { n: price.amount - wallet().light }) : t('not_enough_coins', { n: price.amount - coins(e) }), 50, '#ff9a8a');
     addEarnHints(host, m, price.currency);
     // Монеты можно докупить (покупка в приложении; в веб-версии окно скажет «в приложении»).

@@ -60,7 +60,7 @@ export function setAnalyticsChoice(choice: 'yes' | 'no', from: 'consent' | 'prof
 
 function facts(d: SaveData) {
   return userProperties({
-    chapter: openDistricts().filter((x) => x !== 'mountain').length,
+    chapter: openDistricts().length,
     totalStars: totalStars(d.progress),
     cozyLevel: cozyLevel(d.economy).level,
     language: getLocale(),

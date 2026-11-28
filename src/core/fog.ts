@@ -8,7 +8,7 @@ import { fadeLeft, type TimeState } from './tiles';
 import type { CellType, Level, LevelData, TileKind } from './types';
 
 /** Что видно сквозь туман: светящиеся клетки. */
-export const GLOWS_THROUGH_FOG: readonly CellType[] = ['exit', 'lantern', 'ring', 'start'];
+export const GLOWS_THROUGH_FOG: readonly CellType[] = ['exit', 'lantern', 'ring', 'start', 'fire'];
 
 /** Базовый радиус обзора в тумане (клеток вокруг дороги, по квадрату 3×3). Обсерватория добавляет 1–2. */
 export const FOG_SIGHT = 1;

@@ -1,0 +1,82 @@
+{
+  "id": "peaks-23",
+  "name": "Огни на льду",
+  "grid": [
+    ".....",
+    "#B...",
+    "#....",
+    "E.A..",
+    ".....",
+    "..=..",
+    "..=.S"
+  ],
+  "startDir": "N",
+  "deck": [
+    "straight",
+    "straight",
+    "left",
+    "left",
+    "right",
+    "straight2",
+    "left",
+    "right",
+    "left",
+    "left",
+    "straight",
+    "straight",
+    "right",
+    "straight",
+    "left"
+  ],
+  "stars": {
+    "two": 3,
+    "three": 5
+  },
+  "goal": "signals",
+  "easeDecks": [
+    [
+      "right",
+      "straight",
+      "straight",
+      "left",
+      "left",
+      "right",
+      "straight2",
+      "left",
+      "right",
+      "left",
+      "left",
+      "straight",
+      "straight",
+      "right",
+      "straight",
+      "left"
+    ],
+    [
+      "right",
+      "straight",
+      "straight",
+      "left",
+      "left",
+      "straight",
+      "right",
+      "straight2",
+      "left",
+      "right",
+      "left",
+      "left",
+      "straight",
+      "straight",
+      "right",
+      "straight",
+      "left"
+    ]
+  ],
+  "metrics": {
+    "rating": 3,
+    "roads": 22,
+    "minTiles": 9,
+    "reserve": 6,
+    "trap": 0.205
+  }
+}

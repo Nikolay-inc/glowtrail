@@ -14,7 +14,7 @@ export interface DemoPhase {
   grid: string[];
   startDir: 'N' | 'E' | 'S' | 'W';
   steps: DemoStep[];
-  goal?: 'classic' | 'fireflies' | 'escape';
+  goal?: 'classic' | 'fireflies' | 'escape' | 'signals';
   fog?: boolean;
   shadow?: number;
   /** Чем заканчивается фаза (по умолчанию — победой): lost — показываем, как тень догоняет. */
@@ -175,6 +175,71 @@ export const RULE_CARDS: Record<RuleId, RuleCard> = {
     title: 'rule_water_title',
     text: 'rule_water_text',
     phases: [{ grid: ['.E.', '~~~', '.S.'], startDir: 'N', steps: [{ fail: 'straight' }, { place: 'bridge' }, { place: 'straight' }] }],
+  },
+  ice: {
+    id: 'ice',
+    title: 'rule_ice_title',
+    text: 'rule_ice_text',
+    phases: [
+      // Закончил ход на льду — скользит до травы.
+      { grid: ['.E.', '...', '.=.', '.=.', '.S.'], startDir: 'N', steps: [{ place: 'straight' }, { place: 'straight' }] },
+      // Камень останавливает на последнем льду — тупик; лучше свернуть на лёд и съехать в сторону.
+      {
+        grid: ['.....', 'E.#..', '..=..', '..=..', '..S..'],
+        startDir: 'N',
+        steps: [{ place: 'straight' }, { fail: 'straight' }, { reset: true }, { place: 'left' }, { place: 'right' }, { place: 'straight' }, { place: 'straight' }],
+      },
+    ],
+  },
+  drift: {
+    id: 'drift',
+    title: 'rule_drift_title',
+    text: 'rule_drift_text',
+    phases: [
+      // Сугроб не пускает; зажгли соседний фонарь — растаял, и через него можно пройти.
+      {
+        grid: ['E..', '.*L', '...', '.S.'],
+        startDir: 'N',
+        steps: [{ place: 'straight' }, { fail: 'straight' }, { reset: true }, { place: 'right' }, { place: 'left' }, { place: 'left' }, { place: 'straight' }, { place: 'right' }, { place: 'straight' }],
+      },
+    ],
+  },
+  wind: {
+    id: 'wind',
+    title: 'rule_wind_title',
+    text: 'rule_wind_text',
+    phases: [
+      // Встал на ветер — сдвинуло на клетку по стрелке.
+      { grid: ['...E', '....', '.>..', '.S..'], startDir: 'N', steps: [{ place: 'straight' }, { place: 'left' }, { place: 'straight' }, { place: 'straight' }] },
+      // Ветер сдул на лёд — дальше скольжение.
+      { grid: ['....E', '.....', '>==..', 'S....'], startDir: 'N', steps: [{ place: 'straight' }, { place: 'left' }, { place: 'straight' }, { place: 'straight' }] },
+    ],
+  },
+  signals: {
+    id: 'signals',
+    title: 'rule_signals_title',
+    text: 'rule_signals_text',
+    phases: [
+      // Второй костёр раньше первого не загорится; по порядку — оба горят, арка открыта.
+      {
+        grid: ['E...', '.B..', '...A', '.S..'],
+        startDir: 'N',
+        goal: 'signals',
+        steps: [
+          { place: 'straight' },
+          { fail: 'straight' },
+          { reset: true },
+          { place: 'right' },
+          { place: 'straight' },
+          { place: 'left' },
+          { place: 'left' },
+          { place: 'straight' },
+          { place: 'straight' },
+          { place: 'right' },
+          { place: 'straight' },
+        ],
+      },
+    ],
   },
 };
 

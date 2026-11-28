@@ -1,0 +1,87 @@
+{
+  "id": "peaks-13",
+  "name": "Флюгер",
+  "grid": [
+    "#..#.",
+    ".#...",
+    "..E..",
+    "#.^..",
+    ".....",
+    ".....",
+    "S...L"
+  ],
+  "startDir": "N",
+  "deck": [
+    "right",
+    "right",
+    "straight",
+    "right",
+    "straight",
+    "straight2",
+    "straight",
+    "left",
+    "left",
+    "left",
+    "left",
+    "straight",
+    "straight2",
+    "straight",
+    "straight2",
+    "straight2",
+    "straight"
+  ],
+  "stars": {
+    "two": 3,
+    "three": 6
+  },
+  "easeDecks": [
+    [
+      "left",
+      "right",
+      "right",
+      "straight",
+      "right",
+      "straight",
+      "straight2",
+      "straight",
+      "left",
+      "left",
+      "left",
+      "left",
+      "straight",
+      "straight2",
+      "straight",
+      "straight2",
+      "straight2",
+      "straight"
+    ],
+    [
+      "left",
+      "right",
+      "right",
+      "straight",
+      "right",
+      "straight",
+      "right",
+      "straight2",
+      "straight",
+      "left",
+      "left",
+      "left",
+      "left",
+      "straight",
+      "straight2",
+      "straight",
+      "straight2",
+      "straight2",
+      "straight"
+    ]
+  ],
+  "metrics": {
+    "rating": 3,
+    "roads": 34,
+    "minTiles": 10,
+    "reserve": 7,
+    "trap": 0.217
+  }
+}

@@ -26,7 +26,7 @@ describe('размещение плиток', () => {
     const g = createGame(level(['.E.', '...', '.S.'], ['straight', 'straight']));
     const p = previewTile(g, 'straight');
     expect(p.ok).toBe(true);
-    expect(p.cells).toEqual([{ x: 1, y: 1, idx: 4 }]);
+    expect(p.cells).toEqual([{ x: 1, y: 1, idx: 4, din: 0 }]);
     expect(p.newDir).toBe(0);
   });
 

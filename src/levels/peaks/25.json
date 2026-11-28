@@ -1,0 +1,85 @@
+{
+  "id": "peaks-25",
+  "name": "Огни на ветру",
+  "grid": [
+    ".v.#E.",
+    "......",
+    "...C..",
+    "..v...",
+    "#A.B..",
+    ".=....",
+    "S=...."
+  ],
+  "startDir": "N",
+  "deck": [
+    "right",
+    "straight2",
+    "left",
+    "left",
+    "right",
+    "right",
+    "left",
+    "straight2",
+    "straight",
+    "right",
+    "left",
+    "left",
+    "straight2",
+    "right",
+    "left",
+    "straight2"
+  ],
+  "stars": {
+    "two": 3,
+    "three": 5
+  },
+  "goal": "signals",
+  "easeDecks": [
+    [
+      "straight",
+      "right",
+      "straight2",
+      "left",
+      "left",
+      "right",
+      "right",
+      "left",
+      "straight2",
+      "straight",
+      "right",
+      "left",
+      "left",
+      "straight2",
+      "right",
+      "left",
+      "straight2"
+    ],
+    [
+      "straight",
+      "right",
+      "straight2",
+      "right",
+      "left",
+      "left",
+      "right",
+      "right",
+      "left",
+      "straight2",
+      "straight",
+      "right",
+      "left",
+      "left",
+      "straight2",
+      "right",
+      "left",
+      "straight2"
+    ]
+  ],
+  "metrics": {
+    "rating": 4.4,
+    "roads": 14,
+    "minTiles": 10,
+    "reserve": 6,
+    "trap": 0.345
+  }
+}

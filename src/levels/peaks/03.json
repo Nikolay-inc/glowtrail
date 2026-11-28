@@ -1,0 +1,75 @@
+{
+  "id": "peaks-03",
+  "name": "Ледяные валуны",
+  "grid": [
+    "====.",
+    ".....",
+    "E....",
+    "....L",
+    "#...F",
+    "....#",
+    "##S.."
+  ],
+  "startDir": "N",
+  "deck": [
+    "straight2",
+    "straight",
+    "straight2",
+    "right",
+    "right",
+    "left",
+    "straight",
+    "left",
+    "left",
+    "straight2",
+    "straight",
+    "left",
+    "straight"
+  ],
+  "stars": {
+    "two": 3,
+    "three": 5
+  },
+  "easeDecks": [
+    [
+      "left",
+      "straight2",
+      "straight",
+      "straight2",
+      "right",
+      "right",
+      "left",
+      "straight",
+      "left",
+      "left",
+      "straight2",
+      "straight",
+      "left",
+      "straight"
+    ],
+    [
+      "right",
+      "left",
+      "straight2",
+      "straight",
+      "straight2",
+      "right",
+      "right",
+      "left",
+      "straight",
+      "left",
+      "left",
+      "straight2",
+      "straight",
+      "left",
+      "straight"
+    ]
+  ],
+  "metrics": {
+    "rating": 3,
+    "roads": 14,
+    "minTiles": 7,
+    "reserve": 6,
+    "trap": 0.25
+  }
+}

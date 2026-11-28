@@ -4,7 +4,9 @@
 //
 // Настроения (`setMood`): «night» — карта и уровни Долины, спокойное, чуть мистическое; «warm» — деревня,
 // теплее; «forest» — «Туманный лес», ниже и таинственнее (модальный ре минор на октаву ниже, мягкая атака,
-// совы, шелест вместо сверчков, колокольчики реже и ниже). Смена настроения — кроссфейд за MOOD_FADE с:
+// совы, шелест вместо сверчков, колокольчики реже и ниже); «peaks» — «Ледяные вершины», зимнее: светлый ми мажор,
+// колокольчики выше и прозрачнее (почти без обертона, звенят дольше), пэд мягче и тише, аккорды реже (раз в
+// 12–16 с), вместо сверчков — тонкий свист ветра по склону. Смена настроения — кроссфейд за MOOD_FADE с:
 // громкости фоновых слоёв, высота гула и фильтры плавно едут, звучащие голоса старого настроения
 // затухают, новые аккорды входят с атакой той же длины.
 //
@@ -13,7 +15,7 @@
 // (счётчик liveNodes, тест). Планировщик работает «на шаг вперёд» по часам AudioContext: tick() раскладывает
 // события на 2 с вперёд.
 
-export type Mood = 'night' | 'warm' | 'forest';
+export type Mood = 'night' | 'warm' | 'forest' | 'peaks';
 
 /** Громкость музыки по умолчанию (доля от полной). */
 export const MUSIC_VOLUME = 0.25;
@@ -27,6 +29,8 @@ const midi = (n: number) => 440 * Math.pow(2, (n - 69) / 12);
 interface MoodSpec {
   /** Аккорды (MIDI). */
   chords: number[][];
+  /** Длина аккорда (темп): min + случайная до range, с. */
+  chordDur: { min: number; range: number };
   /** Ноты колокольчиков (MIDI). */
   bells: number[];
   /** Тоника гула (MIDI), вторая синусоида — квинта. */
@@ -35,8 +39,11 @@ interface MoodSpec {
   droneCutoff: number;
   /** Подушки: срез фильтра (Гц), атака (доля длительности), громкость ноты. */
   pad: { cutoff: number; attack: number; vol: number };
-  /** Колокольчики: пауза min + случайная до range (с), вероятность второй ноты, громкость (множитель). */
-  bell: { min: number; range: number; pair: number; vol: number };
+  /**
+   * Колокольчики: пауза min + случайная до range (с), вероятность второй ноты, громкость (множитель),
+   * обертон (доля звонкого неровного обертона: меньше — прозрачнее), затухание (с).
+   */
+  bell: { min: number; range: number; pair: number; vol: number; overtone: number; decay: number };
   /** Ветер: громкость и центральная частота фильтра. */
   wind: number;
   windFreq: number;
@@ -47,7 +54,10 @@ interface MoodSpec {
   owl: boolean;
 }
 
-/** Ночь — ля минор, деревня — теплее (фа и до мажор), лес — ре минор (эолийский) на октаву ниже ночи. */
+/**
+ * Ночь — ля минор, деревня — теплее (фа и до мажор), лес — ре минор (эолийский) на октаву ниже ночи,
+ * вершины — ми мажор с добавленными нонами, колокольчики на октаву выше ночных.
+ */
 const MOODS: Record<Mood, MoodSpec> = {
   night: {
     chords: [
@@ -57,11 +67,12 @@ const MOODS: Record<Mood, MoodSpec> = {
       [52, 55, 59, 62], // Em7
       [50, 53, 57, 60], // Dm7
     ],
+    chordDur: { min: 8, range: 4 },
     bells: [81, 84, 86, 88, 91, 93], // A5 C6 D6 E6 G6 A6 — ля-минорная пентатоника
     drone: 33, // A1
     droneCutoff: 220,
     pad: { cutoff: 900, attack: 0.35, vol: 0.035 },
-    bell: { min: 2.5, range: 6, pair: 0.3, vol: 1 },
+    bell: { min: 2.5, range: 6, pair: 0.3, vol: 1, overtone: 1, decay: 2.4 },
     wind: 0.018,
     windFreq: 500,
     crickets: 1,
@@ -76,11 +87,12 @@ const MOODS: Record<Mood, MoodSpec> = {
       [55, 59, 62, 65], // G7
       [57, 60, 64, 67], // Am7
     ],
+    chordDur: { min: 8, range: 4 },
     bells: [84, 86, 88, 91, 93, 96], // до-мажорная пентатоника
     drone: 29, // F1
     droneCutoff: 220,
     pad: { cutoff: 900, attack: 0.35, vol: 0.035 },
-    bell: { min: 2.5, range: 6, pair: 0.3, vol: 1 },
+    bell: { min: 2.5, range: 6, pair: 0.3, vol: 1, overtone: 1, decay: 2.4 },
     wind: 0.018,
     windFreq: 500,
     crickets: 1,
@@ -95,16 +107,37 @@ const MOODS: Record<Mood, MoodSpec> = {
       [33, 45, 48, 52], // Am (A1 A2 C3 E3)
       [31, 43, 46, 50], // Gm (G1 G2 B♭2 D3)
     ],
+    chordDur: { min: 8, range: 4 },
     bells: [74, 77, 79, 81, 84], // D5 F5 G5 A5 C6 — ре-минорная пентатоника, ниже ночной
     drone: 26, // D1
     droneCutoff: 160,
     pad: { cutoff: 600, attack: 0.5, vol: 0.04 },
-    bell: { min: 6, range: 10, pair: 0.15, vol: 0.8 },
+    bell: { min: 6, range: 10, pair: 0.15, vol: 0.8, overtone: 1, decay: 2.4 },
     wind: 0.014,
     windFreq: 380,
     crickets: 0.25,
     leaves: 0.05,
     owl: true,
+  },
+  peaks: {
+    chords: [
+      [52, 59, 66, 68], // Eadd9 (E3 B3 F♯4 G♯4)
+      [49, 56, 59, 64], // C♯m7 (C♯3 G♯3 B3 E4)
+      [45, 52, 59, 61], // Aadd9 (A2 E3 B3 C♯4)
+      [47, 54, 59, 64], // Bsus4 (B2 F♯3 B3 E4)
+      [42, 49, 52, 59], // F♯m11 (F♯2 C♯3 E3 B3)
+    ],
+    chordDur: { min: 12, range: 4 }, // медленнее: раз в 12–16 с
+    bells: [88, 90, 92, 95, 97, 100], // E6 F♯6 G♯6 B6 C♯7 E7 — ми-мажорная пентатоника, выше ночной
+    drone: 28, // E1
+    droneCutoff: 200,
+    pad: { cutoff: 650, attack: 0.55, vol: 0.026 },
+    bell: { min: 4, range: 8, pair: 0.35, vol: 0.7, overtone: 0.35, decay: 3.4 },
+    wind: 0.026,
+    windFreq: 760,
+    crickets: 0,
+    leaves: 0,
+    owl: false,
   },
 };
 
@@ -361,11 +394,12 @@ export class NightMusic {
   /** Колокольчик/челеста: синус с обертоном, быстрая атака, звонкое затухание — в основном в ревербератор. */
   private bell(at: number, note: number) {
     const ctx = this.ctx!;
-    const k = MOODS[this.mood].bell.vol;
-    const v = this.openVoice(at, at + 2.5);
+    const spec = MOODS[this.mood].bell;
+    const k = spec.vol;
+    const v = this.openVoice(at, at + spec.decay + 0.1);
     for (const [mult, vol] of [
       [1, 0.05],
-      [2.76, 0.012],
+      [2.76, 0.012 * spec.overtone],
     ] as const) {
       const o = ctx.createOscillator();
       const g = ctx.createGain();
@@ -373,7 +407,7 @@ export class NightMusic {
       o.frequency.value = midi(note) * mult;
       g.gain.setValueAtTime(0.0001, at);
       g.gain.exponentialRampToValueAtTime(vol * k, at + 0.01);
-      g.gain.exponentialRampToValueAtTime(0.0001, at + 2.4);
+      g.gain.exponentialRampToValueAtTime(0.0001, at + spec.decay);
       o.connect(g);
       g.connect(v.fade);
       v.sources.push(o);
@@ -439,7 +473,7 @@ export class NightMusic {
     const until = ctx.currentTime + LOOKAHEAD;
     const m = MOODS[this.mood];
     while (this.nextChord < until) {
-      const dur = 8 + this.rand() * 4; // аккорд меняется раз в 8–12 с
+      const dur = m.chordDur.min + this.rand() * m.chordDur.range; // аккорд меняется раз в 8–12 с (в горах — 12–16)
       // Соседние аккорды по кругу, иногда — шаг через один.
       this.chordIndex = (this.chordIndex + (this.rand() < 0.7 ? 1 : 2)) % m.chords.length;
       const attack = this.transitionAttack || (dur + 3) * m.pad.attack;
@@ -520,7 +554,8 @@ export class NightMusic {
   }
 
   /**
-   * Настроение: ночь (карта и уровни Долины), теплее (деревня), лес («Туманный лес»). Кроссфейд за MOOD_FADE:
+   * Настроение: ночь (карта и уровни Долины), теплее (деревня), лес («Туманный лес»), вершины («Ледяные
+   * вершины»). Кроссфейд за MOOD_FADE:
    * слои и гул плавно меняются, голоса старого настроения затухают и останавливаются, первый аккорд нового
    * входит с атакой той же длины. Повторный вызов с тем же настроением ничего не делает.
    */

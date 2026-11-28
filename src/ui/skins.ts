@@ -5,7 +5,7 @@ import Phaser from 'phaser';
 import type { Look } from '../core/wardrobe';
 import { getEconomy } from '../meta';
 
-export type RoadStyle = 'glow' | 'moon' | 'firefly' | 'sunset' | 'aurora' | 'stars' | 'stones' | 'planks' | 'ember' | 'mint';
+export type RoadStyle = 'glow' | 'moon' | 'firefly' | 'sunset' | 'aurora' | 'stars' | 'stones' | 'planks' | 'ember' | 'mint' | 'ice';
 export type ArchStyle = 'portal' | 'moon' | 'sunset' | 'stone' | 'flowers' | 'gold' | 'crystal' | 'leaves';
 
 /** Цвета ленты света для светящихся стилей дороги: сияние, полоса, сердцевина. */
@@ -18,7 +18,51 @@ export const ROAD_COLORS: Record<Exclude<RoadStyle, 'stones' | 'planks'>, { glow
   sunset: { glow: 0xff8a6a, band: 0xffa07a, core: 0xffe6d8 },
   aurora: { glow: 0x5affd0, band: 0x8ab8ff, core: 0xe8fff8 },
   stars: { glow: 0xd8b8ff, band: 0xc9a8ff, core: 0xffffff },
+  ice: { glow: 0x48c8ff, band: 0xbdeeff, core: 0xffffff },
 };
+
+/**
+ * «Ледяная дорога»: трещинки во льду и искры инея на отрезке a → b (s — размер клетки). Детали стабильны:
+ * зависят от seed (номер отрезка), не от случайности. Общая для образца в магазине и для поля (BoardView).
+ */
+export function drawIceDetails(g: Phaser.GameObjects.Graphics, ax: number, ay: number, bx: number, by: number, s: number, seed: number, alpha = 1) {
+  const len = Math.hypot(bx - ax, by - ay) || 1;
+  const ux = (bx - ax) / len;
+  const uy = (by - ay) / len;
+  const nx = -uy;
+  const ny = ux;
+  const h = (k: number) => {
+    const v = Math.sin(seed * 127.1 + k * 311.7) * 43758.5453;
+    return v - Math.floor(v);
+  };
+  // Трещинки: ломаные поперёк ленты с короткой веточкой
+  g.lineStyle(Math.max(1, s * 0.018), 0xffffff, 0.75 * alpha);
+  for (let k = 0; k < 2; k++) {
+    const t = 0.25 + k * 0.45 + (h(k) - 0.5) * 0.15;
+    const side = h(k + 7) < 0.5 ? -1 : 1;
+    const cx = ax + (bx - ax) * t;
+    const cy = ay + (by - ay) * t;
+    const p1 = { x: cx + nx * side * s * 0.13, y: cy + ny * side * s * 0.13 };
+    const p2 = { x: cx + ux * s * 0.05 + nx * side * s * 0.03, y: cy + uy * s * 0.05 + ny * side * s * 0.03 };
+    const p3 = { x: cx - ux * s * 0.02 - nx * side * s * 0.08, y: cy - uy * s * 0.02 - ny * side * s * 0.08 };
+    g.lineBetween(p1.x, p1.y, p2.x, p2.y);
+    g.lineBetween(p2.x, p2.y, p3.x, p3.y);
+    g.lineBetween(p2.x, p2.y, p2.x + ux * s * 0.07, p2.y + uy * s * 0.07);
+  }
+  // Искры инея: крестики-звёздочки по краям ленты
+  for (let k = 0; k < 3; k++) {
+    const t = (k + 0.5) / 3 + (h(k + 3) - 0.5) * 0.2;
+    const off = (h(k + 11) - 0.5) * s * 0.3;
+    const x = ax + (bx - ax) * t + nx * off;
+    const y = ay + (by - ay) * t + ny * off;
+    const r = s * (0.03 + h(k + 5) * 0.025);
+    g.lineStyle(Math.max(1, s * 0.012), 0xffffff, 0.9 * alpha);
+    g.lineBetween(x - r, y, x + r, y);
+    g.lineBetween(x, y - r, x, y + r);
+    g.fillStyle(0xffffff, alpha);
+    g.fillCircle(x, y, Math.max(1, s * 0.012));
+  }
+}
 
 /** Цвета арки: кольцо, ободок, свечение открытой/закрытой. */
 export const ARCH_COLORS: Record<ArchStyle, { ring: number; rim: number; open: number; closed: number }> = {
@@ -71,6 +115,7 @@ export function drawRoadSample(g: Phaser.GameObjects.Graphics, style: RoadStyle,
   line(s * 0.5, c.glow, 0.15);
   line(s * 0.22, c.band, 0.95);
   line(s * 0.08, c.core, 0.9);
+  if (style === 'ice') for (let i = 0; i + 1 < pts.length; i++) drawIceDetails(g, pts[i].x, pts[i].y, pts[i + 1].x, pts[i + 1].y, s * 0.55, i + 1);
 }
 
 /** Образец арки для магазина. */

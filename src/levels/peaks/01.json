@@ -1,0 +1,62 @@
+{
+  "id": "peaks-01",
+  "name": "Первый лёд",
+  "grid": [
+    "#..E#",
+    ".....",
+    ".....",
+    "S..F.",
+    ".=...",
+    ".=..."
+  ],
+  "startDir": "E",
+  "deck": [
+    "right",
+    "left",
+    "left",
+    "straight",
+    "straight",
+    "left",
+    "straight",
+    "straight2",
+    "straight2"
+  ],
+  "stars": {
+    "two": 2,
+    "three": 3
+  },
+  "easeDecks": [
+    [
+      "right",
+      "left",
+      "left",
+      "straight",
+      "straight",
+      "right",
+      "left",
+      "straight",
+      "straight2",
+      "straight2"
+    ],
+    [
+      "right",
+      "left",
+      "left",
+      "straight",
+      "straight",
+      "right",
+      "right",
+      "left",
+      "straight",
+      "straight2",
+      "straight2"
+    ]
+  ],
+  "metrics": {
+    "rating": 2.5,
+    "roads": 10,
+    "minTiles": 5,
+    "reserve": 4,
+    "trap": 0.205
+  }
+}

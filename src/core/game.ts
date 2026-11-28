@@ -2,8 +2,8 @@
 // Состояние неизменяемое: каждое действие возвращает новое состояние.
 
 import { geoCanMove, geoMinTiles } from './geo';
-import { advanceShadow, anyExpired, fadeLeft, goalReached, placeTile, shadowCaught, timeStart, type PlacedCell, type Placement, type ShadowState, type TimeState } from './tiles';
-import type { Dir, Level, TileKind } from './types';
+import { advanceShadow, anyExpired, fadeLeft, firesLit, goalReached, placeTile, shadowCaught, timeStart, type PlacedCell, type Placement, type ShadowState, type TimeState } from './tiles';
+import { goalNeedsLanterns, type Dir, type Level, type TileKind } from './types';
 
 export { placeTile, tileShape, type BlockReason, type PlacedCell, type Placement, type TimeState, type ShadowState } from './tiles';
 
@@ -277,8 +277,13 @@ export function firefliesOnRoad(state: GameState): number {
   return state.level.fireflies.filter((f) => state.onRoad[f]).length;
 }
 
+/** Сколько сигнальных огней горит (по порядку). */
+export function signalsLit(state: GameState): number {
+  return firesLit(state.level, (i) => state.onRoad[i]);
+}
+
 export function isExitOpen(state: GameState): boolean {
-  return state.level.goal === 'escape' || lanternsOnRoad(state) === state.level.lanterns.length;
+  return state.level.goal === 'escape' || (lanternsOnRoad(state) === state.level.lanterns.length && signalsLit(state) === state.level.fires.length);
 }
 
 /** Сколько клеток (по прямой сетке) от конца дороги до выхода (цель «светлячки» — до ближайшего несобранного). */
@@ -334,7 +339,7 @@ function computeStatus(state: GameState): Status {
 
 /** Какой гаснущий фонарь погас (индекс клетки) или -1. После победы фонари не гаснут. */
 export function expiredLantern(state: GameState): number {
-  if (state.level.goal !== 'classic' || state.status === 'won') return -1;
+  if (!goalNeedsLanterns(state.level.goal) || state.status === 'won') return -1;
   const ts = timeOf(state);
   const k = state.level.fades.findIndex((_, i) => fadeLeft(state.level, ts, i) === 0);
   return k < 0 ? -1 : state.level.fades[k];
@@ -408,10 +413,13 @@ export function applyAction(state: GameState, action: Action): GameState {
     const step = tilesPlaced(state) + 1;
     onRoad = [...state.onRoad];
     road = [...state.road];
+    // Направления по клеткам: дорога может повернуть и после плитки (ветер), выход — как вход следующей клетки.
     p.cells.forEach((c, i) => {
       onRoad[c.idx] = true;
-      const last = i === p.cells.length - 1;
-      road.push({ ...c, kind, dirIn: state.dir, dirOut: last ? p.newDir : state.dir, step });
+      const next = p.cells[i + 1];
+      const dirIn = c.din ?? state.dir;
+      const dirOut = next ? (next.din ?? state.dir) : p.newDir;
+      road.push({ ...c, kind, dirIn, dirOut, step });
     });
     head = p.cells[p.cells.length - 1].idx;
     dir = p.newDir;

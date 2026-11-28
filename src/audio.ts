@@ -170,9 +170,14 @@ export function duckMusic(seconds = 2) {
   music.duck(seconds);
 }
 
-/** Настроение музыки: 'night' — Долина, 'warm' — деревня, 'forest' — «Туманный лес». Смена — кроссфейд ~2,5 с, то же настроение — ничего. */
+/** Настроение музыки: 'night' — Долина, 'warm' — деревня, 'forest' — «Туманный лес», 'peaks' — «Ледяные вершины». Смена — кроссфейд ~2,5 с, то же настроение — ничего. */
 export function setMusicMood(mood: Mood) {
   music.setMood(mood);
+}
+
+/** Настроение музыки мира (карта, уровни, сцены входа): лес и вершины — свои, остальное — ночь. */
+export function worldMood(worldId: string): Mood {
+  return worldId === 'forest' || worldId === 'peaks' ? worldId : 'night';
 }
 
 export function isMuted() {

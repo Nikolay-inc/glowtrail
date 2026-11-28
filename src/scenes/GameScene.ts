@@ -28,9 +28,11 @@ import {
   tilesPlaced,
   lossReason,
   timeOf,
+  signalsLit,
   type StashIndex,
 } from '../core/game';
-import { shadowDelay, shadowGap, shadowIn } from '../core/tiles';
+import { driftMelted, shadowDelay, shadowGap, shadowIn } from '../core/tiles';
+import { FIRE } from '../ui/peaks';
 import { drawRingBase, paletteOf } from '../ui/forest';
 import { abilities, buyHint, adDoubleCoins, adHint, chapelAvailable, challengeReward, freePlus3Available, getEconomy, hintsLeft, questEvent, recordWinRewards, spendChapel, spendFreePlus3, spendHint, type ChallengeReward } from '../meta';
 import { onLevelWin, rewardedReady, starterOfferAfterAlmost, starterOfferAfterWin } from '../monetization/index';
@@ -182,6 +184,8 @@ export class GameScene extends Phaser.Scene {
   private fogHidden = new Set<number>();
   private fogOpened = new Set<number>();
   private shadowText!: Phaser.GameObjects.Text;
+  /** Сигнальные огни «горит/всего» в строке цели. */
+  private fireText!: Phaser.GameObjects.Text;
 
   private get stashX() {
     return this.L.stashX ?? -CARD * 2;
@@ -233,11 +237,13 @@ export class GameScene extends Phaser.Scene {
     this.trayY = TRAY_Y + down;
     this.previewY = PREVIEW_Y + down;
     this.bottomY = BOTTOM_Y + down;
-    const forest = paletteOf(level) === 'forest';
-    addBackground(this, { evening: !level.night, forest });
-    // Лес — своя музыка (глубже и таинственнее); на выходе — обратно ночная.
-    if (forest) {
-      setMusicMood('forest');
+    const pal = paletteOf(level);
+    const forest = pal === 'forest';
+    const peaks = pal === 'peaks';
+    addBackground(this, { evening: !level.night && !peaks, forest, peaks });
+    // Лес и вершины — своя музыка (лес глубже, вершины — зимняя, прозрачнее); на выходе — обратно ночная.
+    if (forest || peaks) {
+      setMusicMood(pal);
       this.events.once('shutdown', () => setMusicMood('night'));
     }
     this.streak = this.custom ? 0 : lossStreak(level.id);
@@ -249,6 +255,7 @@ export class GameScene extends Phaser.Scene {
     this.goalText = text(this, 0, this.topY + 58, '', 40).setOrigin(0, 0.5).setDepth(2);
     this.ffText = text(this, 0, this.topY + 58, '', 40).setOrigin(0, 0.5).setDepth(2);
     this.shadowText = text(this, 0, this.topY + 58, '', 40).setOrigin(0, 0.5).setDepth(2);
+    this.fireText = text(this, 0, this.topY + 58, '', 40).setOrigin(0, 0.5).setDepth(2);
     this.undoBtn = new Button(this, 840, this.topY, { w: 130, h: 130, icon: 'undo', onClick: () => this.onUndo() });
     this.restartBtn = new Button(this, 990, this.topY, { w: 130, h: 130, icon: 'restart', onClick: () => this.restart() });
 
@@ -403,7 +410,7 @@ export class GameScene extends Phaser.Scene {
     const level = this.state.level;
     const n = level.lanterns.length;
     const ff = level.fireflies.length;
-    type Row = { icon: 'portal' | 'lantern' | 'firefly' | 'fade' | 'bridge' | 'ring' | 'fog' | 'shadow' | 'herb' | 'eye'; label: string; note?: string };
+    type Row = { icon: 'portal' | 'lantern' | 'firefly' | 'fade' | 'bridge' | 'ring' | 'fog' | 'shadow' | 'herb' | 'eye' | 'fire' | 'ice' | 'drift' | 'wind'; label: string; note?: string };
     const rows: Row[] = [];
     if (level.goal === 'fireflies') {
       // Цель «светлячки»: двери нет, нужно собрать всех.
@@ -415,6 +422,8 @@ export class GameScene extends Phaser.Scene {
       if (ff > 0) rows.push({ icon: 'firefly', label: t('goal_fireflies', { n: ff }) });
     } else {
       rows.push({ icon: 'portal', label: t('goal_door') });
+      // «Сигнальные огни»: костры по порядку номеров.
+      if (level.fires.length) rows.push({ icon: 'fire', label: t('goal_signals', { n: level.fires.length }) });
       if (n > 0) rows.push({ icon: 'lantern', label: t('goal_lanterns', { n }) });
       if (ff > 0) rows.push({ icon: 'firefly', label: t('goal_fireflies', { n: ff }) });
     }
@@ -423,6 +432,9 @@ export class GameScene extends Phaser.Scene {
     if (fadeN) rows.push({ icon: 'fade', label: t('goal_fade_title'), note: t('goal_fade_text') });
     if (level.turnBridges.length) rows.push({ icon: 'bridge', label: t('goal_bridge_title'), note: t('goal_bridge_text') });
     if (level.rings.length) rows.push({ icon: 'ring', label: t('goal_ring_title'), note: t('goal_ring_text') });
+    if (level.cells.includes('ice')) rows.push({ icon: 'ice', label: t('goal_ice_title'), note: t('goal_ice_text') });
+    if (level.cells.includes('drift')) rows.push({ icon: 'drift', label: t('goal_drift_title'), note: t('goal_drift_text') });
+    if (level.cells.includes('wind')) rows.push({ icon: 'wind', label: t('goal_wind_title'), note: t('goal_wind_text') });
     if (level.fog) {
       rows.push({ icon: 'fog', label: t('goal_fog_title'), note: t('goal_fog_text') });
       // Обсерватория: обзор в тумане дальше.
@@ -488,6 +500,10 @@ export class GameScene extends Phaser.Scene {
       else if (r.icon === 'shadow') this.drawShadowIcon(ig, ix, iy, 1.6);
       else if (r.icon === 'herb') this.drawHerbIcon(ig, ix, iy);
       else if (r.icon === 'eye') this.drawEyeIcon(ig, ix, iy);
+      else if (r.icon === 'fire') this.drawFireIcon(ig, ix, iy, true, 1.5);
+      else if (r.icon === 'ice') this.drawIceIcon(ig, ix, iy);
+      else if (r.icon === 'drift') this.drawDriftIcon(ig, ix, iy);
+      else if (r.icon === 'wind') this.drawWindIcon(ig, ix, iy);
       else this.drawTurnBridgeIcon(ig, ix, iy + 10);
       c.add(ig);
       const label = labels[i].setScale(fit);
@@ -538,6 +554,60 @@ export class GameScene extends Phaser.Scene {
     g.fillCircle(x + 26, y - 28, 22);
     g.lineStyle(4, C.primary, 1);
     g.strokeCircle(x + 26, y - 28, 22);
+  }
+
+  /** Костёр: камни, поленья и (если горит) пламя. */
+  private drawFireIcon(g: Phaser.GameObjects.Graphics, x: number, y: number, on: boolean, k = 1) {
+    if (on) {
+      g.fillStyle(FIRE.glow, 0.25);
+      g.fillCircle(x, y - 4 * k, 26 * k);
+    }
+    g.fillStyle(FIRE.stone, 1);
+    g.fillEllipse(x, y + 14 * k, 40 * k, 12 * k);
+    g.lineStyle(6 * k, FIRE.log, 1);
+    g.lineBetween(x - 14 * k, y + 14 * k, x + 6 * k, y - 8 * k);
+    g.lineBetween(x + 14 * k, y + 14 * k, x - 6 * k, y - 8 * k);
+    if (!on) return;
+    g.fillStyle(FIRE.flame, 1);
+    g.fillTriangle(x - 12 * k, y + 8 * k, x + 12 * k, y + 8 * k, x, y - 24 * k);
+    g.fillStyle(FIRE.core, 1);
+    g.fillTriangle(x - 6 * k, y + 8 * k, x + 6 * k, y + 8 * k, x, y - 10 * k);
+  }
+
+  /** Лёд: голубая плитка с бликом. */
+  private drawIceIcon(g: Phaser.GameObjects.Graphics, x: number, y: number) {
+    g.fillStyle(0x5aa6d6, 1);
+    g.fillRoundedRect(x - 34, y - 34, 68, 68, 14);
+    g.fillStyle(0x9fd8f2, 1);
+    g.fillRoundedRect(x - 31, y - 31, 62, 58, 12);
+    g.fillStyle(0xffffff, 0.7);
+    g.fillTriangle(x - 18, y + 4, x + 2, y - 20, x + 10, y - 20);
+    g.fillTriangle(x - 18, y + 4, x - 10, y + 4, x + 10, y - 20);
+  }
+
+  /** Сугроб: снежная горка. */
+  private drawDriftIcon(g: Phaser.GameObjects.Graphics, x: number, y: number) {
+    g.fillStyle(0xb8d4ec, 1);
+    g.fillEllipse(x, y + 14, 72, 30);
+    g.fillStyle(0xe6f2ff, 1);
+    g.fillEllipse(x - 14, y + 2, 38, 32);
+    g.fillEllipse(x + 14, y + 4, 40, 28);
+    g.fillEllipse(x, y - 10, 36, 30);
+  }
+
+  /** Ветер: две стрелки-галочки и завиток. */
+  private drawWindIcon(g: Phaser.GameObjects.Graphics, x: number, y: number) {
+    g.lineStyle(6, 0xbfefff, 1);
+    for (const dx of [-14, 8]) {
+      g.beginPath();
+      g.moveTo(x + dx - 10, y - 14);
+      g.lineTo(x + dx + 6, y);
+      g.lineTo(x + dx - 10, y + 14);
+      g.strokePath();
+    }
+    g.lineStyle(4, 0xdff4ff, 0.7);
+    g.lineBetween(x - 34, y - 24, x + 22, y - 24);
+    g.lineBetween(x - 30, y + 24, x + 26, y + 24);
   }
 
   /** Туман: три облачка. */
@@ -618,8 +688,20 @@ export class GameScene extends Phaser.Scene {
         this.tip('water', { x: card.homeX, y: this.trayY - CARD / 2 }, 'above');
       }
     }
+    // Вершины: подсказка Lumo у элемента, когда он встречается впервые (каждая — один раз за игру).
+    const first = (pred: (c: string, i: number) => boolean) => level.cells.findIndex(pred);
+    const above = (idx: number) => {
+      const c = this.board.center(idx);
+      return { x: c.x, y: c.y - this.board.cell * 0.4 };
+    };
+    const peaksTip = level.goal === 'signals' && !hasSeenTip('signals') ? (['signals', level.fires[0]] as const)
+      : first((c) => c === 'wind') >= 0 && !hasSeenTip('wind') ? (['wind', first((c) => c === 'wind')] as const)
+      : first((c) => c === 'drift') >= 0 && !hasSeenTip('drift') ? (['drift', first((c) => c === 'drift')] as const)
+      : first((c) => c === 'ice') >= 0 && !hasSeenTip('ice') ? (['ice', first((c) => c === 'ice')] as const)
+      : null;
+    if (peaksTip) this.tip(peaksTip[0], above(peaksTip[1]), 'above');
     // Две неудачи подряд — показываем, где подсказка.
-    if (this.streak >= STUCK.pulseHint) this.tip('hint', { x: this.hintBtn.x, y: this.bottomY - 58 }, 'above');
+    else if (this.streak >= STUCK.pulseHint) this.tip('hint', { x: this.hintBtn.x, y: this.bottomY - 58 }, 'above');
   }
 
   /** Подсказка обучения по id (один раз за игру). */
@@ -689,9 +771,12 @@ export class GameScene extends Phaser.Scene {
     const y = this.topY + 58;
     const open = lanternsLeft(this.state) === 0;
     // «Побег»: фонари не обязательны — считаем, сколько зажжено на самом деле.
-    const lit = level.goal === 'escape' ? lanternsOnRoad(this.state) : n - lanternsLeft(this.state);
+    const lit = lanternsOnRoad(this.state);
     const ff = firefliesOnRoad(this.state);
+    const fires = level.fires.length;
+    const firesLit = signalsLit(this.state);
     this.goalText.setText(n > 0 ? `${lit}/${n}` : '');
+    this.fireText.setText(fires > 0 ? `${firesLit}/${fires}` : '');
     this.ffText.setText(ffTotal > 0 ? `${ff}/${ffTotal}` : '');
     // Тень: через сколько ходов появится или сколько клеток до неё.
     const ts = level.shadow ? timeOf(this.state) : null;
@@ -701,18 +786,24 @@ export class GameScene extends Phaser.Scene {
     // Ширина строки: арка, [фонарь + текст], [светлячок + текст], [тень + текст].
     const door = level.goal !== 'fireflies';
     // Строка между кнопками (поворот слева, отмена справа): если не влезает — шрифт мельче.
-    const parts = [n > 0, ffTotal > 0, !!ts].filter(Boolean).length;
+    const parts = [n > 0, ffTotal > 0, !!ts, fires > 0].filter(Boolean).length;
     const fs = parts >= 3 ? 34 : 40;
-    for (const tx of [this.goalText, this.ffText, this.shadowText]) tx.setFontSize(fs);
+    for (const tx of [this.goalText, this.ffText, this.shadowText, this.fireText]) tx.setFontSize(fs);
+    const fireW = fires > 0 ? 30 + 50 + this.fireText.width : 0;
     const lanternW = n > 0 ? 30 + 50 + this.goalText.width : 0;
     const ffW = ffTotal > 0 ? 40 + 50 + this.ffText.width : 0;
     const shW = ts ? 40 + 50 + this.shadowText.width : 0;
-    const total = (door ? 44 : -40) + lanternW + ffW + shW;
+    const total = (door ? 44 : -40) + fireW + lanternW + ffW + shW;
     let x = W / 2 - total / 2;
     if (door) {
       drawPortalIcon(g, x + 22, y, 22, open);
       x += 44;
     } else x -= 40; // цель «светлячки»: арки нет, в строке цели только светлячки
+    if (fires > 0) {
+      this.drawFireIcon(g, x + 66, y + 2, firesLit === fires, 0.9);
+      this.fireText.setX(x + 96).setColor(firesLit === fires ? '#ffb070' : C.text);
+      x += fireW;
+    }
     if (n > 0) {
       this.drawLanternIcon(g, x + 66, y + 4, lit === n);
       this.goalText.setX(x + 96).setColor(lit === n ? '#ffd36b' : C.text);
@@ -1202,6 +1293,15 @@ export class GameScene extends Phaser.Scene {
     } else if (p.reason === 'bridgeTurned') {
       this.log({ ev: 'bridge_rotated_blocked', level: this.state.level.id, attempt: this.attempt, tile: tilesPlaced(this.state) });
       if (at) this.tip('turnbridge', at, 'above');
+    } else if (p.reason === 'drift' && at) {
+      this.tip('drift', at, 'above');
+    } else if (p.reason === 'fireOrder' && p.fire !== undefined) {
+      // Не тот костёр: вежливо мигает номером, Lumo подсказывает, какой сначала. Это не проигрыш.
+      this.board.blinkFire(p.fire);
+      const need = signalsLit(this.state) + 1;
+      this.log({ ev: 'fire_order_blocked', level: this.state.level.id, attempt: this.attempt, fire: this.state.level.fireNo[p.fire], need });
+      const c = this.board.center(p.fire);
+      this.tips.show({ text: t('tip_fire_order', { n: need }), target: { x: c.x, y: c.y - s * 0.4 }, side: 'above', autoCloseMs: 2200 });
     }
     // Первая ошибка — показываем, что ход можно вернуть.
     if (canUndo(this.state)) this.tip('undo', { x: this.undoBtn.x, y: this.topY + 70 }, 'below');
@@ -1322,6 +1422,14 @@ export class GameScene extends Phaser.Scene {
         this.log({ ev: 'shadow_caught', level: next.level.id, attempt: this.attempt, tile: placed.step });
       }
     }
+    // Вершины: скольжение, ветер, растаявшие сугробы, зажжённые сигнальные огни.
+    const fresh = next.road.slice(prev.road.length);
+    const slid = fresh.filter((r) => r.forced === 'ice').length;
+    if (slid) this.log({ ev: 'ice_slide', level: next.level.id, attempt: this.attempt, tile: placed.step, cells: slid });
+    if (fresh.some((r) => r.forced === 'wind')) this.log({ ev: 'wind_push', level: next.level.id, attempt: this.attempt, tile: placed.step });
+    const melted = next.level.cells.reduce((n, c, i) => n + (c === 'drift' && driftMelted(next.level, (j) => next.onRoad[j], i) && !driftMelted(prev.level, (j) => prev.onRoad[j], i) ? 1 : 0), 0);
+    if (melted) this.log({ ev: 'drift_melted', level: next.level.id, attempt: this.attempt, tile: placed.step, cells: melted });
+    if (signalsLit(next) > signalsLit(prev)) this.log({ ev: 'signal_lit', level: next.level.id, attempt: this.attempt, tile: placed.step, fire: signalsLit(next), total: next.level.fires.length });
     if (!this.custom) questEvent({ type: 'tile', jump: placed.kind === 'jump' });
     const expired = expiredLantern(next);
     if (next.status !== 'won' && expired >= 0 && expiredLantern(prev) < 0) {
@@ -1713,8 +1821,10 @@ export class GameScene extends Phaser.Scene {
     const chapelPlus = offer === 'chapel';
     const extra = offer ? findExtraTiles(s, 3) : null;
     const showSkip = this.streak >= STUCK.skip;
-    const total = s.level.lanterns.length;
-    const lit = lanternsOnRoad(s);
+    // «Сигнальные огни»: вместо фонарей (их на таких уровнях обычно нет) — костры «горит из всех».
+    const fires = s.level.fires.length;
+    const total = fires > 0 ? fires : s.level.lanterns.length;
+    const lit = fires > 0 ? signalsLit(s) : lanternsOnRoad(s);
     const dist = distanceToExit(s);
 
     // Раскладка по вертикали считается заранее, чтобы панель была ровно по содержимому.
@@ -1733,9 +1843,10 @@ export class GameScene extends Phaser.Scene {
       const gap = 70;
       const x0 = W / 2 - ((total - 1) * gap) / 2;
       // Гаснущий фонарь, который погас, — снова не горит.
-      s.level.lanterns.forEach((idx, i) => this.drawLanternIcon(g, x0 + i * gap, y, s.onRoad[idx] && (s.level.fade[idx] === 0 || fadeLeftAt(s, idx) > 0)));
+      if (fires > 0) s.level.fires.forEach((_, i) => this.drawFireIcon(g, x0 + i * gap, y, i < lit, 1.1));
+      else s.level.lanterns.forEach((idx, i) => this.drawLanternIcon(g, x0 + i * gap, y, s.onRoad[idx] && (s.level.fade[idx] === 0 || fadeLeftAt(s, idx) > 0)));
       o.add(g);
-      o.add(text(this, W / 2, y + 70, t('lanterns_lit', { n: lit, total }), 44, C.text, false, { w: 860 }));
+      o.add(text(this, W / 2, y + 70, t(fires > 0 ? 'fires_lit' : 'lanterns_lit', { n: lit, total }), 44, C.text, false, { w: 860 }));
       y += 140;
     }
     // Дорога упёрлась в закрытую арку: объясняем, почему войти нельзя.

@@ -255,3 +255,67 @@ describe('лесная музыка', () => {
     expect(m.liveNodes).toBe(0);
   });
 });
+
+describe('музыка «Ледяных вершин»', () => {
+  it('10 минут в горах — узлы не растут, аккорды реже (12–16 с), колокольчики выше и прозрачнее, без сверчков и сов', () => {
+    const nightCtx = new FakeCtx();
+    const night = new NightMusic(rand);
+    night.start(nightCtx as unknown as BaseAudioContext, false);
+    run(nightCtx, night, 120);
+    // Самый низкий колокольчик (основной тон; ниже 800 Гц — только подушки и гул).
+    const lowestBell = (c: FakeCtx) => Math.min(...c.created.filter((s) => s.type === 'sine' && s.frequency.value > 800).map((s) => s.frequency.value));
+    const nightBell = lowestBell(nightCtx);
+
+    const ctx = new FakeCtx();
+    const m = new NightMusic(rand);
+    m.setMood('peaks');
+    m.start(ctx as unknown as BaseAudioContext, false);
+    expect(m.getMood()).toBe('peaks');
+    const persistent = m.persistentNodes;
+    const pads = () => ctx.sources.filter((s) => s.type === 'triangle').length;
+    let changes = 0;
+    let before = pads();
+    const samples: number[] = [];
+    run(ctx, m, 600, (t) => {
+      const now = pads();
+      if (t < 120 && now > before) changes++;
+      before = now;
+      if (t > 60 && t % 30 === 0) samples.push(m.liveNodes);
+    });
+    expect(m.persistentNodes).toBe(persistent);
+    expect(Math.max(...samples)).toBeLessThan(60);
+    expect(avg(samples.slice(-5))).toBeLessThan(avg(samples.slice(0, 5)) * 1.6 + 10);
+    // 120 с / 16 с ≈ 7 … 120 с / 12 с = 10 (+ запас) — реже ночных (9–16).
+    expect(changes).toBeGreaterThanOrEqual(6);
+    expect(changes).toBeLessThanOrEqual(11);
+    // Колокольчики — выше ночных (нижняя нота пентатоники — E6 против A5).
+    expect(lowestBell(ctx)).toBeGreaterThan(nightBell * 1.4);
+    expect(m.owlCount).toBe(0);
+    // Пэд мягче: пик громкости нот аккорда ниже ночного.
+    const padPeak = (c: FakeCtx) => Math.max(...c.gains.flatMap((g) => g.gain.events.filter(([k, v]) => k === 'exp' && v > 0.001 && v < 0.1).map(([, v]) => v)));
+    expect(padPeak(ctx)).toBeLessThan(padPeak(nightCtx));
+    m.stop();
+    run(ctx, m, 30);
+    expect(m.liveNodes).toBe(0);
+  });
+
+  it('переключения night ↔ peaks ↔ forest — кроссфейд, узлы не растут', () => {
+    const ctx = new FakeCtx();
+    const m = new NightMusic(rand);
+    m.start(ctx as unknown as BaseAudioContext, false);
+    const persistent = m.persistentNodes;
+    const cycle: Mood[] = ['peaks', 'night', 'peaks', 'forest', 'peaks', 'warm'];
+    let i = 0;
+    const samples: number[] = [];
+    run(ctx, m, 600, (t) => {
+      if (t % 20 === 0) m.setMood(cycle[i++ % cycle.length]);
+      if (t > 60 && t % 30 === 5) samples.push(m.liveNodes);
+    });
+    expect(m.persistentNodes).toBe(persistent);
+    expect(Math.max(...samples)).toBeLessThan(90);
+    expect(avg(samples.slice(-5))).toBeLessThan(avg(samples.slice(0, 5)) * 1.6 + 10);
+    m.stop();
+    run(ctx, m, 30);
+    expect(m.liveNodes).toBe(0);
+  });
+});

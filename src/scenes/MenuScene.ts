@@ -1,13 +1,14 @@
 // Главное меню — карта мира: одна вертикальная тропинка с кружками уровней через все миры по порядку:
 // снизу «Долина» (холмы, деревья, речки, дома без огней), выше «Туманный лес» (ели-силуэты, полосы тумана,
-// светящиеся грибы). На стыке миров — переход: полоса тумана и арка из елей, тропинка уходит в лес; пока лес
-// закрыт — он под густой дымкой, кружки с замками, на стыке подсказка. Пройденные уровни светятся, под ними
+// светящиеся грибы), ещё выше «Ледяные вершины» (снежные пики, ели в снегу, тропинка — серпантин по склону,
+// северное сияние, редкий снег). На стыке миров — переход: в лес — полоса тумана и арка из елей, в горы —
+// каменные ворота с ледяным сводом; пока мир закрыт — он под густой дымкой, кружки с замками, на стыке подсказка. Пройденные уровни светятся, под ними
 // звёзды; текущий пульсирует, рядом стоит Lumo; «испытания» — кружки побольше с короной. Карта прокручивается
 // пальцем, колесом и стрелками; при открытии — прокручена к текущему уровню. Название мира в шапке и музыка —
 // по миру в середине экрана. Декорации разбиты на участки по высоте: невидимые участки скрыты, их анимации
 // на паузе (карта длинная, цель — 60 кадров на iPhone 11). Сверху — профиль, мир, валюты и «Войти»,
 // снизу — «Играть» и вкладки Карта / Деревня / Магазин / Профиль. Награда дня — окном при открытии.
-// Когда лес открылся впервые — сначала сцена «Lumo входит в лес» (ForestIntroScene), остальные окна потом.
+// Когда мир открылся впервые — сначала сцена входа в него (ForestIntroScene, PeaksIntroScene), остальные окна потом.
 
 import { t, tk } from '../i18n';
 import { currentLook } from '../ui/skins';
@@ -17,7 +18,7 @@ import { dailyAvailable, syncChallenges } from '../meta';
 import { currentView, edgeRows, stretchLayout, type ViewRect } from '../ui/viewport';
 import { isChallenge, LEVELS, WORLDS, worldById, worldOpen, type World } from '../levels/index';
 import type { Level } from '../core/types';
-import { setMusicMood, sfx } from '../audio';
+import { setMusicMood, sfx, worldMood } from '../audio';
 import { hasEnteredWorld, isUnlocked, loadProgress, type Progress } from '../storage';
 import { displayName, getProfile } from '../profile';
 import { showNameDialog } from '../ui/NameDialog';
@@ -28,14 +29,11 @@ import { addBackground, Button, createAvatarBadge, createLumo, drawFireflyIcon, 
 import { setFitted } from '../ui/UIText';
 import { C, FONT, W } from '../ui/theme';
 import { irisIn, reducedMotion } from '../ui/fx';
+import { mapLayout, STEP, type ZigzagRange } from '../ui/mapLayout';
+import { addSnowfall, AURORA_COLORS, drawAuroraBand, type SnowHandle } from '../ui/snow';
 
-/** Шаг между уровнями на карте и размах «змейки» тропинки. */
-const STEP = 250;
-const SWAY = 290;
-const MARGIN_TOP = 420;
-const MARGIN_BOTTOM = 420;
-/** Дополнительный промежуток между мирами — там переход (туман, арка из елей). */
-const GAP = 900;
+export { mapLayout } from '../ui/mapLayout';
+
 const R = 66;
 const R_CHALLENGE = 88;
 /** Высота участка декораций (отсечка невидимого) и запас над/под экраном, в котором участки ещё видны. */
@@ -74,23 +72,21 @@ interface Region {
   open: boolean;
 }
 
-/**
- * Где на карте кружок уровня i (0 — внизу). breaks — индексы первых уровней следующих миров: перед ними
- * промежуток GAP под переход. Чистая функция — та же раскладка при каждом открытии.
- */
-export function mapLayout(count: number, breaks: number[] = []): { height: number; pos: { x: number; y: number }[] } {
-  const inside = breaks.filter((b) => b > 0 && b < count);
-  const height = MARGIN_TOP + MARGIN_BOTTOM + (count - 1) * STEP + inside.length * GAP;
-  const pos = Array.from({ length: count }, (_, i) => ({
-    x: W / 2 + Math.sin(i * 0.82 + 0.4) * SWAY * (0.75 + 0.25 * Math.sin(i * 0.31)),
-    y: height - MARGIN_BOTTOM - i * STEP - inside.filter((b) => b <= i).length * GAP,
-  }));
-  return { height, pos };
-}
-
 /** Индексы (в LEVELS) первых уровней миров после первого. */
 function worldBreaks(): number[] {
   return WORLDS.slice(1).map((w) => LEVELS.indexOf(w.levels[0]));
+}
+
+/** Горные миры — тропинка серпантином (раскладка mapLayout). */
+const MOUNTAIN_WORLDS = ['peaks'];
+/** Сцены входа в мир (один раз, когда мир открылся). */
+const WORLD_INTROS: Record<string, string> = { forest: 'ForestIntro', peaks: 'PeaksIntro' };
+
+function zigzagRanges(): ZigzagRange[] {
+  return WORLDS.filter((w) => MOUNTAIN_WORLDS.includes(w.id)).map((w) => {
+    const from = LEVELS.indexOf(w.levels[0]);
+    return { from, to: from + w.levels.length };
+  });
 }
 
 export class MenuScene extends Phaser.Scene {
@@ -110,6 +106,8 @@ export class MenuScene extends Phaser.Scene {
   private title: Phaser.GameObjects.Text | null = null;
   private shownWorld = '';
   private calm = false;
+  /** Снег над горными мирами — в координатах экрана, область — часть экрана, где сейчас горы. */
+  private snow: SnowHandle | null = null;
 
   constructor() {
     super('Menu');
@@ -120,12 +118,14 @@ export class MenuScene extends Phaser.Scene {
     this.drag = null;
     this.regions = [];
     const progress = loadProgress();
-    // Лес открылся впервые — сначала сцена входа в лес (награда дня и другие окна подождут до возвращения).
-    const forest = worldById('forest');
+    // Мир открылся впервые — сначала сцена входа в него (награда дня и другие окна подождут до возвращения).
     const audit = !!(globalThis as { __glowAudit?: boolean }).__glowAudit;
-    if (forest && !audit && worldOpen(forest, progress) && !hasEnteredWorld('forest')) {
-      this.scene.start('ForestIntro');
-      return;
+    for (const [id, scene] of Object.entries(WORLD_INTROS)) {
+      const world = worldById(id);
+      if (world && !audit && worldOpen(world, progress) && !hasEnteredWorld(id)) {
+        this.scene.start(scene);
+        return;
+      }
     }
     // Высокий экран: профиль и «Войти» — к верху безопасной зоны, нижний ряд кнопок — к низу.
     const bounds = stretchLayout(this);
@@ -301,7 +301,7 @@ export class MenuScene extends Phaser.Scene {
 
   private buildMap(progress: Progress, next: number) {
     const breaks = worldBreaks();
-    const { height, pos } = mapLayout(LEVELS.length, breaks);
+    const { height, pos } = mapLayout(LEVELS.length, breaks, zigzagRanges());
     this.mapH = height;
     this.map = this.add.container(0, 0).setDepth(0).setData('scroll', true);
     this.culled = [];
@@ -317,6 +317,8 @@ export class MenuScene extends Phaser.Scene {
       top: k === WORLDS.length - 1 ? -700 : junction(breaks[k]),
       open: worldOpen(world, progress),
     }));
+    // Снег над горами: экранный слой над картой (под панелями), область обновляется при прокрутке (updateSnow).
+    this.snow = this.regions.some((r) => MOUNTAIN_WORLDS.includes(r.world.id)) ? addSnowfall(this, null, { depth: 1 }) : null;
 
     // Тропинка — плавная кривая через все кружки. Снизу она приходит из-за края экрана (под нижней панелью),
     // сверху уходит за верхний край — обрезанных концов не видно.
@@ -462,13 +464,14 @@ export class MenuScene extends Phaser.Scene {
     const { world, top, bottom } = r;
     const theme = world.theme;
     const forest = world.id === 'forest';
+    const peaks = world.id === 'peaks';
     const rnd = new Phaser.Math.RandomDataGenerator([world.id]);
     const yTop = Math.max(top, -600);
     const yBot = Math.min(bottom, height + 600);
 
     // Небо: в долине снизу светлее, к верху — ночь; в лесу — бирюзово-фиолетовые сумерки целиком.
     const sky = this.add.graphics();
-    if (forest) sky.fillGradientStyle(theme.skyTop, theme.skyTop, theme.skyBottom, theme.skyBottom, 0.92, 0.92, 0.95, 0.95);
+    if (forest || peaks) sky.fillGradientStyle(theme.skyTop, theme.skyTop, theme.skyBottom, theme.skyBottom, 0.92, 0.92, 0.95, 0.95);
     else sky.fillGradientStyle(theme.skyTop, theme.skyTop, theme.skyBottom, theme.skyBottom, 0.0, 0.0, 0.9, 0.9);
     sky.fillRect(XL, yTop, XR - XL, yBot - yTop);
     this.put('sky', yTop, yBot, sky);
@@ -484,9 +487,35 @@ export class MenuScene extends Phaser.Scene {
         this.put('sky', y - 640, y + 640, img);
       }
     }
+    if (peaks) {
+      // Северное сияние: ленты над склонами (зелёная, бирюзовая, фиолетовая по очереди), медленно «дышат».
+      let n = 0;
+      for (let y = yBot - 700; y > yTop + 200; y -= rnd.between(1100, 1400)) {
+        const g = this.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
+        drawAuroraBand(g, { x0: XL, x1: XR, y, h: rnd.between(220, 320), color: AURORA_COLORS[n++ % AURORA_COLORS.length], alpha: 0.16, amp: 60, wave: rnd.between(900, 1300), phase: rnd.realInRange(0, 6) });
+        const item = this.put('sky', y - 500, y + 120, g);
+        this.loop(item, { targets: g, alpha: 0.5, duration: rnd.between(3600, 5200), yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+      }
+    }
 
-    // Холмы по краям: дальние и ближние (по участкам).
-    for (let y = yBot - 20; y > yTop + 200; y -= rnd.between(380, 560)) {
+    // Холмы по краям: дальние и ближние (по участкам). В горах — снежные пики и заснеженные склоны.
+    for (let y = yBot - 20; peaks && y > yTop + 200; y -= rnd.between(420, 600)) {
+      const g = this.gfx('hills', y);
+      for (const side of [-1, 1]) {
+        const cx = W / 2 + side * rnd.between(560, 700);
+        // Дальний пик с шапкой, ближний пик пониже и пологий заснеженный склон у подножия.
+        this.snowPeak(g, cx + side * rnd.between(0, 120), y + 60, rnd.between(360, 480), rnd.between(620, 860), theme.hillFar, 0xe8f1ff);
+        this.snowPeak(g, cx - side * rnd.between(120, 220), y + 140, rnd.between(260, 360), rnd.between(380, 520), 0x2c4d7c, 0xdbe8f8);
+        g.fillStyle(theme.hillNear, 0.85);
+        g.fillEllipse(cx, y + 150, rnd.between(620, 820), rnd.between(140, 200));
+        g.fillStyle(0xf2f7ff, 0.3);
+        g.fillEllipse(cx - side * 60, y + 120, rnd.between(360, 500), rnd.between(50, 80));
+      }
+      // Снежное поле поперёк склона (тропинка идёт по нему).
+      g.fillStyle(0xdfeaff, 0.06);
+      g.fillEllipse(W / 2, y, 1700, 300);
+    }
+    for (let y = yBot - 20; !peaks && y > yTop + 200; y -= rnd.between(380, 560)) {
       const g = this.gfx('hills', y);
       for (const side of [-1, 1]) {
         const cx = W / 2 + side * rnd.between(560, 760);
@@ -509,7 +538,7 @@ export class MenuScene extends Phaser.Scene {
     // Деревья — где нет тропинки, реки и перехода между мирами. В лесу — гуще, тёмные ели-силуэты.
     const tTop = Math.max(yTop, 80);
     const tBot = Math.min(yBot, height - 40);
-    const count = Math.round((tBot - tTop) * (forest ? 0.05 : 0.035));
+    const count = Math.round((tBot - tTop) * (forest ? 0.05 : peaks ? 0.04 : 0.035));
     for (let n = 0; n < count; n++) {
       const tx = rnd.between(XL + 100, XR - 100);
       const ty = rnd.between(tTop, tBot);
@@ -519,6 +548,7 @@ export class MenuScene extends Phaser.Scene {
       g.fillStyle(0x000000, 0.25);
       g.fillEllipse(tx, ty + 8, 70 * s, 18 * s);
       if (forest) this.spruce(g, tx, ty, s * rnd.realInRange(1, 1.35), rnd.frac() < 0.35 ? 0x08161c : theme.tree);
+      else if (peaks) this.snowySpruce(g, tx, ty, s, rnd.frac() < 0.35 ? 0x123038 : theme.tree);
       else if (rnd.frac() < 0.6) {
         // Ель
         g.fillStyle(theme.tree, 1);
@@ -545,6 +575,7 @@ export class MenuScene extends Phaser.Scene {
       const p = o.pos[s0 + i];
       const side = p.x > W / 2 ? 1 : -1;
       if (forest) this.mushroomHouse(this.gfx('deco', p.y + 40), p.x + side * 200, p.y + 40, 0.85);
+      else if (peaks) this.chalet(this.gfx('deco', p.y + 40), p.x + side * 200, p.y + 40, 0.85);
       else this.house(this.gfx('deco', p.y + 40), p.x + side * 200, p.y + 40, 0.85);
     });
 
@@ -594,6 +625,46 @@ export class MenuScene extends Phaser.Scene {
       }
     }
 
+    if (peaks) {
+      // Серпантин: на крутых поворотах (крайние кружки) — каменный парапет по внешней стороне и вешки.
+      const from = LEVELS.indexOf(world.levels[0]);
+      world.levels.forEach((_, i) => {
+        if (i % 3 !== 0) return;
+        const p = o.pos[from + i];
+        const out = p.x > W / 2 ? 1 : -1;
+        const g = this.gfx('deco', p.y);
+        for (let a = -70; a <= 70; a += 14) {
+          const rad = Phaser.Math.DegToRad(a);
+          const sx = p.x + out * Math.cos(rad) * 150;
+          const sy = p.y + Math.sin(rad) * 150 + 10;
+          g.fillStyle(0x000000, 0.25);
+          g.fillEllipse(sx, sy + 8, 40, 14);
+          g.fillStyle(0x56688a, 1);
+          g.fillRoundedRect(sx - 17, sy - 18, 34, 24, 8);
+          g.fillStyle(0xf2f7ff, 0.95);
+          g.fillRoundedRect(sx - 17, sy - 22, 34, 10, 5);
+        }
+        // Вешки в красно-белую полоску — на концах парапета.
+        for (const a of [-84, 84]) {
+          const rad = Phaser.Math.DegToRad(a);
+          this.snowPole(g, p.x + out * Math.cos(rad) * 160, p.y + Math.sin(rad) * 160 + 10, 1);
+        }
+      });
+      // Сугробы у тропинки — мягкие белые бугорки, не на кружках.
+      for (let i = 5; i < o.samples.length - 5; i += 23) {
+        const q = o.samples[i];
+        if (q.y < yTop + 150 || q.y > yBot - 300) continue;
+        const mx = q.x + rnd.between(-150, 150);
+        const my = q.y + rnd.between(-40, 40);
+        if (this.nodesNear(o.pos, mx, my, R_CHALLENGE + 50) || o.near(mx, my, 60)) continue;
+        const g = this.gfx('deco', my);
+        g.fillStyle(0x9ab8dc, 0.5);
+        g.fillEllipse(mx, my + 6, rnd.between(80, 130), 26);
+        g.fillStyle(0xf2f7ff, 0.85);
+        g.fillEllipse(mx, my, rnd.between(70, 110), 24);
+      }
+    }
+
     // Мир закрыт — густая дымка поверх декораций (кружки с замками видны сквозь неё) и клочья тумана над ними.
     if (!r.open && k > 0) {
       for (let c = Math.floor(yTop / CHUNK); c * CHUNK < yBot; c++) {
@@ -618,13 +689,18 @@ export class MenuScene extends Phaser.Scene {
     if (k > 0) this.drawJunction(r, o.samples);
   }
 
-  /** Переход между мирами (внизу мира r): полоса тумана, арка из елей, табличка с названием; закрыт — подсказка. */
+  /**
+   * Переход между мирами (внизу мира r): полоса тумана (в горы — снежной дымки), арка из елей (в горы — каменные
+   * ворота с ледяным сводом), табличка с названием; закрыт — подсказка.
+   */
   private drawJunction(r: Region, samples: Phaser.Math.Vector2[]) {
     const jy = r.bottom;
     const cross = samples.reduce((a, b) => (Math.abs(b.y - jy) < Math.abs(a.y - jy) ? b : a));
     const cx = cross.x;
     const theme = r.world.theme;
     const rnd = new Phaser.Math.RandomDataGenerator([`junction-${r.world.id}`]);
+    const peaks = r.world.id === 'peaks';
+    const accent = peaks ? 0x9fe8ff : 0x5ad6c8;
 
     // Полоса тумана поперёк карты.
     const fog: Phaser.GameObjects.Image[] = [];
@@ -632,7 +708,7 @@ export class MenuScene extends Phaser.Scene {
       fog.push(
         this.add
           .image(-200 + n * 370 + rnd.between(-60, 60), jy + rnd.between(-90, 50), 'glow')
-          .setTint(0xb0c0ec)
+          .setTint(peaks ? 0xe0ecff : 0xb0c0ec)
           .setScale(rnd.realInRange(7, 10), rnd.realInRange(2.2, 3))
           .setAlpha(0.2),
       );
@@ -640,15 +716,69 @@ export class MenuScene extends Phaser.Scene {
     const fogItem = this.put('haze', jy - 400, jy + 300, ...fog);
     this.loop(fogItem, { targets: fog, alpha: 0.12, duration: 4200, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
 
-    // Арка из елей: две большие ели по бокам тропинки и свод из ветвей над ней.
     const g = this.add.graphics();
+    const ac = { x: cx, y: jy - 70 };
+    if (peaks) this.iceGate(g, ac.x, ac.y, jy, rnd);
+    else this.spruceArch(g, ac, jy, theme, rnd);
+    const items: Phaser.GameObjects.GameObject[] = [g];
+    // Табличка с названием мира на своде.
+    const name = text(this, ac.x, ac.y - 250, tk(`world.${r.world.id}`), 38, peaks ? '#e6f6ff' : '#c8fff4', true, { w: 420 });
+    const plank = this.add.graphics();
+    const pw = Math.min(460, name.width + 60);
+    plank.lineStyle(4, 0x3a2a1a, 1);
+    plank.lineBetween(ac.x - pw / 2 + 30, ac.y - 280, ac.x - pw / 2 + 50, ac.y - 196);
+    plank.lineBetween(ac.x + pw / 2 - 30, ac.y - 280, ac.x + pw / 2 - 50, ac.y - 196);
+    plank.fillStyle(0x000000, 0.35);
+    plank.fillRoundedRect(ac.x - pw / 2, ac.y - 280, pw, 66, 14);
+    plank.fillStyle(0x4a3524, 1);
+    plank.fillRoundedRect(ac.x - pw / 2, ac.y - 284, pw, 66, 14);
+    plank.lineStyle(3, r.open ? accent : 0x6a5a48, 1);
+    plank.strokeRoundedRect(ac.x - pw / 2, ac.y - 284, pw, 66, 14);
+    if (peaks) {
+      // Снег на табличке.
+      plank.fillStyle(0xf2f7ff, 1);
+      plank.fillRoundedRect(ac.x - pw / 2 - 4, ac.y - 292, pw + 8, 14, 7);
+    }
+    name.setPosition(ac.x, ac.y - 251);
+    if (!r.open) name.setAlpha(0.7);
+    items.push(plank, name);
+    if (r.open) {
+      // Мир открыт — в проёме сияние (лес — бирюзовое, горы — ледяное), по бокам горят грибы (в горах — фонари на столбах).
+      const glow = this.add.image(cx, jy - 60, 'glow').setTint(accent).setBlendMode(Phaser.BlendModes.ADD).setScale(3.2, 2.6).setAlpha(0.28);
+      items.push(glow);
+      const m = this.add.graphics();
+      if (peaks) {
+        for (const side of [-1, 1]) {
+          m.fillStyle(0xfff1c8, 1);
+          m.fillCircle(cx + side * 190, jy - 120, 12);
+          items.push(this.add.image(cx + side * 190, jy - 120, 'glow').setTint(C.lanternOn).setBlendMode(Phaser.BlendModes.ADD).setScale(1.2).setAlpha(0.7));
+        }
+      } else for (const side of [-1, 1]) for (const d of [70, 110]) this.mushroom(m, cx + side * d, jy + 120 - d * 0.3, 0.9, side < 0 ? 0x5ad6c8 : 0xb48cff, true);
+      items.push(m);
+      const item = this.put('deco', jy - 500, jy + 300, ...items);
+      this.loop(item, { targets: glow, alpha: 0.16, duration: 2200, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+    } else {
+      this.put('deco', jy - 500, jy + 300, ...items);
+      // Подсказка, как открыть мир, — под аркой, со стороны предыдущего мира.
+      const locked: Record<string, string> = { forest: t('map_forest_locked'), peaks: t('map_peaks_locked') };
+      const hint = text(this, W / 2, jy + 250, locked[r.world.id] ?? t('map_more_soon'), 38, C.text, true, { w: W - 110, lines: 2 });
+      hint.setShadow(0, 0, '#000000', 12, true, true);
+      const lock = this.add.graphics();
+      drawIcon(lock, 'lock', 46, 0xc8d0f0);
+      lock.setPosition(cx, jy + 20);
+      this.put('top', jy - 100, jy + 400, hint, lock);
+    }
+  }
+
+  /** Арка из елей (вход в лес): две большие ели по бокам тропинки и свод из ветвей над ней. */
+  private spruceArch(g: Phaser.GameObjects.Graphics, ac: { x: number; y: number }, jy: number, theme: World['theme'], rnd: Phaser.Math.RandomDataGenerator) {
+    const cx = ac.x;
     const dark = 0x07161a;
     for (const side of [-1, 1]) {
       g.fillStyle(0x000000, 0.3);
       g.fillEllipse(cx + side * 190, jy + 100, 200, 40);
       this.spruce(g, cx + side * 190, jy + 100, 2.6, dark);
     }
-    const ac = { x: cx, y: jy - 70 };
     const arcPt = (deg: number, rr: number) => {
       const rad = Phaser.Math.DegToRad(deg);
       return { x: ac.x + Math.cos(rad) * rr, y: ac.y + Math.sin(rad) * rr * 1.05 };
@@ -685,41 +815,61 @@ export class MenuScene extends Phaser.Scene {
       const y = ac.y - Math.sqrt(Math.max(0, 1 - ((x - ac.x) / 200) ** 2)) * 210 + 50;
       g.lineBetween(x, y, x + rnd.between(-6, 6), y + rnd.between(30, 70));
     }
-    const items: Phaser.GameObjects.GameObject[] = [g];
-    // Табличка с названием мира на своде.
-    const name = text(this, ac.x, ac.y - 250, tk(`world.${r.world.id}`), 38, '#c8fff4', true, { w: 420 });
-    const plank = this.add.graphics();
-    const pw = Math.min(460, name.width + 60);
-    plank.lineStyle(4, 0x3a2a1a, 1);
-    plank.lineBetween(ac.x - pw / 2 + 30, ac.y - 280, ac.x - pw / 2 + 50, ac.y - 196);
-    plank.lineBetween(ac.x + pw / 2 - 30, ac.y - 280, ac.x + pw / 2 - 50, ac.y - 196);
-    plank.fillStyle(0x000000, 0.35);
-    plank.fillRoundedRect(ac.x - pw / 2, ac.y - 280, pw, 66, 14);
-    plank.fillStyle(0x4a3524, 1);
-    plank.fillRoundedRect(ac.x - pw / 2, ac.y - 284, pw, 66, 14);
-    plank.lineStyle(3, r.open ? 0x5ad6c8 : 0x6a5a48, 1);
-    plank.strokeRoundedRect(ac.x - pw / 2, ac.y - 284, pw, 66, 14);
-    name.setPosition(ac.x, ac.y - 251);
-    if (!r.open) name.setAlpha(0.7);
-    items.push(plank, name);
-    if (r.open) {
-      // Лес открыт — в проёме арки бирюзовое сияние, по бокам горят грибы.
-      const glow = this.add.image(cx, jy - 60, 'glow').setTint(0x5ad6c8).setBlendMode(Phaser.BlendModes.ADD).setScale(3.2, 2.6).setAlpha(0.28);
-      items.push(glow);
-      const m = this.add.graphics();
-      for (const side of [-1, 1]) for (const d of [70, 110]) this.mushroom(m, cx + side * d, jy + 120 - d * 0.3, 0.9, side < 0 ? 0x5ad6c8 : 0xb48cff, true);
-      items.push(m);
-      const item = this.put('deco', jy - 500, jy + 300, ...items);
-      this.loop(item, { targets: glow, alpha: 0.16, duration: 2200, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
-    } else {
-      this.put('deco', jy - 500, jy + 300, ...items);
-      // Подсказка, как открыть мир, — под аркой, со стороны предыдущего мира.
-      const hint = text(this, W / 2, jy + 250, r.world.id === 'forest' ? t('map_forest_locked') : t('map_more_soon'), 38, C.text, true, { w: W - 110, lines: 2 });
-      hint.setShadow(0, 0, '#000000', 12, true, true);
-      const lock = this.add.graphics();
-      drawIcon(lock, 'lock', 46, 0xc8d0f0);
-      lock.setPosition(cx, jy + 20);
-      this.put('top', jy - 100, jy + 400, hint, lock);
+  }
+
+  /** Ворота в горы: два каменных столба в снегу и ледяной свод с сосульками. */
+  private iceGate(g: Phaser.GameObjects.Graphics, cx: number, ay: number, jy: number, rnd: Phaser.Math.RandomDataGenerator) {
+    const rr = 190;
+    // Свод: толстая ледяная дуга, светлая кромка внутри.
+    for (const [w, color, alpha] of [
+      [70, 0x2c4466, 1],
+      [52, 0x8ec6e6, 0.95],
+      [14, 0xe6f6ff, 0.9],
+    ] as const) {
+      g.lineStyle(w, color, alpha);
+      g.beginPath();
+      for (let a = 180; a <= 360; a += 4) {
+        const rad = Phaser.Math.DegToRad(a);
+        const x = cx + Math.cos(rad) * rr;
+        const y = ay + Math.sin(rad) * rr * 1.05;
+        if (a === 180) g.moveTo(x, y);
+        else g.lineTo(x, y);
+      }
+      g.strokePath();
+    }
+    // Ледяные кристаллы на своде и сосульки под ним.
+    for (let a = 196; a <= 344; a += 12) {
+      const rad = Phaser.Math.DegToRad(a);
+      const ox = cx + Math.cos(rad) * (rr + 30);
+      const oy = ay + Math.sin(rad) * (rr + 30) * 1.05;
+      const len = rnd.between(26, 46);
+      g.fillStyle(0xcdeeff, 0.95);
+      g.fillTriangle(ox - 9, oy, ox + 9, oy, ox + Math.cos(rad) * len, oy + Math.sin(rad) * len);
+      const ix = cx + Math.cos(rad) * (rr - 24);
+      const iy = ay + Math.sin(rad) * (rr - 24) * 1.05;
+      g.fillStyle(0xe6f6ff, 0.9);
+      g.fillTriangle(ix - 7, iy, ix + 7, iy, ix, iy + rnd.between(24, 54));
+    }
+    // Каменные столбы с кладкой и снежными шапками.
+    for (const side of [-1, 1]) {
+      const px = cx + side * rr;
+      g.fillStyle(0x000000, 0.3);
+      g.fillEllipse(px, jy + 104, 150, 32);
+      g.fillStyle(0x3e4e6c, 1);
+      g.fillRoundedRect(px - 48, ay - 10, 96, jy + 104 - ay + 10, 10);
+      g.lineStyle(3, 0x24304a, 1);
+      for (let y = ay + 30; y < jy + 100; y += 44) {
+        g.lineBetween(px - 48, y, px + 48, y);
+        const off = ((y - ay) / 44) % 2 < 1 ? -10 : 14;
+        g.lineBetween(px + off, y, px + off, y + 44);
+      }
+      g.fillStyle(0xf2f7ff, 1);
+      g.fillRoundedRect(px - 56, ay - 26, 112, 26, 12);
+      g.fillCircle(px - 30, ay - 22, 16);
+      g.fillCircle(px + 22, ay - 26, 20);
+      // Сугроб у основания.
+      g.fillStyle(0xe6f0fc, 1);
+      g.fillEllipse(px, jy + 100, 140, 34);
     }
   }
 
@@ -787,6 +937,75 @@ export class MenuScene extends Phaser.Scene {
     g.fillCircle(hx + 28 * s, hy - 74 * s, 10 * s);
   }
 
+  /** Снежный пик: основание по центру cx на высоте base, полуширина half, высота h; шапка с «зубцами» и тень справа. */
+  private snowPeak(g: Phaser.GameObjects.Graphics, cx: number, base: number, half: number, h: number, color: number, cap: number) {
+    const top = base - h;
+    g.fillStyle(color, 0.95);
+    g.fillTriangle(cx - half, base, cx + half, base, cx, top);
+    const k = 0.34;
+    const cy = top + h * k;
+    g.fillStyle(cap, 1);
+    g.fillTriangle(cx - half * k, cy, cx + half * k, cy, cx, top);
+    for (let n = 0; n < 4; n++) {
+      const ax = cx - half * k + ((half * k * 2) * n) / 4;
+      const bx = ax + (half * k * 2) / 4;
+      g.fillTriangle(ax, cy - 1, bx, cy - 1, (ax + bx) / 2, cy + h * 0.06);
+    }
+    g.fillStyle(0x000000, 0.16);
+    g.fillTriangle(cx, top, cx + half, base, cx + half * 0.3, base);
+  }
+
+  /** Ель в снегу: ярусы цвета color с белыми шапками и снегом на концах лап, основание в (x, y). */
+  private snowySpruce(g: Phaser.GameObjects.Graphics, x: number, y: number, s: number, color: number) {
+    g.fillStyle(0x1a120c, 1);
+    g.fillRect(x - 5 * s, y - 16 * s, 10 * s, 16 * s);
+    for (let k = 0; k < 3; k++) {
+      const w = (46 - k * 10) * s;
+      const by = y - 12 * s - k * 34 * s;
+      const top = by - (62 - k * 6) * s;
+      g.fillStyle(color, 1);
+      g.fillTriangle(x - w, by, x + w, by, x, top);
+      g.fillStyle(0xf2f7ff, 0.95);
+      g.fillTriangle(x - w * 0.4, top + (by - top) * 0.4, x + w * 0.4, top + (by - top) * 0.4, x, top);
+      g.fillTriangle(x - w, by, x - w * 0.45, by, x - w * 0.8, by - 7 * s);
+      g.fillTriangle(x + w * 0.45, by, x + w, by, x + w * 0.8, by - 7 * s);
+    }
+  }
+
+  /** Горный домик (шале): бревенчатые стены, крутая крыша под снегом, окна без огней. */
+  private chalet(g: Phaser.GameObjects.Graphics, hx: number, hy: number, s: number) {
+    g.fillStyle(0x000000, 0.28);
+    g.fillEllipse(hx, hy + 6, 180 * s, 30 * s);
+    g.fillStyle(0x4a3424, 1);
+    g.fillRect(hx - 66 * s, hy - 92 * s, 132 * s, 92 * s);
+    g.lineStyle(3 * s, 0x2e2016, 0.8);
+    for (let k = 1; k < 5; k++) g.lineBetween(hx - 66 * s, hy - k * 18 * s, hx + 66 * s, hy - k * 18 * s);
+    g.fillStyle(0x2c2a44, 1);
+    g.fillTriangle(hx - 92 * s, hy - 86 * s, hx + 92 * s, hy - 86 * s, hx, hy - 180 * s);
+    g.fillStyle(0xf2f7ff, 1);
+    g.fillTriangle(hx - 82 * s, hy - 96 * s, hx + 82 * s, hy - 96 * s, hx, hy - 178 * s);
+    g.fillRoundedRect(hx - 94 * s, hy - 100 * s, 188 * s, 14 * s, 7 * s);
+    g.fillStyle(0x15172b, 1);
+    g.fillRect(hx - 48 * s, hy - 72 * s, 30 * s, 28 * s);
+    g.fillRect(hx + 18 * s, hy - 72 * s, 30 * s, 28 * s);
+    g.fillRoundedRect(hx - 14 * s, hy - 46 * s, 28 * s, 46 * s, 5 * s);
+    // Сугроб у стены.
+    g.fillStyle(0xe6f0fc, 1);
+    g.fillEllipse(hx + 50 * s, hy, 70 * s, 18 * s);
+  }
+
+  /** Снежная вешка в красно-белую полоску, основание в (x, y). */
+  private snowPole(g: Phaser.GameObjects.Graphics, x: number, y: number, s: number) {
+    g.fillStyle(0x000000, 0.25);
+    g.fillEllipse(x, y + 4 * s, 26 * s, 8 * s);
+    g.fillStyle(0xf2f7ff, 1);
+    g.fillRect(x - 4 * s, y - 70 * s, 8 * s, 70 * s);
+    g.fillStyle(0xd84a3a, 1);
+    for (let k = 0; k < 4; k++) g.fillRect(x - 4 * s, y - 66 * s + k * 18 * s, 8 * s, 9 * s);
+    g.fillStyle(0xf2f7ff, 1);
+    g.fillEllipse(x, y, 30 * s, 10 * s);
+  }
+
   private nodesNear(pos: { x: number; y: number }[], x: number, y: number, d: number) {
     return pos.some((p) => Math.abs(p.y - y) < d + 40 && Math.hypot(p.x - x, p.y + 20 - y) < d);
   }
@@ -852,7 +1071,23 @@ export class MenuScene extends Phaser.Scene {
     if (world.id === this.shownWorld) return;
     this.shownWorld = world.id;
     if (this.title) setFitted(this.title, tk(`world.${world.id}`), { w: W - 420, size: 64, bold: true });
-    setMusicMood(world.id === 'forest' ? 'forest' : 'night');
+    setMusicMood(worldMood(world.id));
+  }
+
+  /** Снег идёт только на той части экрана, где сейчас горы (между переходом и верхом экрана). */
+  private updateSnow() {
+    if (!this.snow) return;
+    const v = currentView(this);
+    let y0 = Infinity;
+    let y1 = -Infinity;
+    for (const r of this.regions) {
+      if (!MOUNTAIN_WORLDS.includes(r.world.id)) continue;
+      y0 = Math.min(y0, r.top + this.map.y);
+      y1 = Math.max(y1, r.bottom + this.map.y - 120);
+    }
+    const top = Math.max(v.y, y0);
+    const bot = Math.min(v.y + v.h, y1);
+    this.snow.setArea(bot - top > 40 ? { x: v.x, y: top, w: v.w, h: bot - top } : null);
   }
 
   private drawNode(n: NodePos, i: number, progress: Progress, next: number) {
@@ -971,6 +1206,7 @@ export class MenuScene extends Phaser.Scene {
     this.map.y = clamped;
     this.applyCull();
     this.updateWorld();
+    this.updateSnow();
   }
 
   /** Прокрутить карту к переходу в мир id (стык миров и начало мира — посередине экрана; для проверки вёрстки). */

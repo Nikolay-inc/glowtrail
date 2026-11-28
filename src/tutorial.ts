@@ -5,7 +5,7 @@ import { SaveService } from './save/SaveService';
 import type { StringKey } from './strings';
 
 /** Подсказки Lumo. Каждая показывается один раз и запоминается в сохранении. */
-export type TipId = 'undo' | 'hint' | 'restart' | 'stash' | 'turn' | 'rock' | 'water' | 'lantern' | 'side_entry' | 'drag' | 'turnbridge' | 'fade';
+export type TipId = 'undo' | 'hint' | 'restart' | 'stash' | 'turn' | 'rock' | 'water' | 'lantern' | 'side_entry' | 'drag' | 'turnbridge' | 'fade' | 'ice' | 'drift' | 'wind' | 'signals';
 
 /** Ключ текста подсказки в файле строк. */
 export const TIP_TEXT: Record<TipId, StringKey> = {
@@ -21,23 +21,29 @@ export const TIP_TEXT: Record<TipId, StringKey> = {
   drag: 'tip_drag',
   turnbridge: 'tip_turnbridge',
   fade: 'tip_fade',
+  ice: 'tip_ice',
+  drift: 'tip_drift',
+  wind: 'tip_wind',
+  signals: 'tip_signals',
 };
 
 /** Карточки правил с анимацией: показываются перед уровнем, где элемент появляется впервые. */
-export type RuleId = 'road' | 'lantern' | 'side' | 'rock' | 'water' | 'firefly' | 'jump' | 'ffgoal' | 'turnbridge' | 'fade' | 'ring' | 'fog' | 'shadow' | 'escape';
-export const ALL_RULES: readonly RuleId[] = ['road', 'lantern', 'side', 'rock', 'water', 'firefly', 'jump', 'ffgoal', 'turnbridge', 'fade', 'ring', 'fog', 'shadow', 'escape'];
+export type RuleId = 'road' | 'lantern' | 'side' | 'rock' | 'water' | 'firefly' | 'jump' | 'ffgoal' | 'turnbridge' | 'fade' | 'ring' | 'fog' | 'shadow' | 'escape' | 'ice' | 'drift' | 'wind' | 'signals';
+export const ALL_RULES: readonly RuleId[] = ['road', 'lantern', 'side', 'rock', 'water', 'firefly', 'jump', 'ffgoal', 'turnbridge', 'fade', 'ring', 'fog', 'shadow', 'escape', 'ice', 'drift', 'wind', 'signals'];
 
 /** Что на уровне — для выбора карточек правил по содержимому. */
 export interface RulesLevel {
   num: number;
   fireflies: readonly number[];
-  goal?: 'classic' | 'fireflies' | 'escape';
+  goal?: 'classic' | 'fireflies' | 'escape' | 'signals';
   rings?: readonly unknown[];
   fog?: boolean;
   shadow?: number;
   deck?: readonly string[];
   turnBridges?: readonly number[];
   fades?: readonly number[];
+  /** Клетки поля (лёд, сугробы, ветер). */
+  cells?: readonly string[];
 }
 /** Обучающие уровни (по номеру): какие карточки перед ними. */
 export const RULES_BY_LEVEL: Record<number, RuleId[]> = { 1: ['road'], 3: ['lantern'], 4: ['rock', 'side'], 8: ['water'] };
@@ -54,6 +60,10 @@ export function rulesFor(level: RulesLevel): RuleId[] {
   if (level.fog) out.push('fog');
   if (level.goal === 'escape') out.push('escape');
   else if (level.shadow) out.push('shadow');
+  if (level.cells?.includes('ice')) out.push('ice');
+  if (level.cells?.includes('drift')) out.push('drift');
+  if (level.cells?.includes('wind')) out.push('wind');
+  if (level.goal === 'signals') out.push('signals');
   return out;
 }
 

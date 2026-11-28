@@ -23,7 +23,7 @@ import {
 import { buildingCost as modelCost } from '../src/core/economyModel';
 import { applyQuestEvent, claimQuest, dailyQuests, ensureQuests, rerollQuest, weekOf, weeklyQuest, type QuestContext } from '../src/core/quests';
 import { bloomCandidates, bloomsPending, CHALLENGE_STREET_COINS, claimCozy, cozyLevel, cozyPoints, decorCost, earnChallenge, freeBloom, placeDecor, clearDecor, streetNextPrice, upgradeStreet } from '../src/core/village';
-import { BUILDINGS, buildingCost, costOf, COZY_STEP, decorPrice, streetPrice } from '../src/core/villageData';
+import { BONUS, BUILDINGS, buildingCost, costOf, COZY_STEP, decorPrice, decorType, districtBuildings, MOUNTAIN_DECOR_ORDER, streetPrice } from '../src/core/villageData';
 import { CHEST_ITEMS, COZY_ITEMS, FIELD_SLOTS, itemBaseCost, QUEST_ITEMS, WARDROBE } from '../src/core/wardrobe';
 import { migrate, SAVE_VERSION } from '../src/save/SaveService';
 
@@ -313,5 +313,83 @@ describe('стили поля в наградах', () => {
     expect(QUEST_ITEMS.some((id) => id.startsWith('lamp-') || id.startsWith('road-'))).toBe(true);
     expect(COZY_ITEMS.some((id) => id.startsWith('arch-'))).toBe(true);
     expect(WARDROBE.filter((x) => (FIELD_SLOTS as readonly string[]).includes(x.slot) && itemBaseCost(x.id).currency === 'light').length).toBeGreaterThanOrEqual(4);
+  });
+});
+
+describe('Горный город (глава 3)', () => {
+  const MOUNTAIN = ['mine', 'forge', 'cable-car', 'crystal-cave', 'goat-farm', 'bell-tower', 'hot-springs', 'stone-bridge', 'star-temple', 'summit-beacon'];
+
+  it('10 построек по порядку, цены трёх уровней, бонусы — только знакомых видов и растут с уровнем', () => {
+    expect(districtBuildings('mountain').map((b) => b.id)).toEqual(MOUNTAIN);
+    const known = new Set(BUILDINGS.filter((b) => b.district !== 'mountain').map((b) => BONUS[b.id].kind));
+    // nightLight уже был в игре (ночные уровни светлее) — у маяка на вершине.
+    known.add('nightLight');
+    for (const id of MOUNTAIN) {
+      const b = BONUS[id];
+      expect(b, id).toBeDefined();
+      expect(known.has(b.kind), `${id}: ${b.kind}`).toBe(true);
+      expect(b.values[1]).toBeGreaterThanOrEqual(b.values[0]);
+      expect(b.values[2]).toBeGreaterThanOrEqual(b.values[1]);
+      for (const l of [1, 2, 3] as const) expect(costOf(id, l).light + costOf(id, l).coins).toBeGreaterThan(0);
+    }
+    // Мягкие значения: скидки и проценты не сильнее лесных.
+    expect(BONUS.mine.values[2]).toBeLessThanOrEqual(BONUS.teahouse.values[2]);
+    expect(BONUS.forge.values[2]).toBeLessThanOrEqual(BONUS.sawmill.values[2]);
+    expect(BONUS['stone-bridge'].values[2]).toBeLessThanOrEqual(BONUS.forester.values[2]);
+  });
+
+  it('бонусы горных построек складываются с долиной и лесом', () => {
+    const b = villageBonuses({ ...rich(), buildings: { sawmill: 3, forge: 3, teahouse: 1, mine: 2, 'goat-farm': 3, 'mushroom-farm': 1, 'summit-beacon': 2 } });
+    expect(b.streetDiscountPct).toBe(20 + 15);
+    expect(b.coinMultPct).toBe(5 + 8);
+    expect(b.questLight).toBe(2 + 1);
+    expect(b.nightLight).toBe(2);
+  });
+
+  it('украшения района — зимние: фонари-столбики, скамейки, ели в снегу, ледяные скульптуры', () => {
+    const types = new Set(Array.from({ length: 24 }, (_, s) => decorType(s, 'mountain')));
+    expect([...types].sort()).toEqual([...MOUNTAIN_DECOR_ORDER].sort());
+    // В долине и лесу — как раньше.
+    expect(decorType(0)).toBe('bench');
+    expect(decorType(9, 'forest')).toBe('flowers');
+    // Цены и покупка — по общим правилам (монеты × глава, варианты 2 и 4 — свет).
+    const e = rich();
+    const res = placeDecor(e, 'mountain', 2, 0);
+    if (typeof res === 'string') throw new Error(res);
+    expect(res.bought).toEqual(decorPrice('mountain', 0));
+  });
+
+  it('улицы района улучшаются по шагам, цены — с множителем главы', () => {
+    let e = rich();
+    for (const step of [0, 1, 2]) {
+      expect(streetNextPrice(e, 'mountain', 1)).toBe(streetPrice('mountain', step));
+      const r = upgradeStreet(e, 'mountain', 1);
+      if (typeof r === 'string') throw new Error(r);
+      e = r;
+    }
+    expect(e.streets['mountain:1']).toBe(3);
+    expect(streetPrice('mountain', 0)).toBeGreaterThan(streetPrice('forest', 0));
+  });
+
+  it('новые жители (горняк, пастушка коз, звонарь) дают ежедневные задания', () => {
+    const people = ['mine', 'goat-farm', 'bell-tower'];
+    const seen = new Set<string>();
+    for (let i = 0; i < 30; i++) {
+      const day = new Date(Date.UTC(2026, 11, 1 + i)).toISOString().slice(0, 10);
+      for (const q of dailyQuests(day, ctx({ residents: people, mult: 1.5 }))) {
+        expect(people).toContain(q.resident);
+        seen.add(q.resident);
+      }
+    }
+    expect([...seen].sort()).toEqual([...people].sort());
+    // Награда — с множителем главы 3.
+    expect(dailyQuests('2026-12-01', ctx({ residents: people, mult: 1.5 }))[0].reward).toEqual({ coins: 40 });
+  });
+
+  it('шаг улицы в награду идёт и в горный район, когда он открыт', () => {
+    const all = Object.fromEntries((['valley', 'forest'] as const).flatMap((d) => [0, 1, 2, 3].map((i) => [`${d}:${i}`, 3])));
+    const e: Economy = { ...rich(), streets: all };
+    const st = earnChallenge(e, 'peaks-10', ['valley', 'forest', 'mountain']);
+    expect(st?.street).toBe('mountain:0');
   });
 });

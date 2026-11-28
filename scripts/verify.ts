@@ -1,7 +1,8 @@
 // npm run verify — проверяет все уровни и кривую сложности.
 // Ошибки (не решается, неверные звёзды, битые колоды облегчения, устаревшие метрики, недоступные светлячки,
 // уровень с одним решением) роняют команду; отклонения от кривой — предупреждения.
-// Обучающие уровни 1–10 сверяются со своей таблицей (CURVE ниже), уровни 11–60 — с планами миров (src/levels/curve.ts).
+// Обучающие уровни 1–10 сверяются со своей таблицей (CURVE ниже), уровни 11–90 — с планами миров (src/levels/curve.ts).
+// До уровня 81 — не больше одной цепочки «ветер → лёд» на уровень.
 // Уровни с туманом проверяются на «без угадывания» (fogFair): осторожный игрок, видящий только раскрытое, доходит до цели.
 //   --world forest — в таблице только уровни этого мира; --md — таблица в Markdown (для отчёта).
 
@@ -9,11 +10,11 @@ import { LEVELS } from '../src/levels/index';
 import { analyzeLevel } from '../src/core/difficulty';
 import { solveLevel } from '../src/core/solver';
 import { starThresholds } from '../src/core/game';
-import { featuresOf } from '../src/core/generator';
+import { featuresOf, usesFeatures, windIceChains } from '../src/core/generator';
 import type { Level } from '../src/core/types';
 import { portalSides } from '../src/core/portal';
 import { TIP_TEXT } from '../src/tutorial';
-import { ALL_SLOTS, MEDIUM_MIN_ROADS, needsChoice, BREATHER_MAX_RATING, BREATHER_MIN_ROADS, EASY_MAX_RATING, EASY_MIN_ROADS, mustBeEasy, FIREFLY_FROM, MAX_H, MAX_W, NOVELTY, RATING_TOLERANCE, slotOf, type NoveltyTest, type Role } from '../src/levels/curve';
+import { ALL_SLOTS, WIND_CHAIN_FREE_FROM, MEDIUM_MIN_ROADS, needsChoice, BREATHER_MAX_RATING, BREATHER_MIN_ROADS, EASY_MAX_RATING, EASY_MIN_ROADS, mustBeEasy, FIREFLY_FROM, MAX_H, MAX_W, NOVELTY, RATING_TOLERANCE, slotOf, type NoveltyTest, type Role } from '../src/levels/curve';
 import { fogFair } from '../src/core/fog';
 import { WORLDS, worldOf } from '../src/levels/worlds';
 
@@ -83,6 +84,11 @@ function elementsOf(level: Level): string {
   if (level.rings.length) out.push(`кольца ×${level.rings.length}`);
   if (level.fog) out.push('туман');
   if (level.shadow) out.push(`тень ${level.shadow}`);
+  const n = (c: string) => level.cells.filter((x) => x === c).length;
+  if (n('ice')) out.push(`лёд ×${n('ice')}`);
+  if (n('drift')) out.push(`сугроб ×${n('drift')}`);
+  if (n('wind')) out.push(`ветер ×${n('wind')}`);
+  if (level.fires.length) out.push(`огни ×${level.fires.length}`);
   return out.join(' + ');
 }
 
@@ -159,7 +165,7 @@ for (const [i, level] of LEVELS.entries()) {
     if (c.rocks && !t.allows.rocks) warn.push('камни раньше времени');
     if (c.water && !t.allows.water) warn.push('вода или мост раньше времени');
     if (level.fireflies.length) warn.push('светлячки раньше времени');
-    const late = featuresOf(level).filter((f) => ['jump', 'turnbridge', 'fade', 'ring', 'fog', 'shadow'].includes(f));
+    const late = featuresOf(level).filter((f) => ['jump', 'turnbridge', 'fade', 'ring', 'fog', 'shadow', 'ice', 'drift', 'wind'].includes(f));
     if (late.length || level.goal !== 'classic') warn.push(`новые элементы раньше времени: ${[...late, level.goal].join(', ')}`);
     if (t.teachesStash && !needsStash) warn.push('учит «отложить», но решается без него');
     if (t.teachesStash && level.tutorial !== 'stash') warn.push('нет подсказки-обучения «отложить» (tutorial: "stash")');
@@ -170,8 +176,10 @@ for (const [i, level] of LEVELS.entries()) {
       if (vertical || !horizontal) warn.push('в арку должно быть можно войти только сбоку');
     }
   } else if (slot) {
-    plan = `${slot.intro ? 'знакомство' : ROLE_RU[slot.role]} ~${slot.rating}${slot.goal === 'fireflies' ? ', светлячки' : slot.goal === 'escape' ? ', побег' : ''}`;
+    plan = `${slot.intro ? 'знакомство' : ROLE_RU[slot.role]} ~${slot.rating}${slot.goal === 'fireflies' ? ', светлячки' : slot.goal === 'escape' ? ', побег' : slot.goal === 'signals' ? ', огни' : ''}`;
     if (r.roads < 2) err.push('одно решение — по плану мира таких уровней нет');
+    if (!usesFeatures(level, slot.needs)) err.push(`по плану нужны ${slot.needs.filter((f) => f === 'ice' || f === 'wind').join(' и ')}, но лучшее решение без них обходится`);
+    if (level.num < WIND_CHAIN_FREE_FROM && windIceChains(level) > 1) err.push(`цепочек «ветер → лёд» ${windIceChains(level)} — до уровня ${WIND_CHAIN_FREE_FROM} можно не больше одной`);
     if (needsChoice(slot) && r.roads < MEDIUM_MIN_ROADS) err.push(`${ROLE_RU[slot.role]} — нужно решений ≥ ${MEDIUM_MIN_ROADS} (сейчас ${r.roads})`);
     if (level.goal !== (slot.goal ?? 'classic')) warn.push(`цель ${level.goal}, по плану ${slot.goal ?? 'classic'}`);
     if (mustBeEasy(slot) && (m.rating > EASY_MAX_RATING || r.roads < EASY_MIN_ROADS)) {
@@ -284,6 +292,14 @@ const NOVEL: Record<NoveltyTest, (l: Level) => boolean> = {
   escape: (l) => l.goal === 'escape',
   combo: (l) => (l.deck.includes('jump') || l.turnBridges.length > 0 || l.fades.length > 0) && (l.rings.length > 0 || l.fog || l.shadow > 0),
   boss: (l) => l.goal === 'escape' && l.fog && l.rings.length > 0,
+  ice: (l) => l.cells.includes('ice'),
+  drift: (l) => l.cells.includes('drift'),
+  iceDrift: (l) => l.cells.includes('ice') && l.cells.includes('drift'),
+  wind: (l) => l.cells.includes('wind'),
+  windPast: (l) => l.cells.includes('wind') && (l.cells.includes('ice') || l.turnBridges.length > 0 || l.rings.length > 0),
+  signals: (l) => l.goal === 'signals',
+  signalsMix: (l) => l.goal === 'signals' && (l.cells.includes('ice') || l.cells.includes('wind') || l.fog),
+  summit: (l) => l.goal === 'signals' && l.cells.includes('ice') && l.cells.includes('wind'),
 };
 for (const b of NOVELTY) {
   const lv = LEVELS.filter((l) => l.num >= b.from && l.num <= b.to);

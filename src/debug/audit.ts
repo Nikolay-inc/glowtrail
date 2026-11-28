@@ -3,12 +3,13 @@
 // Работает в браузере поверх настоящих сцен; скрипт scripts/i18n-check.ts управляет им через Playwright.
 
 import Phaser from 'phaser';
-import { nextVillageObject, VILLAGE } from '../core/economy';
+import { nextVillageObject, VILLAGE, villageById } from '../core/economy';
 import { getLocale, keyOfText, missingKeys, t } from '../i18n';
 import { SETS, WARDROBE } from '../core/wardrobe';
-import { BUILDINGS, DECOR_TYPE_ORDER, DISTRICTS } from '../core/villageData';
-import { LEVELS } from '../levels/index';
-import { applyAction, canPlace, lossReason, type GameState } from '../core/game';
+import { ALL_DECOR_TYPES, BUILDINGS, decorVariants, DISTRICTS } from '../core/villageData';
+import { LEVELS, worldById } from '../levels/index';
+import { applyAction, canPlace, lossReason, previewTile, signalsLit, type GameState } from '../core/game';
+import { solutionOf } from '../core/solver';
 import { getEconomy } from '../meta';
 import { SaveService } from '../save/SaveService';
 import { ALL_RULES } from '../tutorial';
@@ -34,6 +35,20 @@ export interface Violation {
 }
 
 type Any = Record<string, (...a: unknown[]) => unknown>;
+/** Горный город для проверки и скриншота: все постройки восстановлены, часть улучшена и в расцвете. */
+export const MOUNTAIN_SHOWCASE: Record<string, number> = { mine: 3, forge: 2, 'cable-car': 1, 'crystal-cave': 2, 'goat-farm': 3, 'bell-tower': 2, 'hot-springs': 1, 'stone-bridge': 3, 'star-temple': 1, 'summit-beacon': 2 };
+/** Открыть Горный город (уровни 30 и 60 пройдены): постройки по MOUNTAIN_SHOWCASE, улицы и украшения в половине слотов. */
+function mountainOpen(level?: number) {
+  SaveService.update((d) => {
+    d.progress.stars[LEVELS[29].id] = Math.max(1, d.progress.stars[LEVELS[29].id] ?? 0);
+    d.progress.stars[LEVELS[59].id] = Math.max(1, d.progress.stars[LEVELS[59].id] ?? 0);
+    d.economy.buildings = { ...d.economy.buildings, ...(level === undefined ? MOUNTAIN_SHOWCASE : Object.fromEntries(Object.keys(MOUNTAIN_SHOWCASE).map((id) => [id, level]))) };
+    d.economy.streets = { ...d.economy.streets, 'mountain:0': 3, 'mountain:1': 2, 'mountain:2': 1 };
+    const placed: Record<string, number> = {};
+    for (let s = 0; s < 24; s += 2) placed[`mountain:${s}`] = ((s / 2) % 5) % decorVariants(s);
+    d.economy.decor = { owned: [...d.economy.decor.owned, ...Object.entries(placed).map(([k, n]) => `${k}:${n}`)], placed: { ...d.economy.decor.placed, ...placed } };
+  });
+}
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
@@ -286,6 +301,49 @@ function views(game: Phaser.Game): Record<string, () => Promise<void>> {
   v['village-all-edit'] = () => allLit(true, 3);
   // Сцена «Lumo входит в лес» — кадр с названием мира и фразой (сцена не заканчивается сама).
   v['forest-intro'] = async () => void (await start('ForestIntro', { hold: true }, 2500));
+  // Вершины: уровень по первому решению (без «отложить»). ghost — остановиться перед ходом, где лёд или ветер
+  // понесут Lumo, и показать предпросмотр с лучом; иначе — сделать steps ходов.
+  const peaksView = async (id: string, opts: { steps?: number; ghost?: boolean; fires?: number }) => {
+    const level = LEVELS.find((l) => l.id === id);
+    if (!level) return;
+    const num = level.num;
+    SaveService.update((d) => {
+      for (const id of [...ALL_RULES.map((r) => `rule:${r}`), 'ice', 'drift', 'wind', 'signals', 'hint', 'undo'])
+        if (!d.profile.tipsSeen.includes(id)) d.profile.tipsSeen.push(id);
+    });
+    const s = (await start('Game', { levelIndex: num - 1 }, 1600)) as unknown as Any & { state: GameState; goalCard?: Phaser.GameObjects.Container; board: Any };
+    // Карточка цели открывается через 650 мс после старта (на медленной машине позже) — ждём её и убираем.
+    for (let n = 0; n < 40 && !s.goalCard; n++) await sleep(100);
+    (s.goalCard as Phaser.GameObjects.Container | undefined)?.destroy();
+    s.goalCard = undefined;
+    const sol = solutionOf({ ...level, allowStash: false });
+    let st = s.state;
+    for (let k = 0; k < sol.length; k++) {
+      const step = sol[k];
+      const p = previewTile(st, step.kind);
+      if (opts.ghost && p.cells.some((c) => c.forced)) {
+        s.state = st;
+        s.board.setRoad(st);
+        s.refresh(false);
+        s.board.showGhost(st, p);
+        await sleep(800);
+        return;
+      }
+      if (!opts.ghost && opts.fires === undefined && k >= (opts.steps ?? 0)) break;
+      if (opts.fires !== undefined && signalsLit(st) >= opts.fires) break;
+      st = applyAction(st, { type: 'place', slot: st.tray.indexOf(step.kind) });
+    }
+    s.state = st;
+    s.board.setRoad(st);
+    s.refresh(false);
+    await sleep(1400);
+  };
+  v['peaks-ice'] = () => peaksView('peaks-01', { ghost: true });
+  v['peaks-drift'] = () => peaksView('peaks-05', { steps: 0 });
+  v['peaks-wind'] = () => peaksView('peaks-11', { ghost: true });
+  v['peaks-signals'] = () => peaksView('peaks-21', { fires: 1 });
+  // Сцена «Lumo поднимается в горы» — кадр с названием мира, сиянием и снегом.
+  v['peaks-intro'] = async () => void (await start('PeaksIntro', { hold: true }, 2500));
   // Карта, прокрученная к переходу в «Туманный лес»: пока закрыт (дымка, замки, подсказка) и открытый.
   const mapForest = async () => {
     const s = (await start('Menu')) as unknown as { focusWorld: (id: string) => void };
@@ -300,6 +358,24 @@ function views(game: Phaser.Game): Record<string, () => Promise<void>> {
     });
     await mapForest();
   };
+  // Карта у ворот «Ледяных вершин» (серпантин, пики, снег) — закрытые (подсказка) и открытые; без мира — пропуск.
+  const peaksWorld = worldById('peaks');
+  if (peaksWorld) {
+    const mapPeaks = async () => {
+      const s = (await start('Menu')) as unknown as { focusWorld: (id: string) => void };
+      s.focusWorld('peaks');
+      await sleep(600);
+    };
+    v['map-peaks-locked'] = mapPeaks;
+    v['map-peaks'] = async () => {
+      const last = LEVELS[LEVELS.indexOf(peaksWorld.levels[0]) - 1].id;
+      SaveService.update((d) => {
+        d.progress.stars[last] = Math.max(1, d.progress.stars[last] ?? 0);
+        for (const w of ['forest', 'peaks']) if (!d.progress.worlds.includes(w)) d.progress.worlds.push(w);
+      });
+      await mapPeaks();
+    };
+  }
   // Открытый лесной квартал (последним: отмечает уровень 30 пройденным в сохранении проверки).
   v['village-forest'] = async () => {
     SaveService.update((d) => {
@@ -311,6 +387,47 @@ function views(game: Phaser.Game): Record<string, () => Promise<void>> {
   v['village-forest-edit'] = async () => {
     const s = (await start('Village', { district: 'forest' }, 1000)) as unknown as Any;
     s.toggleEdit();
+    await sleep(500);
+  };
+  v['village-mountain-open'] = async () => {
+    mountainOpen();
+    await start('Village', { district: 'mountain' }, 1000);
+  };
+  v['village-mountain-edit'] = async () => {
+    mountainOpen();
+    const s = (await start('Village', { district: 'mountain' }, 1000)) as unknown as Any;
+    s.toggleEdit();
+    await sleep(500);
+  };
+  // Все постройки в расцвете (самые широкие рисунки — с пристройками) и все заброшены (ценники вместо огоньков).
+  v['village-mountain-bloom'] = async () => {
+    mountainOpen(3);
+    const s = (await start('Village', { district: 'mountain' }, 1000)) as unknown as Any;
+    s.toggleEdit();
+    await sleep(500);
+  };
+  v['village-mountain-ruins'] = async () => {
+    mountainOpen(0);
+    const s = (await start('Village', { district: 'mountain' }, 1000)) as unknown as Any;
+    s.toggleEdit();
+    await sleep(500);
+  };
+  v['village-mountain-building'] = async () => {
+    mountainOpen();
+    const s = (await start('Village', { district: 'mountain' }, 1000)) as unknown as Any;
+    s.showBuilding(villageById('bell-tower'));
+    await sleep(500);
+  };
+  v['village-mountain-decor'] = async () => {
+    mountainOpen();
+    const s = (await start('Village', { district: 'mountain' }, 1000)) as unknown as Any;
+    s.showDecor(3);
+    await sleep(500);
+  };
+  v['village-mountain-street'] = async () => {
+    mountainOpen();
+    const s = (await start('Village', { district: 'mountain' }, 1000)) as unknown as Any;
+    s.showStreet(1);
     await sleep(500);
   };
   type GameView = {
@@ -396,7 +513,7 @@ function shown(o: Phaser.GameObjects.GameObject): boolean {
 }
 
 /** Внутренние id данных (постройки, районы, вещи, наборы, украшения) — в интерфейсе их быть не должно. */
-const RAW_IDS = new Set<string>([...BUILDINGS.map((b) => b.id), ...DISTRICTS, ...WARDROBE.map((w) => w.id), ...SETS.map((s) => s.id), ...DECOR_TYPE_ORDER]);
+const RAW_IDS = new Set<string>([...BUILDINGS.map((b) => b.id), ...DISTRICTS, ...WARDROBE.map((w) => w.id), ...SETS.map((s) => s.id), ...ALL_DECOR_TYPES]);
 /** В псевдо-языке все переведённые буквы с акцентами: «голое» слово-id значит, что надпись мимо i18n. */
 const rawIdIn = (s: string) => s.split(/[^a-z0-9-]+/).find((w) => w.length > 2 && RAW_IDS.has(w));
 
@@ -502,6 +619,8 @@ export function install(game: Phaser.Game) {
       for (const sc of game.scene.getScenes(true)) if (sc.scene.key !== 'Village') sc.scene.stop();
       // Лесной квартал открывается после уровня 30.
       if (district === 'forest') SaveService.update((d) => (d.progress.stars[LEVELS[29].id] = Math.max(1, d.progress.stars[LEVELS[29].id] ?? 0)));
+      // Горный город — после уровня 60; постройки восстановлены (подписи с огоньками).
+      if (district === 'mountain') mountainOpen();
       game.scene.start('Village', { district });
       await sleep(900);
       // Ждём, пока сцена запустится и нарисует карту (камера есть только у работающей сцены).
@@ -520,6 +639,11 @@ export function install(game: Phaser.Game) {
         return b ? toScreen(b.x + b.w / 2, kind === 'art' ? b.y + b.h * 0.7 : b.y + b.h / 2) : null;
       };
       return { art: at('art'), label: at('label') };
+    },
+    /** Раскладка карты деревни (прямоугольники и границы свободной области) — для подбора LAYOUT/SLOTS. */
+    villageBoxes: () => {
+      const s = game.scene.getScene('Village') as unknown as { boxes: LBox[]; yTop: number; yBot: number };
+      return { boxes: s.boxes, yTop: s.yTop, yBot: s.yBot };
     },
     /** Что под указателем в деревне (отладка касаний). */
     hit: () => {

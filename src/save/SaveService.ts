@@ -80,7 +80,7 @@ export interface Profile {
   bestDayStreak: number;
 }
 
-export type EventType = 'session' | 'start' | 'win' | 'lose' | 'abandon' | 'hint_used' | 'extra_tiles' | 'auto_ease' | 'level_skipped' | 'signup' | 'login' | 'logout' | 'auth_prompt' | 'tutorial_step' | 'tip_shown' | 'drag_place' | 'tap_place' | 'door_locked_attempt' | 'fireflies_collected' | 'tile_jump_used' | 'bridge_rotated_blocked' | 'lantern_expired' | 'currency_earn' | 'currency_spend' | 'village_restore' | 'upgrade_buy' | 'skin_buy' | 'daily_reward' | 'wardrobe_buy' | 'outfit_save' | 'building_upgrade' | 'decor_place' | 'street_upgrade' | 'quest_done' | 'cozy_level' | 'not_enough_hint_click' | 'language_change' | 'chest_open' | 'challenge_reward' | 'tutorial_complete' | 'settings_change' | 'teleport_used' | 'fog_revealed' | 'shadow_caught' | 'shadow_delayed' | 'world_enter' | 'ad_offer' | 'ad_reward' | 'ad_fail' | 'ad_interstitial' | 'store_view' | 'purchase_start' | 'purchase_done' | 'purchase_fail' | 'restore' | 'starter_offer' | 'privacy_options';
+export type EventType = 'session' | 'start' | 'win' | 'lose' | 'abandon' | 'hint_used' | 'extra_tiles' | 'auto_ease' | 'level_skipped' | 'signup' | 'login' | 'logout' | 'auth_prompt' | 'tutorial_step' | 'tip_shown' | 'drag_place' | 'tap_place' | 'door_locked_attempt' | 'fireflies_collected' | 'tile_jump_used' | 'bridge_rotated_blocked' | 'lantern_expired' | 'currency_earn' | 'currency_spend' | 'village_restore' | 'upgrade_buy' | 'skin_buy' | 'daily_reward' | 'wardrobe_buy' | 'outfit_save' | 'building_upgrade' | 'decor_place' | 'street_upgrade' | 'quest_done' | 'cozy_level' | 'not_enough_hint_click' | 'language_change' | 'chest_open' | 'challenge_reward' | 'tutorial_complete' | 'settings_change' | 'teleport_used' | 'fog_revealed' | 'shadow_caught' | 'shadow_delayed' | 'world_enter' | 'ad_offer' | 'ad_reward' | 'ad_fail' | 'ad_interstitial' | 'store_view' | 'purchase_start' | 'purchase_done' | 'purchase_fail' | 'restore' | 'starter_offer' | 'privacy_options' | 'ice_slide' | 'wind_push' | 'drift_melted' | 'signal_lit' | 'fire_order_blocked';
 
 export interface LogEvent {
   /** Время события, ISO. */
@@ -119,6 +119,9 @@ export interface LogEvent {
   goal_type?: string;
   /** Номер плитки на поле (bridge_rotated_blocked, lantern_expired, tile_jump_used). */
   tile?: number;
+  /** Сигнальный огонь: номер (fire_order_blocked — какой пытались, signal_lit — сколько горит), need — какой нужен. */
+  fire?: number;
+  need?: number;
   /** Экономика: валюта (coins / light), сколько, за что и что куплено/восстановлено. */
   currency?: 'coins' | 'light';
   amount?: number;
@@ -128,7 +131,7 @@ export interface LogEvent {
   hints?: number;
   /** Новое значение настройки (settings_change: on / off, yes / no). */
   value?: string;
-  /** Мир (world_enter: valley / forest). */
+  /** Мир (world_enter: valley / forest / peaks). */
   world?: string;
   /** Реклама: место ролика (ad_offer, ad_reward, ad_fail: hint / plus3 / double_coins / daily_double). */
   place?: string;
